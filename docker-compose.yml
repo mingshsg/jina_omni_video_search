@@ -1,0 +1,26 @@
+# Run the demo in Docker with an external media directory.
+#
+# Usage:
+#   1. Ensure .env has ELASTICSEARCH_URL, ELASTICSEARCH_API_KEY, EMBED_INFERENCE_ID, …
+#   2. (once) yarn setup-indices   # from host, or see README
+#   3. VIDEO_DATA_DIR=/path/to/videos docker compose up --build
+#
+# Videos / proxies / thumbs land under VIDEO_DATA_DIR (mapped to /app/data).
+
+services:
+  app:
+    build: .
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    env_file:
+      - .env
+    environment:
+      MEDIA_ROOT: /app/data
+      # Optional: mount a second host folder and set this to enable "local path" import
+      # LOCAL_IMPORT_ROOT: /import
+    volumes:
+      # External folder for originals, playback proxies, encode proxies, thumbs, uploads
+      - ${VIDEO_DATA_DIR:-./data}:/app/data
+      # Uncomment to allow local-path import from a host directory:
+      # - ${LOCAL_IMPORT_HOST:-./import}:/import
+    restart: unless-stopped

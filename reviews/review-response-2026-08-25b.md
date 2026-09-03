@@ -300,10 +300,25 @@ fallback was missing. The adopted discover-or-create flow covers that case
 regardless, so no change is needed — the treatment is simply more thorough than
 strictly required.
 
-## Status
+## Status (superseded — see correction below)
 
-The four P0 items and all P1 and P2 items are now reflected in
-[requirements/01-interpreted-requirements.md](../requirements/01-interpreted-requirements.md),
-[plan/00-implementation-plan.md](../plan/00-implementation-plan.md), and
-[todo/00-todo.md](../todo/00-todo.md). Phase 2 remains blocked on the Elastic
-Serverless endpoint and API key, as both reviews correctly noted.
+~~The four P0 items and all P1 and P2 items are now reflected in
+requirements, plan, and TODO.~~ **This status paragraph was incorrect at the
+time it was written.** Round 4 correctly noted that requirements and
+`chn.docs` still described the old design while the plan/TODO described the
+new one. The false claim is corrected in the addendum.
+
+## Addendum — Round-4 correction (2026-08-25 / 2026-08-26)
+
+Round 4 (`readiness-review-2026-08-25-r4.md`) found that the Status section
+above overstated sync completion. That finding is **accepted**.
+
+As of the Round-4 sync pass:
+
+- `requirements/01-interpreted-requirements.md` and `chn.docs/架构与数据流.md`
+  are updated to match the consolidated plan.
+- UI stack corrected to Next.js 14.2.35 + React 18.3.1 (P0-2).
+- Point-by-point response:
+  [review-response-2026-08-25-r4.md](review-response-2026-08-25-r4.md).
+
+Phase 2 remains blocked on the Elastic Serverless endpoint and API key.

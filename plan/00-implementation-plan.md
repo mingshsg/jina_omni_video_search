@@ -37,7 +37,9 @@ They are listed together so the rationale is not scattered through the document.
 - **Chunking**: 64 s window with 4 s overlap as the requested default, plus a
   10 s / 2 s fine preset for comparison. Both coexist via variant identity.
 - **UI**: **EUI** (Elastic UI) as the design system, rendered client-side only.
-  Tailwind removed. See "Interface stack".
+  Tailwind removed. Stack pinned to **Next.js 14.2.35 + React 18.3.1 + EUI
+  119.1.0** (see "Interface stack" and Round-4 correction). yarn is a project
+  pin for reproducibility.
 - **UI languages**: bilingual Chinese and English, Chinese default.
 - **Repository**: Git initialised on `main`. Reviews are new dated files, never
   rewrites of an artifact something else responds to.
@@ -63,9 +65,12 @@ earlier draft of this plan.
   or base64-encoded string" — and states **no** size or duration constraint. The
   documented file-size limits are 5 MB for images and 8 MB for PDFs only. Any
   figure for video is a guess until Phase 2 measures it.
-- **Local self-hosted server: a source constant.** `jina-airgap` enforces
-  `MAX_MEDIA_BYTES = 10 * 1024 * 1024`. This is a property of that server's
-  code, not a service contract, and must not be quoted as the hosted limit.
+- **Local self-hosted server: a configurable reference baseline.** `jina-airgap`
+  defaults to `MAX_MEDIA_BYTES = 10 * 1024 * 1024`. That is a source constant,
+  not a service contract, and must not be quoted as the hosted limit. Treat
+  local as a measured, configurable 10 MB baseline — not an unconstrained
+  quality baseline — until the effective cap is validated (and changed, if
+  needed).
 - **No official source states 75 MB or 20 MB for Jina video.** The 20 MB figure
   belongs to the Elastic cluster setting above.
 
@@ -145,8 +150,8 @@ line 1032). Do not shrink vectors to save space.
 - Audio is cut into 30 s segments, resampled to 16 kHz, tokenised at one token
   per 40 ms.
 - Responses carry per-modality token counts (`image_tokens`, `audio_tokens`,
-  `video_tokens`), which is what makes the pre-import cost estimate (NFR-10)
-  possible.
+  `video_tokens`), which is what makes the pre-import workload estimate
+  (NFR-10) possible.
 - `normalized` defaults to `true` on the hosted API.
 
 ### Fusion: evaluated and not adopted
@@ -178,18 +183,28 @@ Verified in
 - `elastic/next-eui-starter` is **archived**; its README states "The lack of SSR
   support also currently makes Next.js a challenge with EUI", and the tracking
   issue elastic/eui#7630 is still open.
-- **npm is unsupported; yarn is required.**
+- **Next.js React requirements (official upgrade guides, not peer ranges):**
+  - Next.js **14.2.x**: peers `react: ^18.2.0` only.
+  - Next.js **15**: "The minimum versions of `react` and `react-dom` is now 19."
+  - Next.js **16** App Router: "uses the latest React Canary release, which
+    includes the newly released React 19.2 features."
+  Peer ranges on Next 15/16 that still list `^18.2.0` are **not** an App Router
+  + React 18 support statement (Round-4 finding P0-2).
+- **yarn** is this project's pinned package manager for reproducibility. EUI
+  docs historically recommend yarn; that is a project choice, not proof that
+  npm cannot consume EUI.
 - EUI styles with Emotion and ships Borealis design tokens, which conflict with
   Tailwind's preflight.
 
 ## Stack
 
-- **Next.js 16** (App Router) with TypeScript
-- **React 18** — pinned by EUI's peer range; Next.js 16 accepts `^18.2.0`, so
-  this costs no framework currency
-- **EUI 119.1.0** plus `@elastic/eui-theme-borealis` 8.0.0, `@emotion/react`,
-  `@emotion/css`, `moment`, `@elastic/datemath`
-- **yarn** as the package manager, because EUI does not support npm
+- **Next.js 14.2.35** (App Router) with TypeScript — only Next major whose
+  declared React peer is React 18-only, matching EUI
+- **React 18.3.1** / **react-dom 18.3.1**, `@types/react` / `@types/react-dom`
+  18.3.x
+- **EUI 119.1.0** plus `@elastic/eui-theme-borealis` **8.0.0** (exact peer),
+  `@emotion/react` 11.x, `@emotion/css` 11.x, `moment`, `@elastic/datemath`
+- **yarn** as the pinned package manager
 - No Tailwind
 - `@elastic/elasticsearch` official client
 - ffmpeg and ffprobe invoked as child processes, no wrapper library, so the
@@ -211,6 +226,13 @@ SEO or first-paint SSR requirement, so EUI's documented lack of SSR support
 costs nothing here, while the Next.js server continues to host the parts that
 genuinely need a server — ffmpeg, Elasticsearch, SSE, Range streaming, uploads —
 none of which import EUI.
+
+**Phase 1 first gate:** a disposable compatibility spike with the exact pinned
+versions must render `EuiProvider` plus one interactive EUI control through the
+App Router, pass both `yarn dev` and `yarn build && yarn start`, and fail on
+peer warnings promoted to errors, hydration errors, duplicate React, Emotion
+insertion errors, or runtime failures. Record the resolved tree and result in
+`docs/operations.md` before full scaffolding is treated as done.
 
 Concretely:
 
@@ -323,8 +345,11 @@ library page, the player timeline, and the Phase 10 comparison.
 ### Index `video-assets`, one document per video
 
 - Identity: `video_id` keyword, `title` text with keyword subfield
-- Provenance: `source_mode` keyword (url, local, upload), `source_ref` keyword
-  not indexed, `media_path` keyword not indexed
+- Provenance: `source_mode` keyword (url, local, upload); `source_origin_path`
+  keyword not indexed (sanitized origin+path only — no userinfo, no secret
+  query/fragment); `source_fingerprint` keyword (one-way hash of the raw
+  submitted ref); `media_path` keyword not indexed. Never persist or return
+  the raw submitted URL unless an explicit allowlist marks it safe (FR-22).
 - Media facts: `duration_ms` long, `width` and `height` integer, `fps` float,
   `has_audio` boolean, `size_bytes` long, `container` and `video_codec` keyword
 - Variants: nested list, each with `variant_id`, chunking settings, provider,
@@ -363,8 +388,9 @@ per-provider value:
 **Visual proxy.** Extract exactly `N` frames (default 32) evenly spaced across
 the window, then encode them as a low-frame-rate H.264 MP4. Because the model
 samples 32 frames from whatever it is given, a 4-second file containing 32 good
-frames is strictly better than a 64-second file containing 32 degraded ones at
-the same size.
+frames is the preferred encoding hypothesis over a 64-second file containing 32
+degraded ones at the same size — validate by retrieval quality, not by asserting
+dominance.
 
 Walk the resolution ladder outer, CRF ladder inner, stopping at the first
 combination at or below `B`:
@@ -481,16 +507,19 @@ for queries — because the API default is `text-matching`. Video and audio byte
 budget is unknown until measured.
 
 **`local`.** A self-hosted omni server exposing an OpenAI-compatible
-`/v1/embeddings` accepting base64 video and audio, capped by a
-`MAX_MEDIA_BYTES` constant in its own source. The `jina_repo/jina-airgap`
-checkout on this machine lists the model in `models/catalog.json`: 1.74B
-parameters, 1024 dimensions, 32K context, roughly 8 GB memory, MLX-capable.
-Weights are not downloaded yet; only the catalog is present.
+`/v1/embeddings` accepting base64 video and audio. The `jina-airgap` reference
+server defaults to `MAX_MEDIA_BYTES = 10 MB` in its own source — a **configurable
+10 MB baseline**, not an unconstrained service. Do not treat local as a
+budget-free quality baseline until that cap is measured and, if raised,
+re-validated. The `jina_repo/jina-airgap` checkout on this machine lists the
+model in `models/catalog.json`: 1.74B parameters, 1024 dimensions, 32K context,
+roughly 8 GB memory, MLX-capable. Weights are not downloaded yet; only the
+catalog is present.
 
-Why the third option is worth wiring even though it is not the default: it
-removes the byte budget as a constraint, making it the right place to calibrate
-the encoder ladder and to measure how much retrieval quality the 1 MB budget
-actually costs; inference is free, so pipeline iteration burns no tokens.
+Why the third option is worth wiring even though it is not the default: a
+higher measured or reconfigured local cap makes it a strong place to calibrate
+the encoder ladder and to estimate how much retrieval quality the Serverless
+1 MB budget costs; inference is free, so pipeline iteration burns no tokens.
 Caveats: CC-BY-NC-4.0 weights, so demo use only, and CPU inference on a 1.74B
 model with 32-frame video input will be materially slower than hosted services.
 
@@ -566,7 +595,10 @@ video for the selected variant.
 | `EMBED_TASK_PASSAGE` | `retrieval.passage` | documents |
 | `EMBED_TASK_QUERY` | `retrieval.query` | queries |
 | `EMBED_DIMS` | `1024` | never truncated, see Matryoshka note |
-| `EMBED_MAX_BINARY_BYTES` | none | **set per provider from the probe** |
+| `EIS_MAX_BINARY_BYTES` | none | **set from EIS probe**; decoded media bytes |
+| `JINA_MAX_BINARY_BYTES` | none | **set from hosted Jina probe**; same byte layer |
+| `LOCAL_MAX_BINARY_BYTES` | none | **set from local probe**; same byte layer |
+| `EMBED_BUDGET_BYTE_LAYER` | `decoded_media` | `decoded_media`, `base64_string`, or `json_request` — must match how the probe measured |
 | `EMBED_VIDEO_FRAMES` | `32` | matches the model's sampling |
 | `EMBED_MAX_LONG_EDGE` | `1280` | top of the resolution ladder |
 | `EMBED_CONCURRENCY` | `3` | parallel inference calls |
@@ -595,13 +627,15 @@ Every phase has an acceptance criterion in
 [todo/00-todo.md](../todo/00-todo.md), so "done" is verifiable rather than a
 matter of opinion.
 
-**Phase 1, scaffolding.** Next.js 16 with React 18 and TypeScript, EUI with the
-client-side provider and Emotion cache, `.gitignore` **before the first
-commit**, `.env.example`, zod-validated `lib/config.ts`, the `data/`
-subdirectory structure, and a README covering prerequisites (Node 22, ffmpeg 8
-on `PATH`, **yarn**) and startup. The README lands here rather than at the end,
-because a project that cannot be started by reading its own README is not really
-scaffolded. Git is already initialised.
+**Phase 1, scaffolding.** Compatibility spike first (exact pinned versions:
+Next.js 14.2.35, React 18.3.1, EUI 119.1.0), then full app scaffolding with
+TypeScript, EUI client-side provider and Emotion cache, `.gitignore` **before
+any `.env` or `data/`**, `.env.example`, zod-validated `lib/config.ts`, the
+`data/` subdirectory structure, and a README covering prerequisites (Node 22,
+ffmpeg 8 on `PATH`, **yarn**) and startup. The README lands here rather than at
+the end, because a project that cannot be started by reading its own README is
+not really scaffolded. Git is already initialised; the documentation baseline
+commit already exists.
 
 **Phase 2, capability probe.** Build and run `scripts/probe-capabilities.ts`
 before writing the pipeline. It must, **per provider**:
@@ -662,8 +696,10 @@ Elastic's published scores: they split the same trailer into 28 PySceneDetect
 scenes of 1.9 to 18.4 seconds, so raw scores over different candidate sets are
 not comparable. Record results in `reviews/`.
 
-**Phase 11, documentation close-out.** Complete the `docs/` set with measured
-numbers, refresh the README, mark `todo/` complete, and write a self-review in
+**Phase 11, documentation close-out.** Complete the `docs/` set: every
+**empirical** claim traces to a recorded measurement; externally defined
+constants (dimensions, protocol limits, defaults) trace to a cited source.
+Refresh the README, mark `todo/` complete, and write a self-review in
 `reviews/` covering known limits: picture quality under the measured byte
 budget, temporal precision of 64-second windows, the client-only EUI rendering
 decision, and the `embedding` query vector builder's status.
@@ -690,9 +726,10 @@ durable job queue are explicitly out of scope and bounded by NFR-8.
   Mitigated by rendering EUI client-side only and by the `dynamic` import
   fallback. The residual risk is Emotion style injection edge cases, which
   surface as a flash of unstyled content rather than incorrect behaviour.
-- **EUI does not support React 19.** Mitigated by pinning React 18, which
-  Next.js 16 accepts. The cost is forgoing React 19 features, none of which this
-  project needs.
+- **EUI does not support React 19; Next 15/16 App Router require React 19.**
+  Mitigated by pinning **Next.js 14.2.35 + React 18.3.1**, the only combination
+  in both declared support ranges. Cost: two Next majors behind; none of the
+  missing features are required for this demo. Phase 1 spike gates adoption.
 - **The `embedding` query vector builder is newer surface area.** Mitigated by
   plain `dense_vector` fields, which are generally available, with a fallback of
   computing query vectors in the application — already required for the `jina`
@@ -701,7 +738,7 @@ durable job queue are explicitly out of scope and bounded by NFR-8.
   and backoff, with token usage logged so throughput can be tuned.
 - **Long videos generate many inference calls.** Two per window, so a two-hour
   film at the default window is about 240 calls. Surfaced as a pre-import
-  estimate before the user commits.
+  workload estimate before the user commits.
 - **Optional and currently blocked**: the `hive-mind` submodule was requested to
   provide Elastic's internal EUI and Next.js integration patterns, but the
   repository is private and the clone failed without credentials. The EUI
@@ -727,3 +764,9 @@ durable job queue are explicitly out of scope and bounded by NFR-8.
   behaviour, and the RRF response contract. Added the version matrix, the
   no-truncation rule for video vectors, the pre-filter justification for
   single-index variants, and the EUI interface stack replacing Tailwind.
+- **2026-08-25, Round-4 sync.** Corrected UI stack to Next.js 14.2.35 + React
+  18.3.1 after verifying Next 15/16 App Router require React 19. Split per-
+  provider budget env vars; fixed local-provider budget wording; sanitized URL
+  provenance; softened unproven claims; requirements and `chn.docs` brought
+  into sync with this plan. Response:
+  [reviews/review-response-2026-08-25-r4.md](../reviews/review-response-2026-08-25-r4.md).

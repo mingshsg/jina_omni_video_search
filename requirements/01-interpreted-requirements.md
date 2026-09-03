@@ -7,6 +7,10 @@ departs from the literal wording of the request, the reason is stated inline.
 Legend: FR = functional requirement, NFR = non-functional requirement,
 C = external constraint, D = design decision, OQ = open question.
 
+This file is the **user contract**. The plan in
+`plan/00-implementation-plan.md` implements it; if they disagree, this file
+wins until an explicit revision updates both.
+
 ## Verified external facts
 
 These were confirmed against Elastic and Jina documentation during planning, not
@@ -34,34 +38,71 @@ assumed. They are the foundation for several requirements below.
   scenes of 1.9 to 18.4 seconds using PySceneDetect, and the model card states
   the model is "optimal with short clips".
 
-### Constraint C1: binary input size limit
+### Constraint C1: binary input size limits (per provider)
 
 The user recalled a limit of 75 MB, then revised to 10 MB. Both numbers were
-investigated. There are two different gates, and neither is 75 MB:
+investigated. There is **no single global limit**. Limits are provider-specific:
 
-- **Elasticsearch side**: `indices.inference.max_binary_input_size` caps each
-  binary input at 1 MB decoded by default. Self-managed and Elastic Cloud Hosted
-  deployments can raise it to 20 MB via the cluster settings API. **On
-  Elasticsearch Serverless the limit is fixed at 1 MB and cannot be changed.**
-  Oversized values are rejected with HTTP 400.
-- **Jina side**: Jina's own reference server (`jina-airgap`) enforces
-  `MAX_MEDIA_BYTES = 10 * 1024 * 1024`, and its API reference states "Max 10 MB
-  per input". The public API additionally documents 5 MB for images and 8 MB for
-  PDFs.
-- No official Elastic or Jina source states 75 MB. It does not appear in the
-  Jina OpenAPI specification either.
+- **EIS on Elasticsearch Serverless: 1 MB decoded, fixed.** The cluster setting
+  `indices.inference.max_binary_input_size` defaults to 1 MB and can be raised
+  to 20 MB on self-managed and Cloud Hosted, but on Serverless it is fixed at
+  1 MB. Oversized values are rejected with HTTP 400.
+- **Hosted Jina API (video and audio): unknown, unmeasured.** The live OpenAPI
+  at `api.jina.ai` defines `VideoDoc` / `AudioDoc` with no size or duration
+  constraint. Documented file-size limits are 5 MB for images and 8 MB for
+  PDFs only. Any video/audio figure for the hosted API is a guess until Phase 2
+  measures it (OQ2).
+- **Local self-hosted / `jina-airgap` reference server: 10 MB source constant.**
+  `MAX_MEDIA_BYTES = 10 * 1024 * 1024` is a property of that server's source,
+  not a hosted-service contract, and must not be quoted as the hosted Jina
+  limit.
+- **No official Elastic or Jina source states 75 MB** for omni video. The 20 MB
+  figure belongs to the Elastic cluster setting above, not to Jina.
 
-The 10 MB figure the user remembered therefore belongs to the direct Jina API
-path, while the Elastic Serverless + EIS path chosen for this project is bound by
-1 MB.
-
-One ambiguity remains: the 1 MB limit is documented on the `semantic` field
-reference page, and this project calls `_inference/embedding/` directly instead.
-The documentation does not state whether both go through the same gate.
+One ambiguity remains for the EIS path: the 1 MB wording lives on the
+`semantic` field reference page, while this project calls
+`_inference/embedding/` directly.
 
 - **OQ1**: Is the 1 MB cap enforced on direct `_inference/embedding/` calls, or
-  only on inference fields? Resolved empirically by FR-13 rather than by
-  guessing; the measured value drives `EMBED_MAX_BINARY_BYTES`.
+  only on inference fields? Resolved empirically by FR-13; measured values drive
+  the per-provider budget variables in C1's configuration (not a single global
+  `EMBED_MAX_BINARY_BYTES`).
+
+### Constraint C3: version matrix, task adapters, normalization, no truncation
+
+- **Elastic version matrix** (target **9.5**):
+  - 9.3+: create endpoints and run multimodal `embedding` inference; cannot use
+    these models with `semantic_text`.
+  - 9.4+: `semantic_text` works for **text-only** embeddings; omni models GA in
+    US, SG, EU, APJ.
+  - 9.5+: the `semantic` field type supports **all** modalities.
+- **Still use explicit `dense_vector`, not `semantic`:** also runs on 9.4; keeps
+  base64 out of `_source`; preserves quantisation, modality labelling, and RRF
+  weighting control.
+- **Task adapters:** the hosted Jina API defaults `task` to `text-matching`
+  (wrong for retrieval). Documents must use `retrieval.passage`; queries must
+  use `retrieval.query`. EIS `embedding` endpoints expose no documented `task`
+  or `input_type` control (OQ3).
+- **Normalization ownership** is recorded per variant (`normalized_by`:
+  provider or application). L2 normalisation makes magnitudes comparable; it
+  does **not** make embedding functions interchangeable across providers.
+- **Matryoshka truncation is forbidden for video vectors.** Keep dimensions at
+  1024. Video is the most truncation-sensitive modality in the technical report.
+
+### Constraint C4: UI stack (Next.js 14 + React 18 + EUI)
+
+- EUI 119.1.0 peer range is `react: ^17.0 || ^18.0` — **no React 19**.
+- Next.js 15 minimum React is 19; Next.js 16 App Router uses React 19.2 Canary.
+  Peer ranges that accept `^18.2.0` on Next 15/16 are not an official App Router
+  + React 18 support statement.
+- **Next.js 14.2.35** peers only `react: ^18.2.0` — the only combination where
+  both Next and EUI sit in their declared support ranges.
+- EUI has no SSR support with Next.js; render EUI client-side only.
+- **yarn** is the project's pinned package manager for reproducibility (EUI docs
+  historically recommend yarn; npm may work for consumers but is not used here).
+- No Tailwind — Emotion + Borealis tokens own styling.
+
+See the decision log below for approval provenance.
 
 ## Functional requirements
 
@@ -72,8 +113,12 @@ The documentation does not state whether both go through the same gate.
 - **FR-2** Each mode is validated before any work begins, with a readable error
   on failure:
   - URL: scheme restricted to http/https; DNS resolution must not land on a
-    private, loopback, or link-local address (SSRF protection); `HEAD` request
-    checks content type and content length against the configured maximum.
+    private, loopback, or link-local address (SSRF protection); **redirect hops
+    are re-validated** (count-limited); the TCP connection targets the validated
+    IP while preserving Host and TLS server name; **stream-time byte enforcement**
+    aborts oversized responses even when `Content-Length` is absent; request and
+    idle timeouts apply; abort quarantines partial files; `HEAD` may be used as
+    a hint but is not trusted alone for size.
   - Local path: must be absolute; after `realpath` resolution it must lie inside
     `LOCAL_IMPORT_ROOT` (path traversal protection); must be a regular file with
     a whitelisted extension and an acceptable size.
@@ -83,6 +128,12 @@ The documentation does not state whether both go through the same gate.
     duration.
 - **FR-3** The original file is retained in the application media store so that
   playback works identically across all three modes.
+- **FR-22** Stored and displayed URL provenance is **sanitized**. Strip
+  userinfo and query/fragment parameters that may carry credentials or signed
+  tokens. Persist a safe origin+path and/or a one-way source fingerprint. Never
+  return the raw submitted URL to the browser or write it into Elasticsearch
+  unless an explicit allowlist marks it safe. Error messages already forbid
+  leaking secrets; persisted metadata must follow the same rule.
 
 ### Chunking
 
@@ -103,28 +154,37 @@ The documentation does not state whether both go through the same gate.
   - a visual vector from a 32-frame proxy clip with no audio track;
   - an audio vector from an independent 16 kHz mono Opus clip covering the same
     time range, skipped when the source has no audio stream.
-  - *Rationale*: the 1 MB cap makes a single clip carrying both good frames and
-    good audio impractical, and two separate inference calls each get the full
-    per-input budget. The demo gains the ability to search spoken dialogue as
-    well as on-screen content, and results can report which modality matched.
-- **FR-8** Proxy encoding adapts to the measured byte budget rather than using
-  fixed settings. Resolution ladder 1280x720, 960x540, 854x480, 720x405,
-  640x360; CRF ladder 23, 26, 28, 30, 32; step down until the file fits.
-  - The 720x405 floor (about 291,000 pixels) sits just above the model's 262,144
-    pixel upscaling threshold. Encoding smaller than that discards information
-    without saving any model tokens.
+  - *Rationale*: the byte budget makes a single clip carrying both good frames
+    and good audio impractical under EIS, and two separate inference calls each
+    get the full per-input budget. Jina's `MergedContentGroup` (one fused
+    vector) was evaluated and **not adopted**: Elastic has no equivalent, and a
+    fused vector would destroy the per-result modality badge.
+- **FR-8** Proxy encoding adapts to the measured **per-provider** byte budget
+  rather than using fixed settings. Resolution ladder: 1280x720, 960x540,
+  854x480, 720x405 (meaningful floor above the model's upscaling threshold),
+  then **640x360 as the last-resort rung** for byte compliance only. CRF ladder:
+  23, 26, 28, 30, 32. Walk resolution outer, CRF inner.
+  - **Terminal behaviour:** if 640x360 at CRF 32 still exceeds the budget,
+    reduce frame count in steps (32, 24, 16); if still unmet, record
+    `ladder_exhausted`, fail that window with a specific error code, and
+    continue the job. Do not hang or silently skip.
   - The rung actually used is recorded in chunk metadata so the trade-off is
     visible during a demo.
-- **FR-9** The embedding provider is pluggable, with three implementations
-  selected by `EMBED_PROVIDER`. All three run the same model and L2-normalise
-  their output, so vectors produced by any of them can coexist in one index.
-  - `eis` (default): Elastic Inference Service. Needs only Elasticsearch
-    credentials. Budget bound by constraint C1.
-  - `jina`: the hosted Jina API. Needs `JINA_API_KEY`. Budget 10 MB per input.
-  - `local`: a self-hosted omni server on the developer machine. No per-token
-    cost, and the byte cap is a constant in the server's own code rather than a
-    service limit. Requires roughly 8 GB of memory, Docker, and downloaded
-    weights. See constraint C2.
+- **FR-9** The embedding provider is pluggable (`EMBED_PROVIDER`: `eis`,
+  `jina`, `local`). Each provider is **pinned** with model, task (where
+  applicable), dimensions, and normalization ownership on the variant. **Cross-
+  provider mixing inside one variant is prohibited by default.** Vectors from
+  different providers are **not** treated as interchangeable after L2
+  normalisation.
+  - `eis` (default): Elastic Inference Service. Needs Elasticsearch credentials.
+    Budget: C1 Serverless / measured (OQ1).
+  - `jina`: hosted Jina API. Needs `JINA_API_KEY`. Explicit `task` required.
+    Budget: measured in Phase 2 (OQ2); do not assume 10 MB.
+  - `local`: self-hosted omni server. Configurable byte cap (reference baseline
+    10 MB in `jina-airgap`); must be measured before treating it as a quality
+    baseline. See constraint C2.
+- **FR-10** Transient failures (HTTP 429, 503) are retried with exponential
+  backoff and jitter. Concurrency is bounded by `EMBED_CONCURRENCY`.
 
 ### Constraint C2: the self-hosted option
 
@@ -140,12 +200,13 @@ Two caveats govern how this option is used:
 - The model weights are licensed CC-BY-NC-4.0, so this path is acceptable for a
   demo but not for commercial deployment.
 - Inference on CPU for a 1.74B model with 32-frame video input will be
-  substantially slower than the hosted services. This path is therefore
-  positioned as an escape hatch for when the measured budget from FR-13 proves
-  too restrictive for acceptable retrieval quality, and as a zero-cost target
-  for iterating on the encoder ladder, not as the default.
-- **FR-10** Transient failures (HTTP 429, 503) are retried with exponential
-  backoff and jitter. Concurrency is bounded by `EMBED_CONCURRENCY`.
+  substantially slower than the hosted services. This path is positioned as an
+  escape hatch when measured budgets hurt quality, and as a calibration target
+  for the encoder ladder — **not** as an unconstrained quality baseline until
+  its effective cap is measured and, if needed, reconfigured.
+- Do not claim it "removes the byte budget" while the reference server still
+  enforces `MAX_MEDIA_BYTES = 10 MB` unless that constant is changed and
+  re-validated.
 
 ### Storage
 
@@ -153,42 +214,63 @@ Two caveats govern how this option is used:
   dimensions, `cosine` similarity, `bbq_hnsw` index type with rescoring
   oversample.
   - *Rationale*: the request asked for "dense vector with meta_data". The
-    alternative `semantic` field type would work but retains the full base64
-    data URL in `_source`, inflating the index by orders of magnitude, and gives
-    up direct control over quantisation.
+    alternative `semantic` field type would work on 9.5 but retains the full
+    base64 data URL in `_source`, inflating the index, and gives up control
+    over quantisation (see C3).
 - **FR-12** Each chunk document carries locating metadata: source video
-  identifier and title, chunk index, `start_ms`, `end_ms`, `duration_ms`, and a
-  display-ready `mm:ss` label. Document `_id` is `{video_id}_{chunk_index}` so
-  re-running ingestion upserts rather than duplicates.
+  identifier and title, **`variant_id`**, chunk index, `start_ms`, `end_ms`,
+  `duration_ms`, and a display-ready `mm:ss` label. Document `_id` is
+  `{video_id}_{variant_id}_{chunk_index}` so re-running the same variant
+  upserts rather than duplicates, and different variants coexist.
+- **FR-19** Variant identity. `variant_id` is derived from chunking config,
+  provider, model, task, proxy settings, and `schema_version`. Search, library,
+  player timeline, and preset comparison all filter by `variant_id`. Cross-
+  provider variants remain separate documents, not mixed knn candidates.
 
 ### Operations
 
 - **FR-13** A capability probe script verifies endpoint availability and
-  **measures** the real binary input ceiling by submitting progressively larger
-  test clips (0.9, 2, 5, 10 MB), then records dimensions, similarity, latency,
-  and token usage. Its result populates `EMBED_MAX_BINARY_BYTES`, so the
-  encoder adapts to whatever the true limit turns out to be (see OQ1).
+  **measures** the real binary input ceiling **per provider** by submitting
+  progressively larger test clips, then records dimensions, similarity,
+  latency, and token usage. Results populate
+  `EIS_MAX_BINARY_BYTES` / `JINA_MAX_BINARY_BYTES` / `LOCAL_MAX_BINARY_BYTES`.
+  The probe must state which layer was measured: **decoded media bytes**,
+  **base64 string bytes**, or **total JSON request bytes** (base64 expands
+  ~33%; mixing layers produces systematic bias). It also discovers or creates
+  the EIS endpoint, reports version availability, attempts task settings on
+  EIS (OQ3), and exercises query-side `query_vector_builder`.
 - **FR-14** Ingestion runs as a job with stage-level progress streamed to the
   browser over Server-Sent Events.
+- **FR-20** Job state machine. States and transitions are documented in
+  `docs/api-contract.md` before coding. Crash recovery beyond **idempotent
+  manual retry** is out of scope: a failed job may be re-run; the same
+  `_id` upserts; failed windows are individually visible. No claim of automatic
+  resume-from-mid-pipeline after process death.
+- **FR-21** Search response contract. Results include fused rank/score,
+  locating metadata, and a modality badge. Because RRF returns a fused rank
+  only, per-modality attribution is recovered by application-side fusion or by
+  a second lookup; the chosen design is fixed in `docs/api-contract.md` before
+  Phase 8. A chunk returned by both branches follows the documented badge rule
+  (e.g. `both`, or the higher-ranked branch — pick one and stick to it).
 
 ### Search and playback
 
 - **FR-15** Free-text queries retrieve matching chunks by fusing the visual and
   audio vector searches with an RRF retriever. The user can restrict search to
-  visual only, audio only, or both.
+  visual only, audio only, or both. Queries are filtered to the selected
+  `variant_id`.
 - **FR-16** Results display a thumbnail, the `mm:ss` range, the relevance score,
-  and a badge indicating which modality matched.
+  and a badge indicating which modality matched (per FR-21).
 - **FR-17** Clicking a result opens the player and seeks to that chunk's start
   time. A timeline strip marks all matching windows in the current video for
-  direct navigation.
+  the selected variant.
 - **FR-18** Media is served through an endpoint supporting HTTP Range requests,
   which is what makes seeking work.
 
 ## Non-functional requirements
 
 - **NFR-1** Elasticsearch and Jina credentials live only in `.env`, which is
-  excluded by `.gitignore` from the first commit. The repository contains only
-  `.env.example`.
+  excluded by `.gitignore`. The repository contains only `.env.example`.
 - **NFR-2** Configuration is validated with zod at startup, so a missing or
   malformed variable fails immediately rather than mid-pipeline.
 - **NFR-3** The interface is bilingual Chinese and English, switchable, with
@@ -202,14 +284,10 @@ Two caveats govern how this option is used:
 
 ### Scale, performance, and deployment
 
-These were absent from the first draft and were added after the readiness review
-flagged the omission. They are demo-appropriate targets, not production SLOs.
-
 - **NFR-7 Deployment target.** A single developer machine (macOS on Apple
-  Silicon), run with `npm run dev` or `next start`. ffmpeg and ffprobe are host
-  dependencies resolved from `PATH`, not bundled. Containerisation is out of
-  scope for the first iteration; if it is added later, the image must include
-  ffmpeg, which is the only non-npm dependency.
+  Silicon), run with `yarn dev` or `yarn build && yarn start`. ffmpeg and
+  ffprobe are host dependencies resolved from `PATH`, not bundled.
+  Containerisation is out of scope for the first iteration.
 - **NFR-8 Scale envelope.** Designed for a demo corpus, not an archive:
   - up to roughly 20 videos and 2,000 chunk documents in the index;
   - individual source files up to `MAX_SOURCE_BYTES` (default 2 GB);
@@ -224,18 +302,32 @@ flagged the omission. They are demo-appropriate targets, not production SLOs.
     modality and writes it to `docs/operations.md`;
   - ingestion reports observed throughput in windows per minute at completion;
   - search must feel interactive, with a target under 2 seconds end to end for a
-    text query, of which the query-vector inference call is expected to dominate;
+    text query (warm p95 over repeated runs);
   - the ffmpeg proxy encoder is expected to be faster than the inference call it
-    feeds, so ingestion should be inference-bound rather than encode-bound. If
-    measurement contradicts this, the ladder search is the thing to optimise.
-- **NFR-10 Cost visibility before commitment.** Because a long video turns into
-  hundreds of inference calls, the import page must show the estimated window
-  count and inference call count after probing and before the user confirms.
+    feeds; if measurement contradicts this, the ladder search is the thing to
+    optimise.
+- **NFR-10 Workload visibility before commitment.** Because a long video turns
+  into hundreds of inference calls, the import page must show the estimated
+  window count and inference call count after probing and before the user
+  confirms. This is a **workload estimate**, not a currency cost estimate,
+  unless a pricing source and calculation are later added.
+
+## Open questions
+
+- **OQ1**: Does Serverless enforce 1 MB on direct `_inference/embedding/` calls?
+  **Resolved (2026-08-26, partial):** On ES **9.6.0** Serverless, direct
+  `_inference/embedding` accepted decoded video/audio up to **~3.1 MB** with no
+  size-limit HTTP 400. Documented 1 MB Serverless cap was not observed in the
+  probe ladder. Operational encoder budget remains **1,048,576** bytes in `.env`
+  until a higher hard limit is confirmed. See `docs/operations.md`.
+- **OQ2**: What is the hosted Jina API video/audio byte ceiling? **Open** —
+  `JINA_API_KEY` not configured; probe skipped.
+- **OQ3**: Does the EIS omni embedding endpoint accept, reject, or ignore task /
+  input_type settings? **Resolved (2026-08-26):** Top-level `task` **rejected**
+  (400). `input_type=ingest` **changes** the text embedding vs default
+  (accepted). Prefer `input_type` for query/passage on EIS.
 
 ## Interpretation notes
-
-Three points where the literal request and the model's actual behaviour diverge,
-and how each is handled:
 
 1. **"resize to 720p level"** is honoured for the playback proxy (NFR-4). For the
    embedding proxy, 720p is the ceiling of the ladder rather than a fixed target,
@@ -243,12 +335,12 @@ and how each is handled:
    frames regardless.
 2. **"split the video file to multiple ... chunks"** is implemented as time
    windows over the source, with per-window proxy clips generated on demand. The
-   source is not physically cut into 64-second files, which would waste disk and
-   add nothing.
+   source is not physically cut into 64-second files.
 3. **The 64 s / 4 s specification is kept as the default** even though Elastic's
-   reference demo suggests shorter clips retrieve better, because it is what was
-   asked for. The fine-grained preset exists so the difference can be measured
-   rather than argued about.
+   reference demo suggests shorter clips retrieve better. The fine-grained preset
+   exists so the difference can be measured.
+4. **4-second / 32-frame proxy vs 64-second container** is a design hypothesis
+   to validate by retrieval quality, not a proven dominance claim.
 
 ## Out of scope for the first iteration
 
@@ -259,16 +351,30 @@ and how each is handled:
   later.
 - Containerisation and any deployment beyond the developer machine (NFR-7).
 - A durable job queue; the in-process runner is adequate within NFR-8.
+- Automatic crash resume beyond idempotent manual retry (FR-20).
+
+## Decision log
+
+| When | Decision | Who / how | Prior recorded choice |
+| --- | --- | --- | --- |
+| 2026-08-25 | Stack Next.js (App Router), EIS primary, dual-track, local store, bilingual | User clarification answers | — |
+| 2026-08-25 | Dual-track embedding + configurable providers including local | User | — |
+| 2026-08-25 | EUI look-and-feel preferred; Tailwind not required | User | Next.js 15 + Tailwind in early notes |
+| 2026-08-25 | Next.js **16** + React **18** + EUI (client-only), yarn | Assistant proposal after EUI peer check | Incorrect: confused peer installability with App Router support |
+| 2026-08-25 late | Next.js **14.2.35** + React **18.3.1** + EUI **119.1.0**, yarn as project pin | User chose `next14` after Round-4 review proved Next 15/16 App Router require React 19 | Supersedes Next 16 + React 18 |
 
 ## Revision history
 
 - **2026-08-25, initial draft.** Derived from the original request and three
   rounds of clarification.
-- **2026-08-25, revision after readiness review.** `reviews/readiness-review.md`
-  was written while this directory was still empty, so its headline verdict is
-  superseded, but three of its substantive gaps were real and are now closed:
-  no scale or latency targets (added as NFR-8 and NFR-9), no stated deployment
-  target (NFR-7), and no consideration of the on-prem path that the sibling
-  projects on this machine make available (added as the `local` provider in FR-9
-  and constraint C2). A full point-by-point response is in
-  `reviews/readiness-review-response.md`.
+- **2026-08-25, revision after readiness review.** Added NFR-7/8/9, local
+  provider (FR-9 / C2). See `reviews/readiness-review-response.md`.
+- **2026-08-25, Round-2/3 sync.** Variant identity, provider isolation, per-
+  provider budgets, hardened URL import, job retry semantics, search contract,
+  C3 facts — reflected in the consolidated plan; this requirements file lagged
+  until Round 4.
+- **2026-08-25, Round-4 sync.** Promoted plan decisions into this contract:
+  C1/C3/C4, FR-2 hardening, FR-8 terminal ladder, FR-9 isolation, FR-12/19
+  variants, FR-13 byte-layer measurement, FR-20/21/22, NFR-7 yarn, NFR-10
+  workload wording, OQ restatement, UI stack corrected to Next.js 14, decision
+  log. Original request file left verbatim.

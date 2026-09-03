@@ -1,0 +1,31 @@
+import type { IngestErrorCode } from '../ingest/errors';
+
+export const ingestErrorsZh: Record<IngestErrorCode, string> = {
+  INGEST_URL_INVALID: 'URL 格式无效。',
+  INGEST_URL_INVALID_SCHEME: '仅允许 http 或 https 协议的 URL。',
+  INGEST_URL_CREDENTIALS: '不允许在 URL 中嵌入账号密码。',
+  INGEST_URL_SSRF_BLOCKED: '该 URL 指向被禁止的私有或本地地址。',
+  INGEST_URL_REDIRECT_LIMIT: '下载时重定向次数过多。',
+  INGEST_URL_TIMEOUT: '下载超时。',
+  INGEST_URL_SIZE_EXCEEDED: '远程文件超过允许的最大大小。',
+  INGEST_URL_DOWNLOAD_FAILED: '无法下载远程文件。',
+  INGEST_LOCAL_NOT_CONFIGURED: '服务器未配置本地路径导入。',
+  INGEST_LOCAL_NOT_ABSOLUTE: '本地路径必须是绝对路径。',
+  INGEST_LOCAL_TRAVERSAL: '路径超出允许的导入目录范围。',
+  INGEST_LOCAL_NOT_FOUND: '文件不存在。',
+  INGEST_LOCAL_NOT_FILE: '路径必须指向普通文件。',
+  INGEST_LOCAL_NOT_DIR: '路径必须指向目录。',
+  INGEST_LOCAL_EXTENSION: '不允许此文件类型。',
+  INGEST_LOCAL_SIZE_EXCEEDED: '文件超过允许的最大大小。',
+  INGEST_UPLOAD_NO_FILE: '未上传文件。',
+  INGEST_UPLOAD_EXTENSION: '不允许此文件类型。',
+  INGEST_UPLOAD_SIZE_EXCEEDED: '上传文件超过允许的最大大小。',
+  INGEST_PROBE_FAILED: '无法读取视频元数据。',
+  INGEST_PROBE_ZERO_DURATION: '文件没有可播放的视频时长。',
+  INGEST_INVALID_MODE: '无效的导入模式。',
+  INGEST_INVALID_CHUNKING:
+    '无效的分块预设或窗口/重叠参数。请使用 standard、60s、30s、20s、fine，或提供合法的 window_ms + overlap_ms。',
+  INGEST_BATCH_EMPTY: '本批次未找到视频文件。',
+  INGEST_BATCH_TOO_LARGE: '单批文件过多，请拆成更小的批次。',
+  INGEST_INTERNAL: '导入过程中发生意外错误。',
+};

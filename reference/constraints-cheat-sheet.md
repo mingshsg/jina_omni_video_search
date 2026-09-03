@@ -132,12 +132,17 @@ See [elastic-eui-constraints.md](elastic-eui-constraints.md) for evidence.
 | --- | --- |
 | Latest `@elastic/eui` | 119.1.0 |
 | React peer range | `^17.0 \|\| ^18.0` — **no React 19** |
-| SSR / Next.js | Officially "a challenge"; the Next.js starter is **archived**; elastic/eui#7630 still open |
-| Package manager | **yarn required, npm unsupported** |
-| Styling | Emotion 11.x plus `@elastic/eui-theme-borealis` 8.0.0; conflicts with Tailwind preflight |
+| Next 14.2.35 | peers `react: ^18.2.0` only |
+| Next 15 App Router | upgrade guide: React **19** minimum |
+| Next 16 App Router | upgrade guide: React **19.2 Canary** |
+| SSR / Next.js | Officially "a challenge"; starter archived; #7630 open |
+| Package manager | **yarn pinned for this project** (EUI docs prefer yarn; not treated as a hard consumer law) |
+| Styling | Emotion 11.x + Borealis 8.0.0; no Tailwind |
 
-Resulting stack: Next.js 16 App Router + React 18 + EUI, client-side rendering
-only, yarn, no Tailwind.
+Resulting stack: **Next.js 14.2.35 + React 18.3.1 + EUI 119.1.0**, client-side
+rendering only, yarn, no Tailwind. Per-provider budgets:
+`EIS_MAX_BINARY_BYTES` / `JINA_MAX_BINARY_BYTES` / `LOCAL_MAX_BINARY_BYTES`
+with an explicit `EMBED_BUDGET_BYTE_LAYER`.
 
 ## Design implications for this demo
 
@@ -151,3 +156,4 @@ only, yarn, no Tailwind.
    measure their real limits rather than quoting one.
 6. Pin task adapters and never mix providers within a variant.
 7. Keep vectors at 1024 dimensions.
+8. Sanitize stored URL provenance (FR-22).

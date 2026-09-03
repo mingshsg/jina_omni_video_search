@@ -8,29 +8,31 @@ sources:
   - https://github.com/elastic/eui/issues/7630
   - https://github.com/elastic/eui/issues/8720
   - https://github.com/elastic/next-eui-starter
+  - https://nextjs.org/docs/app/guides/upgrading/version-15
+  - https://nextjs.org/docs/app/guides/upgrading/version-16
 verified: 2026-08-25
 ---
 
 # EUI adoption constraints
 
-Verified directly against the EUI repository, the npm registry, and the EUI
-issue tracker on 2026-08-25, because the UI decision for this project depends
-on them. These are the facts, not opinions; the resulting decision lives in
-`plan/00-implementation-plan.md`.
+Verified directly against the EUI repository, the npm registry, Next.js upgrade
+guides, and the EUI issue tracker. These are the facts; the resulting decision
+lives in `plan/00-implementation-plan.md`.
 
 ## Versions observed
 
-- Latest published `@elastic/eui`: **119.1.0** (released 2026-08-24). The `main`
-  branch carries the same version.
-- Published dist-tags include theme-pinned lines: `borealis`, `classic`,
-  `amsterdam`, alongside `latest`.
-- Latest `next`: **16.3.2**. Both Next.js 15 and 16 declare
-  `peerDependencies.react` as `^18.2.0 || ^19.0.0`, so Next.js does **not**
-  force React 19.
+- Latest published `@elastic/eui`: **119.1.0** (released 2026-08-24).
+- Latest stable `next@14`: **14.2.35**, peers `react: ^18.2.0` only.
+- `next@15.0.0` peers list `^18.2.0 || 19.0.0-rc-…`, but the **upgrade guide**
+  states React 19 is the minimum.
+- Latest `next@16` peers still list `^18.2.0 || ^19.0.0`, but the App Router
+  upgrade guide states it uses React 19.2 Canary.
+
+**Lesson (Round 4):** peer installability ≠ official App Router support.
 
 ## Constraint 1: EUI does not declare React 19 support
 
-`packages/eui/package.json` on `main` at 119.1.0:
+`packages/eui/package.json` at 119.1.0:
 
 ```json
 "peerDependencies": {
@@ -47,75 +49,53 @@ on them. These are the facts, not opinions; the resulting decision lives in
 }
 ```
 
-React 19 is absent. Supporting evidence on intent:
-
 - Issue [#8720 `[Epic] React 19 support`](https://github.com/elastic/eui/issues/8720)
-  was **closed** on 2026-05-24, but the peer range was never widened, and the
-  epic body still reads "This work isn't yet prioritized." Its definition of
-  done included updating documentation to reflect added support, which did not
-  happen. Treat the epic as deprioritised rather than delivered.
-- Issue #9587 (`[React 19][EuiFieldSearch]` console error in React 19 dev mode)
-  remains **open**.
+  closed without widening the peer range.
+- Issue #9587 (React 19 console error) remains open.
 
-**Consequence:** pin React 18. Next.js 16 accepts `^18.2.0`, so this costs
-nothing in framework currency.
+## Constraint 2: Next.js App Router React matrix
 
-## Constraint 2: EUI has no SSR support, and Next.js is officially "a challenge"
+| Next.js | Official upgrade-guide React stance | Peer `react` (npm) |
+| --- | --- | --- |
+| **14.2.35** | React 18 | `^18.2.0` only |
+| **15** | "The minimum versions of `react` and `react-dom` is now **19**." | lists 18 \|\| 19 |
+| **16** | App Router uses React **Canary** with **19.2** features | lists 18 \|\| 19 |
 
-`elastic/next-eui-starter` is **archived** (`archived: true`, last push
-2024-08-08). Its README states:
+**Consequence:** the only combination where **both** Next and EUI sit inside
+their declared support ranges is **Next.js 14.2.35 + React 18.3.x + EUI
+119.1.0**. Next 16 + React 18 was rejected after Round 4.
 
-> This starter is not constantly maintained and is out of sync with the latest
-> EUI release. The lack of SSR support also currently makes Next.js a challenge
-> with EUI. We plan to enhance our support for Next.js and re-evaluate this
-> project at that time.
+## Constraint 3: EUI has no SSR support; Next.js is "a challenge"
 
-The linked tracking issue
-[#7630 `[Meta] Expanded Platform support`](https://github.com/elastic/eui/issues/7630)
-is still **open** (last updated 2026-02-03) and lists as unaddressed:
+`elastic/next-eui-starter` is **archived**. README:
 
-> **SSR support / Next.js** - This is a challenge for anyone prototyping in
-> Next.js, which many folks in the company do. In fact, we even provide a
-> Next.js starter project, which has fallen woefully behind on support and
-> updates.
+> The lack of SSR support also currently makes Next.js a challenge with EUI.
 
-**Consequence:** do not rely on server-rendering EUI. Render EUI on the client
-only. This is acceptable here because the application is an internal demo with
-no SEO or first-paint SSR requirement, and it lets the Next.js server continue
-to host the parts that genuinely need a server (ffmpeg, Elasticsearch, SSE,
-Range streaming, uploads), none of which import EUI.
+Issue [#7630](https://github.com/elastic/eui/issues/7630) still open.
 
-## Constraint 3: npm is not supported, yarn is required
+**Consequence:** render EUI client-side only. Acceptable for this internal demo.
 
-From `wiki/consuming-eui/README.md`:
+## Constraint 4: yarn as project pin (not a hard consumer mandate)
 
-> To install the Elastic UI Framework into an existing project, use the `yarn`
-> CLI (`npm` is not supported).
+EUI consuming docs say use `yarn` (`npm` is not supported) for installing into
+an existing project. The EUI monorepo itself uses yarn. Round 4 notes that this
+does not prove application consumers **must** use yarn when dependencies are
+present.
 
-Full peer install line given by the same document:
+**Consequence for this repo:** pin **yarn** for reproducibility. Label it a
+project choice, not a universal framework law.
 
 ```bash
 yarn add @elastic/eui @elastic/eui-theme-borealis @elastic/datemath @emotion/react @emotion/css moment
 ```
 
-EUI also expects an ES2015 polyfill to be present.
+## Constraint 5: EUI owns the styling layer
 
-**Consequence:** the project uses yarn, and the README plus `.env.example`
-instructions must say so. Any earlier note in this project's plan that assumed
-`npm install` is superseded.
+Emotion 11.x + Borealis tokens conflict with Tailwind preflight. **No Tailwind.**
 
-## Constraint 4: EUI owns the styling layer
+## Net decision
 
-EUI styles with Emotion (`@emotion/react`, `@emotion/css` at `11.x`) and ships
-design tokens through `@elastic/eui-theme-borealis` 8.0.0. Layering Tailwind's
-preflight on top of this competes with EUI's own resets.
-
-**Consequence:** Tailwind is removed from the stack. Layout and theming come
-from EUI components and Borealis tokens.
-
-## Net decision recorded here for traceability
-
-Next.js 16 App Router + React 18 + EUI 119.1.0, installed with yarn, EUI
-rendered client-side only, no Tailwind. Fallback if the client-only Emotion
-setup proves unstable: wrap EUI-heavy pages in
-`dynamic(() => import(...), { ssr: false })`.
+**Next.js 14.2.35 + React 18.3.1 + EUI 119.1.0**, yarn, client-side EUI only, no
+Tailwind. Phase 1 begins with an exact-version compatibility spike recorded in
+`docs/operations.md`. Fallback: `dynamic(..., { ssr: false })` for EUI-heavy
+pages.

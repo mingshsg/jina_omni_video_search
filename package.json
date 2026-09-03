@@ -1,0 +1,41 @@
+{
+  "name": "jina-video-embedding",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "yarn@1.22.22",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "probe": "tsx scripts/probe-capabilities.ts",
+    "setup-indices": "tsx scripts/setup-indices.ts",
+    "test-embed-compat": "tsx scripts/test-embed-compat.ts",
+    "test": "vitest run",
+    "test-video-pipeline": "tsx scripts/test-video-pipeline.ts",
+    "smoke-phase8-search": "tsx scripts/smoke-phase8-search.ts",
+    "phase10-e2e": "tsx scripts/phase10-e2e.ts"
+  },
+  "dependencies": {
+    "@elastic/datemath": "^5.0.3",
+    "@elastic/elasticsearch": "^8.17.0",
+    "@elastic/eui": "119.1.0",
+    "@elastic/eui-theme-borealis": "8.0.0",
+    "@emotion/cache": "^11.14.0",
+    "@emotion/css": "^11.13.5",
+    "@emotion/react": "^11.14.0",
+    "moment": "^2.30.1",
+    "next": "14.2.35",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.19",
+    "@types/react": "18.3.18",
+    "@types/react-dom": "18.3.5",
+    "tsx": "^4.23.12",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  }
+}

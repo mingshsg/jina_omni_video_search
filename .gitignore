@@ -1,0 +1,55 @@
+# Environment (never commit secrets)
+.env
+.env.*
+!.env.example
+
+# Local media and runtime data (directory placeholders via .gitkeep only)
+data/**
+!data/**/
+!data/**/.gitkeep
+
+# Dependencies and build
+node_modules/
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+
+# Media uploads / proxies (belt-and-suspenders if outside data/)
+uploads/
+*.mp4
+*.webm
+*.mkv
+*.mov
+*.avi
+*.m4v
+*.mp3
+*.wav
+*.opus
+*.m4a
+*.aac
+
+# Logs and debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+*.iml
+
+# Test / coverage
+coverage/
+.nyc_output/
+
+# Vercel / misc
+.vercel
+*.pem
