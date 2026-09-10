@@ -468,6 +468,76 @@ Same `{ "error": { "code", "message" } }` envelope.
 
 ---
 
+## Image search API — normative
+
+**Endpoint:** `POST /api/search/image`
+
+Image-to-video retrieval: embed the query image with the active
+`EMBED_PROVIDER`, then knn **only** on `embedding_video`. No RRF / audio
+branch. Hit shape matches text search.
+
+### Request (multipart)
+
+`Content-Type: multipart/form-data`
+
+| Field | Required | Rules |
+| --- | --- | --- |
+| `file` (or `image`) | yes | JPEG / PNG / WebP / GIF; raw upload ≤ **10 MB** before compress |
+| `variant_id` | yes | knn pre-filter |
+| `video_id` | no | optional single-video filter |
+| `size` | no (default 20) | top-k; clamped **1..100** |
+
+### Request (JSON)
+
+`Content-Type: application/json`
+
+```json
+{
+  "image_base64": "data:image/jpeg;base64,…",
+  "mime": "image/jpeg",
+  "variant_id": "a1b2c3d4e5f67890",
+  "video_id": null,
+  "size": 20
+}
+```
+
+`image_base64` may be a data URL or bare base64. Server resizes long edge to
+`EMBED_MAX_LONG_EDGE` (default **1280**), recompresses to JPEG, and keeps
+decoded bytes under the provider budget (`EIS_MAX_BINARY_BYTES` / etc.).
+
+### Query vector
+
+Always app-side `embedImage(..., 'query')` → knn `query_vector` on
+`embedding_video` (EIS `_inference/embedding` with `type: image`; jina/local
+`{ image: dataUrl }`). Text-search EIS `query_vector_builder` path is **not**
+used here so the compressed bytes stay under budget before inference.
+
+### Response
+
+Same `hits[]` fields as `POST /api/search`. `meta`:
+
+| Field | Value |
+| --- | --- |
+| `modality` | always `visual` |
+| `sort_by` | always `visual` |
+| `badge_strategy` | `single_knn` |
+| `image_bytes` | JPEG bytes sent to the embed provider |
+| `query_mime` | `image/jpeg` after prepare |
+
+`score` / `score_visual` are the visual knn `_score`; `score_audio` /
+`rank_audio` are `null`; `modality_badge` is `visual`.
+
+### Image search errors
+
+| Code | HTTP | When |
+| --- | --- | --- |
+| `SEARCH_INVALID_REQUEST` | 400 | bad Content-Type / missing fields / zod |
+| `SEARCH_IMAGE_INVALID` | 400 | unsupported type / empty / prepare failure |
+| `SEARCH_IMAGE_TOO_LARGE` | 413 | over upload or post-compress budget |
+| `SEARCH_FAILED` | 500 | Elasticsearch or embedding failure |
+
+---
+
 ## Library APIs (Phase 9)
 
 ### `GET /api/library`
@@ -544,3 +614,4 @@ Serves the chunk JPEG (from chunk `thumb_path` or conventional path under
 | 2026-08-26 | Phase 8: finalize search contract — RRF weights/window, badge rule, provider query vectors |
 | 2026-08-26 | Phase 11: library + media/thumb routes; status marked verified vs code |
 | 2026-09-03 | Search hits: `score_visual` / `score_audio` (knn similarity) + `rank_*`; `sort_by` `rrf`\|`visual`\|`audio`. `score` remains RRF when modality=both. |
+| 2026-09-04 | `POST /api/search/image` — image→video visual knn; UI `/search-image`. |

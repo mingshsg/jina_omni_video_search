@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+/env
 
 # Local media and runtime data (directory placeholders via .gitkeep only)
 data/**

@@ -22,7 +22,7 @@ function bufferToDataUrl(data: Buffer | string, mime: string): string {
 }
 
 function buildBinaryBody(
-  modality: 'video' | 'audio',
+  modality: 'video' | 'audio' | 'image',
   dataUrl: string,
 ): Record<string, unknown> {
   return {
@@ -145,6 +145,14 @@ export function createEisEmbeddingProvider(cfg: AppConfig): EmbeddingProvider {
     ): Promise<EmbedResult> {
       const dataUrl = bufferToDataUrl(data, 'audio/wav');
       return infer(buildBinaryBody('audio', dataUrl), role);
+    },
+
+    async embedImage(
+      data: Buffer | string,
+      role: EmbedRole = 'query',
+    ): Promise<EmbedResult> {
+      const dataUrl = bufferToDataUrl(data, 'image/jpeg');
+      return infer(buildBinaryBody('image', dataUrl), role);
     },
   };
 }

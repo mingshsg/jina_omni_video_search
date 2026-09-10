@@ -17,6 +17,14 @@ export interface SearchParams {
   sortBy?: SearchSortBy;
 }
 
+export interface ImageSearchParams {
+  /** JPEG (or provider-ready) image bytes for the visual query embedding. */
+  image: Buffer;
+  variantId: string;
+  videoId?: string | null;
+  size?: number;
+}
+
 export interface SearchHit {
   chunk_id: string;
   video_id: string;
@@ -55,6 +63,20 @@ export interface SearchResult {
   /** How modality badges were recovered (documented in api-contract). */
   badge_strategy: 'rrf_plus_parallel_knn' | 'single_knn';
   took_ms: number;
+}
+
+export interface ImageSearchResult {
+  hits: SearchHit[];
+  rank_window_size: number;
+  size: number;
+  modality: 'visual';
+  sort_by: 'visual';
+  variant_id: string;
+  video_id: string | null;
+  badge_strategy: 'single_knn';
+  took_ms: number;
+  /** Decoded JPEG bytes actually sent to the embed provider. */
+  image_bytes: number;
 }
 
 const SOURCE_FIELDS = [
@@ -526,5 +548,66 @@ export async function searchChunks(
     video_id: params.videoId ?? null,
     badge_strategy: 'rrf_plus_parallel_knn',
     took_ms: Math.round(performance.now() - t0),
+  };
+}
+
+/**
+ * Image → video visual knn only (no RRF / audio branch).
+ *
+ * Always embeds the query image app-side via the active EMBED_PROVIDER
+ * (`embedImage`), then runs knn with `query_vector` on `embedding_video`.
+ * Provider mixing is avoided: EIS / jina / local each use their own embed path.
+ */
+export async function searchChunksByImage(
+  params: ImageSearchParams,
+  cfg?: AppConfig,
+): Promise<ImageSearchResult> {
+  const config = cfg ?? getConfig();
+  const client = getEsClient();
+  const size = clampSearchSize(params.size);
+  const rankWindow = effectiveRankWindowSize(config, size);
+  const filters = buildFilters(params.variantId, params.videoId);
+  const index = config.ES_INDEX_CHUNKS;
+  const t0 = performance.now();
+
+  const provider = createEmbeddingProvider(config);
+  const embedded = await provider.embedImage(params.image, 'query');
+  const mode: QueryVectorMode = {
+    kind: 'vector',
+    vector: embedded.embedding,
+  };
+
+  const resp = await client.search({
+    index,
+    size,
+    _source: [...SOURCE_FIELDS],
+    retriever: {
+      knn: knnRetrieverBody('embedding_video', rankWindow, filters, mode),
+    },
+  } as Parameters<typeof client.search>[0]);
+
+  const knnHits = toEsHits(resp.hits?.hits ?? []);
+  const knnMaps = idMaps(knnHits);
+  const hits = assembleHits(
+    knnHits,
+    size,
+    knnMaps,
+    emptyIdMaps(),
+    new Map(),
+    knnMaps.source,
+    'visual',
+  );
+
+  return {
+    hits,
+    rank_window_size: rankWindow,
+    size,
+    modality: 'visual',
+    sort_by: 'visual',
+    variant_id: params.variantId,
+    video_id: params.videoId ?? null,
+    badge_strategy: 'single_knn',
+    took_ms: Math.round(performance.now() - t0),
+    image_bytes: params.image.length,
   };
 }

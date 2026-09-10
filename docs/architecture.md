@@ -142,12 +142,13 @@ Mappings: [data-model.md](./data-model.md).
 
 ## Interface surface
 
-Three pages under a shared `AppShell` (fixed header, ZH/EN switch, Chinese
+Three pages under a shared `AppShell` (fixed header, ZH/EN switch, English
 default):
 
 | Route | Purpose |
 | --- | --- |
 | `/` | Text search, filters, result cards, player seek, timeline strip |
+| `/search-image` | Image-to-video search (upload / drop; visual knn only) |
 | `/ingest` | URL / local / upload; workload estimate; SSE progress |
 | `/library` | Assets + variants; re-index (retry); remove (ES only) |
 

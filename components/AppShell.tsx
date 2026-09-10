@@ -73,6 +73,11 @@ export function AppShell({
                   {t.navSearch}
                 </EuiHeaderLink>
               </Link>
+              <Link href="/search-image" passHref legacyBehavior>
+                <EuiHeaderLink isActive={pathname === '/search-image'}>
+                  {t.navImageSearch}
+                </EuiHeaderLink>
+              </Link>
               <Link href="/ingest" passHref legacyBehavior>
                 <EuiHeaderLink isActive={pathname === '/ingest'}>
                   {t.navImport}

@@ -132,5 +132,13 @@ export function createLocalEmbeddingProvider(cfg: AppConfig): EmbeddingProvider 
       const dataUrl = bufferToDataUrl(data, 'audio/wav');
       return embedInput([{ audio: dataUrl }], role);
     },
+
+    embedImage(
+      data: Buffer | string,
+      role: EmbedRole = 'query',
+    ): Promise<EmbedResult> {
+      const dataUrl = bufferToDataUrl(data, 'image/jpeg');
+      return embedInput([{ image: dataUrl }], role);
+    },
   };
 }

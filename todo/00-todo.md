@@ -1,7 +1,7 @@
 # TODO
 
 Status legend: `[ ]` not started, `[~]` in progress, `[x]` done, `[-]` cancelled.
-Last updated: 2026-09-03 — search visual/audio scores + `sort_by`.
+Last updated: 2026-09-04 — image-to-video search (`/search-image`).
 
 Each phase carries an acceptance criterion so completion is verifiable rather
 than declared.
@@ -230,6 +230,19 @@ media size (verify in Phase 10).
   (plan: `APP_PORT=3001 docker compose up -d --build`; keep existing
   `./data` → `/app/data` bind; do **not** delete media). Verified 2026-09-03:
   search returns `score_visual`/`score_audio`; media dirs intact.
+
+## Follow-up: image-to-video search
+
+- [x] `POST /api/search/image` — multipart or JSON base64; prepare/compress
+      (max edge 1280 JPEG under provider budget); `embedImage` + knn on
+      `embedding_video` only (`variant_id` required, optional `video_id`)
+- [x] UI `/search-image` — upload/drop, variant + video filter + top-k,
+      result cards / player / timeline; nav **Image search**; EN/ZH i18n
+- [x] Docs: `docs/api-contract.md` (+ architecture route table)
+- [x] Docker rebuild on APP_PORT=3001 after this change
+  (`APP_PORT=3001 docker compose up -d --build`; Dockerfile uses
+  `node:22-bookworm-slim` to avoid Hub pulls of full bookworm /
+  `# syntax=` frontend when offline). Verified: `/search-image` → 200.
 
 ## Blocked / waiting on user
 

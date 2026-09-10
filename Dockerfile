@@ -1,14 +1,20 @@
-# syntax=docker/dockerfile:1
 # Next.js 14 + ffmpeg for ingest / proxy encode / playback.
+# Uses bookworm-slim (local cache) — full bookworm not required for yarn build.
 
-FROM node:22-bookworm AS deps
+FROM node:22-bookworm-slim AS deps
 WORKDIR /app
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates python3 make g++ \
+  && rm -rf /var/lib/apt/lists/*
 RUN corepack enable && corepack prepare yarn@1.22.22 --activate
 COPY package.json yarn.lock ./
 RUN yarn install --frozen-lockfile
 
-FROM node:22-bookworm AS builder
+FROM node:22-bookworm-slim AS builder
 WORKDIR /app
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
 RUN corepack enable && corepack prepare yarn@1.22.22 --activate
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .

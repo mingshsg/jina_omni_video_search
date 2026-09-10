@@ -1,6 +1,6 @@
 import type { EmbedProvider, NormalizedBy } from '../ingest/variant';
 
-export type EmbedModality = 'text' | 'video' | 'audio';
+export type EmbedModality = 'text' | 'video' | 'audio' | 'image';
 export type EmbedRole = 'passage' | 'query';
 
 export interface TokenUsage {
@@ -38,4 +38,6 @@ export interface EmbeddingProvider extends ProviderIdentity {
   embedText(text: string, role: EmbedRole): Promise<EmbedResult>;
   embedVideo(data: Buffer | string, role?: EmbedRole): Promise<EmbedResult>;
   embedAudio(data: Buffer | string, role?: EmbedRole): Promise<EmbedResult>;
+  /** Image query / passage in the shared multimodal space. */
+  embedImage(data: Buffer | string, role?: EmbedRole): Promise<EmbedResult>;
 }

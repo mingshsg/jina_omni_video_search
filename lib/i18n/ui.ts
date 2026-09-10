@@ -7,6 +7,7 @@ export type UiMessages = {
   appTitle: string;
   appSubtitle: string;
   navSearch: string;
+  navImageSearch: string;
   navImport: string;
   navLibrary: string;
   localeZh: string;
@@ -43,6 +44,19 @@ export type UiMessages = {
   loadingVariants: string;
   noVariants: string;
   seekingTo: string;
+
+  // Image search
+  imageSearchTitle: string;
+  imageSearchSubtitle: string;
+  imageUploadLabel: string;
+  imageUploadHint: string;
+  imageDropHint: string;
+  imageSelectedLabel: string;
+  imageClear: string;
+  imageSearchButton: string;
+  imageSearchEmptyHint: string;
+  imageRequired: string;
+  imageTypeError: string;
 
   // Ingest
   ingestTitle: string;
@@ -138,6 +152,7 @@ export const uiEn: UiMessages = {
   appTitle: 'Jina Omni Video Search',
   appSubtitle: 'Find a moment by text · play from there',
   navSearch: 'Search',
+  navImageSearch: 'Image search',
   navImport: 'Import',
   navLibrary: 'Library',
   localeZh: '中文',
@@ -174,6 +189,18 @@ export const uiEn: UiMessages = {
   loadingVariants: 'Loading variants…',
   noVariants: 'No ready variants yet. Import a video first.',
   seekingTo: 'Seek to',
+
+  imageSearchTitle: 'Image search',
+  imageSearchSubtitle: 'Upload a picture · find matching video moments',
+  imageUploadLabel: 'Query image',
+  imageUploadHint: 'JPEG, PNG, WebP, or GIF. Large images are resized automatically.',
+  imageDropHint: 'Drop an image here, or click to choose a file',
+  imageSelectedLabel: 'Selected',
+  imageClear: 'Clear',
+  imageSearchButton: 'Search with image',
+  imageSearchEmptyHint: 'Upload an image and choose a variant to search.',
+  imageRequired: 'Choose an image before searching.',
+  imageTypeError: 'Please choose a JPEG, PNG, WebP, or GIF image.',
 
   ingestTitle: 'Import',
   ingestDescription: 'URL · local path · upload',
@@ -268,6 +295,7 @@ export const uiZh: UiMessages = {
   appTitle: 'Jina Omni 视频检索',
   appSubtitle: '用文本找到瞬间 · 从该处播放',
   navSearch: '检索',
+  navImageSearch: '以图搜片',
   navImport: '导入',
   navLibrary: '片库',
   localeZh: '中文',
@@ -304,6 +332,18 @@ export const uiZh: UiMessages = {
   loadingVariants: '正在加载变体…',
   noVariants: '尚无可用变体，请先导入视频。',
   seekingTo: '跳转到',
+
+  imageSearchTitle: '以图搜片',
+  imageSearchSubtitle: '上传图片 · 匹配视频画面瞬间',
+  imageUploadLabel: '查询图片',
+  imageUploadHint: '支持 JPEG、PNG、WebP、GIF；过大图片会自动压缩。',
+  imageDropHint: '拖放图片到此处，或点击选择文件',
+  imageSelectedLabel: '已选择',
+  imageClear: '清除',
+  imageSearchButton: '以图检索',
+  imageSearchEmptyHint: '上传图片并选择变体后检索。',
+  imageRequired: '请先选择图片再检索。',
+  imageTypeError: '请选择 JPEG、PNG、WebP 或 GIF 图片。',
 
   ingestTitle: '导入',
   ingestDescription: 'URL · 本地路径 · 上传',
