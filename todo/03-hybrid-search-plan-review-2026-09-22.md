@@ -122,11 +122,31 @@ provisional.
       Phase 3 behavior byte-for-byte; the toggle never alters hand-selected
       facets.
 
-Post-revision SHA-256 (round 3 + parser transport, scope, and toggle; the
-round-2 review records the pre-revision inputs):
+- [x] **Transport corrected (verification, 2026-09-22).** The earlier
+      `chat_completion` recommendation was **wrong**: its response type is
+      `StreamResult`, i.e. SSE. Use the inference API **`completion`** task
+      (`client.inference.completion` → `{ completion: [{ result }] }`), which
+      is plain request/response and accepts a first-class `timeout` and
+      `task_settings`. The ES|QL `COMPLETION` command remains rejected, but on
+      the corrected ground that its `WITH { }` clause exposes only
+      `inference_id` and `timeout`, so `task_settings` — the structured-output
+      channel — is unreachable from it.
+- [x] **Defaults set to off (user, 2026-09-22).** The default search path is
+      pure embedding vector search, byte-identical to today. `hybrid` omitted
+      means `use_text=false` and `parse_query=false`. Hybrid ranking and query
+      parsing are both explicit opt-ins.
+- [x] **Parse visibility (user, 2026-09-22).** Partial extraction and no-op
+      parses are valid outcomes, not failures. Response meta carries a `parse`
+      object with `applied` *and* `rejected` (value + reason), confidence,
+      timings, and cache state; the UI renders it in a collapsible parse-detail
+      panel that is available even when the parse changed no results.
+- [x] `tmp/` added to `.gitignore`.
+
+Post-revision SHA-256 (round 3 + transport correction, defaults, inspection;
+the round-2 review records the pre-revision inputs):
 
 ```text
-68dcbaa3abe7207d4b34f3aa3f8baf09af6b51ed163a032d913f716f73e12ae3  plan/03-hybrid-metadata-search-plan.md
-1f0f98976b7734bb3040d3171ac321b03ca38ea6fde5651448d38a6fd5c20c9a  todo/02-hybrid-metadata-search-todo.md
-3d8f29a062948633d1c8ca7d81ad463746246e93b97316d824e0063670cd2736  chn.docs/混合元数据检索规划.md
+61e612510e0e346f93ad0dfab036e871498ec86e11c5db669d3692b4f3f79810  plan/03-hybrid-metadata-search-plan.md
+3a7192b7909eedfd7ffd324d0d14f05eca019825ef76be53562663ffe46242a6  todo/02-hybrid-metadata-search-todo.md
+91cf70030b9d97d8a3b4294f641dddc927130fbca4703520c4d8fe4e12cee671  chn.docs/混合元数据检索规划.md
 ```

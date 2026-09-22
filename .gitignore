@@ -55,3 +55,6 @@ coverage/
 # Vercel / misc
 .vercel
 *.pem
+
+# Local scratch (not part of the repo)
+tmp/

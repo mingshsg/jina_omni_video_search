@@ -449,30 +449,64 @@ cannot decide whether `interview` in "Audrey Hepburn interview" is a
 the LLM is being bought for — **disambiguation and generalization, not
 extraction**.
 
-**Transport: Elastic Inference Service, called directly.** The parser reuses
-the existing Elasticsearch connection rather than introducing a second AI
-vendor path. `lib/embed/eis.ts` already issues
+**Transport: Elastic Inference Service `completion` task, called directly.**
+Three different things share the word "completion" and must not be confused:
+
+| Thing | What it is | Used here? |
+| --- | --- | --- |
+| ES\|QL `COMPLETION` command | A language command (`ROW … \| COMPLETION …`) | **No** |
+| Inference API `completion` task | `POST /_inference/completion/<id>` — plain request/response | **Yes** |
+| Inference API `chat_completion` task | `POST /_inference/chat_completion/<id>` — returns a stream | **No** |
+
+The parser reuses the existing Elasticsearch connection rather than
+introducing a second AI vendor path. `lib/embed/eis.ts` already issues
 `client.transport.request({ path: '/_inference/embedding/<id>' })`; the parser
-issues the same shape against a `chat_completion` endpoint. Consequences:
+calls the typed equivalent, which exists in the installed 8.19.2 client:
+
+```ts
+const res = await client.inference.completion({
+  inference_id: cfg.QUERY_PARSER_INFERENCE_ID,
+  input: prompt,                 // one string: schema + vocabularies + query
+  timeout: '800ms',              // first-class per-call deadline
+  task_settings: { /* provider passthrough */ },
+});
+const raw = res.completion[0].result;   // JSON string → parse → validate
+```
+
+`chat_completion` is **not** used: its response type is a stream
+(`StreamResult`), so it would require SSE handling for a single short
+extraction. The `completion` task returns
+`{ completion: [ { result: string } ] }` directly, which is exactly the shape
+a parser wants. Consequences:
 
 - **No new credential surface.** Same `ELASTICSEARCH_URL` and
   `ELASTICSEARCH_API_KEY`; no parser URL, model name, or API key in app config.
 - **The inference endpoint ID is the only knob.** Swapping the model is a
-  server-side `PUT _inference/chat_completion/<id>` with no app redeploy and
+  server-side `PUT _inference/completion/<id>` with no app redeploy and
   no secret rotation.
 - **Pinned default: `google-gemini-3.5-flash-lite`** (EIS catalogue, GA). A
   Lite model is the right class for extracting ~6 fields from a short string;
   full Flash is over-specified. Record the resolved model ID in the parse
   evaluation report.
 
-**Why not ES|QL `COMPLETION`.** `ROW q = "…" | COMPLETION parsed = q WITH {…}`
-is valid and GA on Serverless, but it is the wrong vehicle here: it requires
-task type `completion`, whose input is a single string, whereas calling
-`_inference` directly allows **`chat_completion`** with separated system and
-user messages and any provider-native structured-output settings. It also
-avoids embedding the user's query into an ES|QL statement, avoids the
-`esql.command.completion.enabled` cluster setting and its 100-row default
-limit, and avoids planner overhead on a one-row synthetic query.
+**Why not the ES|QL `COMPLETION` command.** `ROW q = "…" | COMPLETION parsed =
+q WITH {…}` is valid and GA on Serverless, and it reaches the *same*
+`completion` task type — so this is a transport choice, not a capability one.
+Four concrete reasons to call the inference API directly instead:
+
+1. **`task_settings` is unreachable from ES|QL.** The `WITH { }` clause
+   accepts only `inference_id` and `timeout`. `task_settings` is the
+   provider-passthrough channel where structured-output settings (for example
+   a Gemini `responseSchema`) would go, and it is available only on the
+   inference API. This is the strongest reason.
+2. No user text is embedded into an ES|QL statement, so there is no escaping
+   or parameter-binding surface.
+3. No dependency on the `esql.command.completion.enabled` cluster setting or
+   its 100-row default limit — operational levers unrelated to this use case
+   that can nonetheless disable it.
+4. No query-planner overhead on a one-row synthetic query, and a simpler
+   error surface (HTTP status versus ES|QL execution errors).
+
 `COMPLETION` is **not** retained for any other purpose in this feature; see
 the retrieval invariant below.
 
@@ -483,13 +517,13 @@ prose, preferring `null` over a guess. Prompt engineering makes well-formed
 output *likely*, not *guaranteed*, so it is never the correctness mechanism:
 Rule 2 validation is. **Phase 3.6 verification item:** determine whether EIS
 passes provider-native structured output (Gemini `responseSchema` / JSON mime
-type) through `task_settings`. If it does, use it; if not, prompt plus
+type) through `task_settings`, which the `completion` task accepts. If it does, use it; if not, prompt plus
 validation plus a single repair retry.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `QUERY_PARSER_PROVIDER` | `dictionary` | `none` \| `dictionary` \| `eis` |
-| `QUERY_PARSER_INFERENCE_ID` | none | EIS `chat_completion` endpoint ID (e.g. one backed by `google-gemini-3.5-flash-lite`) |
+| `QUERY_PARSER_INFERENCE_ID` | none | EIS **`completion`** task endpoint ID (backed by `google-gemini-3.5-flash-lite`) |
 | `QUERY_PARSER_TIMEOUT_MS` | `800` | Hard deadline; on expiry fall back to `dictionary`. **Must be set explicitly** — the Serverless inference default is 120 s |
 | `QUERY_PARSER_MAX_TOKENS` | `256` | Output ceiling; the schema is small |
 | `QUERY_PARSER_FACET_MODE` | `boost` | `boost` \| `filter` (evaluation only) |
@@ -726,6 +760,14 @@ fails a selected facet. Selected facets intersect the explicit `video_id` and
 ready `variant_id`; never broaden a failed or empty intersection. Cap each
 selected array at 20 values and reject invalid/overlimit requests with 400.
 
+**Everything in this feature is off by default.** The default search path is
+**pure embedding vector search**, byte-for-byte the behavior shipped today:
+`hybrid` omitted means `use_text=false` and `parse_query=false`, no BM25
+channel, no asset-rank projection, no parsing, no chips. Hybrid ranking and
+query understanding are both explicit opt-ins. This keeps regression risk on
+the existing demo at essentially zero and makes on/off comparison the natural
+way to operate the feature rather than a special evaluation mode.
+
 **`hybrid.parse_query` — per-search parser toggle.** Query understanding is a
 user-facing choice at search time, not only a deployment setting, so an
 operator can compare parsed and unparsed behavior on the same query without a
@@ -733,18 +775,50 @@ redeploy.
 
 | `parse_query` | Server config | Behavior | `parser` in response meta |
 | --- | --- | --- | --- |
-| omitted | parser configured | parse (recommended default: **on**) | `eis` or `dictionary` |
-| omitted | `QUERY_PARSER_PROVIDER=none` | no parsing | `raw` |
-| `true` | configured | parse | `eis` or `dictionary` |
-| `true` | `none` | no parsing; not an error | `unavailable` |
+| omitted | any | **no parsing (default)** | `disabled` |
+| `true` | parser configured | parse | `eis` or `dictionary` |
+| `true` | `QUERY_PARSER_PROVIDER=none` | no parsing; not an error | `unavailable` |
 | `false` | any | **skip all parsing** — dictionary *and* model | `disabled` |
 
-`false` skips the whole parsing tier, not just the model: the raw query goes
-to every channel exactly as in the Phase 3 MVP, no chips are shown, and no
-facet is inferred. Turning the toggle off must never change which facets the
-operator selected by hand. The UI presents it as one control (a
+`false` (or omitted) skips the whole parsing tier, not just the model: the raw
+query goes to every channel exactly as in the Phase 3 MVP, no chips are shown,
+and no facet is inferred. Turning the toggle off must never change which
+facets the operator selected by hand. The UI presents it as one control (a
 "smart query parsing" switch next to the search box); it is hidden or disabled
 when no parser is configured. An image request never accepts `parse_query`.
+
+**Partial extraction and no-op parses are valid outcomes, not failures.** The
+parser is not required to populate every field, and it is entirely acceptable
+for a parsed search to return the same results as an unparsed one — for a pure
+scene query there is nothing to extract, so `vector_query` is the whole input
+and the result is identical by construction. Neither case is an error, neither
+is logged as one, and neither should be "fixed" by making the parser extract
+more aggressively; over-extraction is the failure mode that costs relevance.
+
+**Inspection is a first-class requirement.** Because a parse can be invisible
+in the results, there must be somewhere to see what it actually did. The
+response meta carries a `parse` object and the UI renders it in a collapsible
+"parse detail" panel next to the results:
+
+```jsonc
+"parse": {
+  "parser": "eis",
+  "vector_query": "in a store window",
+  "free_text": "Audrey Hepburn",
+  "scene_terms_present": true,
+  "applied":  { "actor_ids": ["person:audrey-hepburn"] },
+  "rejected": [ { "field": "country", "value": "Hollywood",
+                  "reason": "not in catalog" } ],
+  "confidence": { "actor_ids": 0.95 },
+  "elapsed_ms": 412,
+  "cache": "miss"
+}
+```
+
+`rejected` is as important as `applied`: it is the only way to see
+Rule 2 validation working and the primary input to tuning over-trigger rate.
+The panel must be available whenever parsing ran, including when it changed
+nothing.
 
 `modality` selects vector channels. `sort_by` selects ranking. If `hybrid`
 is omitted or `use_text=false`, keep the current file-search defaults and
@@ -787,10 +861,12 @@ live behaviour stays unchanged.
 2. **Import** — no metadata panel in the MVP; operators add metadata after
    the asset appears in Library. No suggestion runs during ingest. An import
    form/payload is a separate follow-on across upload, path/URL, and batch.
-3. **Search** — facets, “Include title / description / names in ranking”, and
-   a **smart query parsing** switch (hidden when no parser is configured);
-   when it is on, extracted signals appear as removable chips and turning it
-   off clears them without touching hand-selected facets;
+3. **Search** — defaults to pure vector search; opt-in facets,
+   “Include title / description / names in ranking”, and a **smart query
+   parsing** switch (hidden when no parser is configured). When parsing is on,
+   extracted signals appear as removable chips, a collapsible **parse detail**
+   panel shows applied *and* rejected extractions with timings, and turning
+   the switch off clears the chips without touching hand-selected facets;
    moment cards show visual/audio scores and a separate video metadata match
    indicator. They do not say that a person was detected in the shown scene.
 
@@ -843,7 +919,7 @@ If denormalization (v2) is added later: bulk update-by-query on chunks when
 | **2 — Facets** | Complete bounded asset-ID lookup; text/image API + UI facets | Filters never leak, truncate silently, or disappear on lookup error |
 | **3 — Hybrid** | BM25 assets, two scene candidate paths, application fusion, hybrid sort/UI | Metadata rank-1 asset absent from global kNN becomes eligible; missing metadata visual match remains; scene labels stay honest; name-only queries use the C3 empty-residual behavior |
 | **3.5 — Semantic assets + deterministic parser** | `meta.description_embedding` behind `ASSET_SEMANTIC_ENABLED`; catalog/regex query matcher with removable chips | Paraphrase and cross-language queries measurably improve or the flag stays off; extracted facets apply as boosts and are removable; no chunk re-embedding |
-| **3.6 — Optional EIS query parser** | EIS `chat_completion` endpoint (default model `google-gemini-3.5-flash-lite`) called via `_inference`; validated, boosts-only, cached, dictionary fallback | Runs correctly with `QUERY_PARSER_PROVIDER=none`; over-trigger rate measured against the parse set; timeout falls back without failing the search |
+| **3.6 — Optional EIS query parser** | EIS `completion` task endpoint (default model `google-gemini-3.5-flash-lite`) called via `_inference`; validated, boosts-only, cached, dictionary fallback | Runs correctly with `QUERY_PARSER_PROVIDER=none`; over-trigger rate measured against the parse set; timeout falls back without failing the search |
 | **4a — Local Suggest (optional to core search)** | Deterministic year/language clues in editor only | Draft only; no overwrite; save carries per-field provenance |
 | **4b — Generative Suggest (separate decision)** | Caption/classifier/ASR provider after configuration and evaluation | Provider, budget, and quality gates recorded before enablement |
 | **5 — Optional scale** | Asset text embeddings or denormalized cheap facets | Explicit model/vector lifecycle, migration, and measured latency/quality benefit |
@@ -861,11 +937,13 @@ If denormalization (v2) is added later: bulk update-by-query on chunks when
 | Analyzers | `standard` alone is unsafe for CJK; add a `cjk` sub-field, and prefer `nori`/`smartcn`/`icu`/`phonetic` if the Phase 1 probe finds them bundled |
 | Description embeddings | **Yes, Phase 3.5, flagged** — asset-level channel only, never in a chunk vector field; chunks still never re-embed |
 | Query parsing | Deterministic catalog matcher in 3.5; optional LLM in 3.6 for disambiguation/generalization only |
-| Parser transport | **EIS `chat_completion` via `_inference`**, reusing the existing Elasticsearch credentials — not a second vendor path, and not ES|QL `COMPLETION` (single-string input, cluster-setting dependency, planner overhead). Endpoint ID is the only app-side knob |
+| Parser transport | **EIS `completion` task via `_inference`**, reusing the existing Elasticsearch credentials. Not `chat_completion` (returns a stream); not the ES|QL `COMPLETION` command (no `task_settings`, cluster-setting dependency, planner overhead). Endpoint ID is the only app-side knob |
 | Parser model | **`google-gemini-3.5-flash-lite`** (EIS catalogue, GA). Lite class is correct for ~6-field extraction; revisit only if the parse eval demands it |
 | Agent Builder | Rejected for query parsing — agentic and multi-turn, latency measured in seconds |
 | Parser scope | **Query parsing only.** No generative output ever reaches a score, rank, hit, or card; retrieval stays deterministic (Rule 0) |
-| Parser control | Per-search `hybrid.parse_query` toggle in addition to server config; `false` skips dictionary *and* model and falls back to Phase 3 behavior |
+| Parser control | Per-search `hybrid.parse_query` toggle in addition to server config; **default off**; `false` skips dictionary *and* model and falls back to Phase 3 behavior |
+| Defaults | **Hybrid and parsing are both off by default — the default path is pure embedding vector search, identical to today** |
+| Parse visibility | A parse may extract nothing and may change no results; both are valid. Response meta `parse` + a UI parse-detail panel expose applied *and* rejected extractions |
 | Extracted vs selected facets | **Extracted = boost (removable chip); user-selected = hard filter.** Parser errors must not empty the page |
 | Name-only query | Vector channel still runs, weight reduced, labelled "matched on video metadata"; never present the timestamp as person/event evidence |
 | Live video | Out of scope for MVP (different asset model) |
@@ -892,7 +970,7 @@ moment-only results with whole-video text/names in the hybrid ranker.
 - `lib/metadata/catalogs.ts` (country/demonym, video-type synonym, language
   tables shared by validation, facets, and the query matcher)
 - `lib/search/query-parse.ts` (deterministic matcher; optional EIS
-  `chat_completion` client behind `QUERY_PARSER_PROVIDER`, reusing the
+  `completion` client behind `QUERY_PARSER_PROVIDER`, reusing the
   `lib/embed/eis.ts` transport pattern and mirroring `lib/live/query-cache.ts`
   for the parse cache; its own concurrency gate, not `EMBED_CONCURRENCY`)
 - `lib/es/index-assets.ts`, `lib/ingest/job-store.ts`, new `lib/es/asset-meta.ts`
@@ -965,10 +1043,16 @@ Required functional gates:
   retrieval and ranking code path is identical apart from which text is
   embedded and which boosts are applied; no response field contains
   model-generated prose.
-- **Per-search toggle:** `parse_query=false` produces byte-identical results
-  to the same request with no parser configured; hand-selected facets are
-  unaffected by the toggle; the `parser` meta value matches the table above in
-  all five combinations.
+- **Defaults:** a request with `hybrid` omitted returns byte-identical results
+  to the pre-feature build — pure vector search, no BM25 channel, no parsing.
+- **Per-search toggle:** `parse_query=false` and `parse_query` omitted both
+  produce byte-identical results to the same request with no parser
+  configured; hand-selected facets are unaffected by the toggle; the `parser`
+  meta value matches the table above in all four combinations.
+- **Inspection:** whenever parsing ran, response meta carries `parse` with
+  `applied`, `rejected`, and timings, and the UI panel renders it — including
+  the case where parsing changed no results. A partial or empty extraction is
+  reported as a normal outcome, never as an error.
 - **Query parser (3.5 / 3.6):** runs correctly with
   `QUERY_PARSER_PROVIDER=none`; extracted facets appear as removable chips and
   apply as boosts, never as silent filters; every extracted value validates

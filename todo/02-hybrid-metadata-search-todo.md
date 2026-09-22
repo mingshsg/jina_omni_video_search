@@ -125,11 +125,19 @@ ES mechanics: [`reference/elastic-asset-metadata-and-bounded-retrieval.md`](../r
       validation
 - [ ] Removable chips in the UI; extracted facets apply as **boosts**, and
       only promote to hard filters when the user clicks the chip
-- [ ] Per-search `hybrid.parse_query` toggle + UI switch; `false` skips
-      dictionary *and* model and reproduces Phase 3 behavior exactly; hidden
-      when no parser is configured; never alters hand-selected facets
-- [ ] Response meta `parser` = `eis|dictionary|raw|disabled|unavailable`, plus
-      the extracted structure actually applied
+- [ ] Per-search `hybrid.parse_query` toggle + UI switch, **default off**;
+      omitted or `false` skips dictionary *and* model and reproduces Phase 3
+      behavior exactly; hidden when no parser is configured; never alters
+      hand-selected facets
+- [ ] Assert the zero-config default path is byte-identical to the
+      pre-feature build (pure vector search, no BM25 channel, no parsing)
+- [ ] Response meta `parse` object: `parser`, `vector_query`, `free_text`,
+      `scene_terms_present`, `applied`, **`rejected`** (value + reason),
+      `confidence`, `elapsed_ms`, `cache`
+- [ ] UI collapsible **parse detail** panel rendering applied *and* rejected
+      extractions; must appear even when the parse changed no results
+- [ ] Treat partial extraction and no-op parses as normal outcomes — not
+      errors, not logged as errors, not "fixed" by extracting harder
 - [ ] Enforce Rule 0: parser output never reaches a score, rank, hit, or card;
       retrieval/ranking code path identical with the parser on and off
 - [ ] Measure BM25-only vs BM25+semantic, and raw vs dictionary parsing, on
@@ -137,9 +145,13 @@ ES mechanics: [`reference/elastic-asset-metadata-and-bounded-retrieval.md`](../r
 
 ## Phase 3.6 — Optional EIS query parser
 
-- [ ] Create an EIS `chat_completion` inference endpoint backed by
+- [ ] Create an EIS **`completion`** task endpoint backed by
       **`google-gemini-3.5-flash-lite`**; verify availability by calling it
-      once (do not infer from a Serverless version number)
+      once (do not infer from a Serverless version number). Use
+      `client.inference.completion({ inference_id, input, timeout,
+      task_settings })` → `res.completion[0].result`. **Not**
+      `chat_completion` (returns a stream), **not** the ES|QL `COMPLETION`
+      command (cannot pass `task_settings`)
 - [ ] Determine whether EIS passes provider-native structured output
       (`responseSchema` / JSON mime type) through `task_settings`; if not, use
       prompt + validation + a single repair retry
@@ -149,8 +161,8 @@ ES mechanics: [`reference/elastic-asset-metadata-and-bounded-retrieval.md`](../r
       `_CACHE_TTL_MS`, `_CACHE_MAX`; startup validation names the offending
       variable
 - [ ] Client reuses the `lib/embed/eis.ts` transport pattern against
-      `/_inference/chat_completion/<id>` — no new credentials, no parser URL
-      or model name in app config; its **own** concurrency gate, never
+      `/_inference/completion/<id>` — no new credentials, no parser URL or
+      model name in app config; its **own** concurrency gate, never
       `EMBED_CONCURRENCY`
 - [ ] Prompt carries closed vocabularies + candidate actor matches only, never
       the whole catalog; returns minimal JSON, `null` over guesses
