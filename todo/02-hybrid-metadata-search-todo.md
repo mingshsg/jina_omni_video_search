@@ -37,9 +37,18 @@ ES mechanics: [`reference/elastic-asset-metadata-and-bounded-retrieval.md`](../r
       a `cjk` sub-field, fully qualified `copy_to` from `actor_aliases`;
       mapping upgrade must land **before** any write that sets
       `meta.actor_aliases`
-- [ ] Person catalog `data/people.json` + alias index: ID-based `actor_ids`
-      filter, alias expansion on save, squashed and sorted-token `actor_keys`,
-      bounded backfill when the catalog changes
+- [ ] Person catalog at **`config/people.json`** (not `data/`, which is
+      gitignored + dockerignored + mounted over) + alias index: ID-based
+      `actor_ids` filter, alias expansion on save, squashed and sorted-token
+      `actor_keys`, bounded backfill when the catalog changes
+- [ ] `Dockerfile` copies `config/` into the standalone runner; verify
+      catalog load + autocomplete + metadata save **inside the built image**
+- [ ] Actor wire contract: client sends `actor_ids` only (validated against
+      the catalog, `400 META_UNKNOWN_ACTOR_ID` on unknown); server derives
+      `actors` display, `actor_aliases`, `actor_keys`, `search_text`. No
+      free-text actor names on the API in the MVP
+- [ ] Search facet is `filters.actor_ids` with ANY semantics; cross-script
+      selection test (metadata entered in Hangul, selected via romanized UI)
 - [ ] Verify populated-index migration and title-only old assets; use root
       `title` directly, report migration failures/conflicts, no chunk inference
 - [ ] Pinned 20-option production country/region catalog (selected EU,
@@ -54,8 +63,12 @@ ES mechanics: [`reference/elastic-asset-metadata-and-bounded-retrieval.md`](../r
       `PATCH /api/library/{videoId}/meta` with `expected_revision`, 404/409,
       `refresh=wait_for`; test concurrent editors and later job writes
 - [ ] Script handles the `expected_revision = 0` bootstrap for assets that have
-      no `meta` object; no `upsert`/`doc_as_upsert`; no `retry_on_conflict` on
-      the metadata PATCH
+      no `meta` object; no `upsert`/`doc_as_upsert`
+- [ ] Separate transport version conflicts from semantic revision mismatch:
+      bounded `retry_on_conflict` on **both** writers (safe — it retries only
+      version conflicts, never a script-thrown revision mismatch); 409 only
+      for a genuine stale `expected_revision`; test interleaved ingest/editor
+      writes
 - [ ] Library “Edit metadata” form (all fields optional; country/region select
       `XX — Name`; handle conflict/reload without silent overwrite)
 - [ ] Docs: data-model + api-contract
@@ -65,9 +78,14 @@ ES mechanics: [`reference/elastic-asset-metadata-and-bounded-retrieval.md`](../r
 - [ ] Dedicated **single-request** asset-ID query (`size: 10000`,
       `_source: false`, `track_total_hits: 10001`), filtered by ready variant
       and explicit video; overflow returns `FILTER_SCOPE_TOO_LARGE` (422)
-- [ ] Apply complete allow-list to chunk knn; skip the ID filter entirely when
-      no facets are selected; AND across facets, ANY within arrays, inclusive
-      years, exact missing/empty/failure behavior
+- [ ] Apply the complete ready-ID allow-list to chunk knn **whenever hybrid is
+      on**, with or without facets (chunks carry no readiness status, so
+      dropping it would let unready assets surface only on the unfiltered
+      path); default pure-vector path keeps today's behavior. AND across
+      facets, ANY within arrays, inclusive years, exact missing/empty/failure
+      behavior
+- [ ] Test ready / unready / failed variants for both hybrid-with-facets and
+      hybrid-without-facets
 - [ ] Extend text search and image JSON/multipart request validation and
       filters; reject overlimit arrays or reversed year range
 - [ ] Search and image UI facets (year range, type, language, country, actors,
@@ -85,12 +103,17 @@ ES mechanics: [`reference/elastic-asset-metadata-and-bounded-retrieval.md`](../r
       sub-field, loose `match` on `title^2`/description/abstract) — not a flat
       `multi_match`; lexical window `A = min(20, max(5, ceil(0.2 × eligible)))`
       with a minimum-score floor
-- [ ] Empty-residual / name-only behavior: vector channel still runs with
-      reduced weight, card labelled “matched on video metadata”, no
-      person/event claim at the shown timestamp
-- [ ] Retrieve full global per-modality candidate window; expand lexical assets
-      with one kNN over the `A`-asset ID set (`k = 5A`) capped per asset in the
-      application; union by chunk ID before final top-k
+- [ ] Phase-3 labelling contract (no detector needed): every hit separates
+      vector evidence from “video metadata matched”, and no card claims a
+      person/event occurs at the shown timestamp. `scene_terms_present` and
+      the vector down-weight move to Phase 3.5, where a matcher exists
+- [ ] Retrieve full global per-modality candidate window; expand lexical
+      assets in **two stages** — guaranteed floor (`msearch`, top
+      `G = min(5, A)` assets × 2 chunks) then pooled fill over the rest — so a
+      BM25 rank-1 asset can never receive zero candidates; union by chunk ID
+      before final top-k
+- [ ] Count real ES executions per request and measure p95 at the *guaranteed*
+      budget, not the cheaper pooled-only one
 - [ ] Implement documented application-side rank formula with `w_text = 0.4`
       and stable tie breaks; do not compare per-asset local ranks or
       double-count channels; do not clamp injected candidates
@@ -115,6 +138,11 @@ ES mechanics: [`reference/elastic-asset-metadata-and-bounded-retrieval.md`](../r
 - [ ] `meta.description_embedding` behind `ASSET_SEMANTIC_ENABLED` (default
       off): embed description+abstract on save, record provider/model/task/
       dims, invalidate on provider change
+- [ ] `description_embedding_meta` with `source_revision`, `source_digest`,
+      `state` (`current|stale|failed`): mark stale on save, publish only if
+      the revision still matches at write time, keep the save successful on
+      inference failure, and **query only `state: current`**; test two rapid
+      consecutive edits
 - [ ] Add `rank_asset_semantic` as a third asset-level term
       (`w_semantic/(60 + rank)`), reusing the already-computed query vector —
       **zero extra query-time inference**
@@ -123,8 +151,10 @@ ES mechanics: [`reference/elastic-asset-metadata-and-bounded-retrieval.md`](../r
 - [ ] Deterministic query matcher: person-alias longest match, country/demonym
       table, video-type synonyms, year regexes; shared catalogs with metadata
       validation
-- [ ] Removable chips in the UI; extracted facets apply as **boosts**, and
-      only promote to hard filters when the user clicks the chip
+- [ ] Removable chips in the UI; extracted facets apply as **boosts** via the
+      published formula (`w_facet` provisional 0.2, below `w_text` 0.4), and
+      only promote to hard filters when the user clicks the chip; a facet that
+      is both extracted and hand-selected is counted once (filter wins)
 - [ ] Per-search `hybrid.parse_query` toggle + UI switch, **default off**;
       omitted or `false` skips dictionary *and* model and reproduces Phase 3
       behavior exactly; hidden when no parser is configured; never alters
@@ -138,8 +168,9 @@ ES mechanics: [`reference/elastic-asset-metadata-and-bounded-retrieval.md`](../r
       extractions; must appear even when the parse changed no results
 - [ ] Treat partial extraction and no-op parses as normal outcomes — not
       errors, not logged as errors, not "fixed" by extracting harder
-- [ ] Enforce Rule 0: parser output never reaches a score, rank, hit, or card;
-      retrieval/ranking code path identical with the parser on and off
+- [ ] Enforce Rule 0 as corrected: the parser may shape query *inputs* and
+      propose validated boosts, but may not read results, assign/adjust scores
+      directly, reorder or drop hits, or generate any user-visible text
 - [ ] Measure BM25-only vs BM25+semantic, and raw vs dictionary parsing, on
       the labeled sets before changing any default
 

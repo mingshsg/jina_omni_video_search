@@ -260,6 +260,7 @@ media size (verify in Phase 10).
 - [~] **Hybrid metadata search** — plan in
       [`plan/03-hybrid-metadata-search-plan.md`](../plan/03-hybrid-metadata-search-plan.md);
       track [`todo/02-hybrid-metadata-search-todo.md`](./02-hybrid-metadata-search-todo.md)
+      and [round-3 readiness corrections](./04-hybrid-search-readiness-r3-2026-09-22.md)
 
 ## Blocked / waiting on user
 

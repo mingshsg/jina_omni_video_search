@@ -142,11 +142,14 @@ provisional.
       panel that is available even when the parse changed no results.
 - [x] `tmp/` added to `.gitignore`.
 
-Post-revision SHA-256 (round 3 + transport correction, defaults, inspection;
-the round-2 review records the pre-revision inputs):
+Superseded by round-3 readiness review: see
+[`todo/04-hybrid-search-readiness-r3-2026-09-22.md`](./04-hybrid-search-readiness-r3-2026-09-22.md)
+for G1–G8 and their dispositions.
+
+Post-revision SHA-256 (after round-3 G1–G8 corrections):
 
 ```text
-61e612510e0e346f93ad0dfab036e871498ec86e11c5db669d3692b4f3f79810  plan/03-hybrid-metadata-search-plan.md
-3a7192b7909eedfd7ffd324d0d14f05eca019825ef76be53562663ffe46242a6  todo/02-hybrid-metadata-search-todo.md
-91cf70030b9d97d8a3b4294f641dddc927130fbca4703520c4d8fe4e12cee671  chn.docs/混合元数据检索规划.md
+459b410ec8abd9d1fa8714f5c67c554a2d97156bbcca2a9e0b6d08c282bba0be  plan/03-hybrid-metadata-search-plan.md
+d2b61db5e92e51923730a151a37d95c899a3fe3d5c788e6709e7664baa92fe64  todo/02-hybrid-metadata-search-todo.md
+cf81aa8c61d8fc5724cd389ce0ea7eb4dde0cbd46f449e7258590a493319a538  chn.docs/混合元数据检索规划.md
 ```

@@ -73,7 +73,12 @@ normalization cannot bridge scripts, so `actors_key`-style normalization alone
 (the earlier design) fails every cross-script case.
 
 A curated **person catalog** is the source of truth. For the demo scale it is a
-versioned file, `data/people.json`; a `video-people` index is the scale-out:
+versioned file at **`config/people.json`** — deliberately *not* under `data/`,
+which `.gitignore` excludes (`data/**`) and `.dockerignore` drops, and which
+Compose mounts over with a media volume. A catalog placed there would be
+neither committed nor present in the built image. `config/` is versioned,
+explicitly copied in the `Dockerfile`, and carries no runtime media; runtime
+media stays under `data/`. A `video-people` index is the scale-out:
 
 ```jsonc
 {
@@ -154,9 +159,25 @@ fixed properties; it is not a dynamically keyed map. The UI derives source
 and confirmation per field, rather than from one global `mixed` flag. A saved
 value is confirmed by the reviewer; an unsaved suggestion remains only a
 draft. Clearing a field clears its provenance. The server derives key fields
-and never accepts client-supplied `search_text`, `actor_ids`, `actor_aliases`,
-`actor_keys`, or `tags_key`: actor IDs are resolved against the person catalog
-and the alias/key fields are expanded server-side.
+and never accepts client-supplied `search_text`, `actor_aliases`,
+`actor_keys`, or `tags_key`.
+
+**Actor wire contract (one rule, stated once).** The client supplies **person
+IDs and nothing else**:
+
+| Field | Direction | Who sets it |
+| --- | --- | --- |
+| `meta.actor_ids` | **client → server** on PATCH; returned by GET | Operator, chosen from catalog autocomplete |
+| `meta.actors` | server → client (display only) | Derived: catalog display name in the request locale |
+| `meta.actor_aliases`, `meta.actor_keys`, `meta.search_text` | never on the wire | Derived server-side from the catalog |
+
+PATCH validates every `actor_ids` entry against the person catalog; an unknown
+ID is `400 META_UNKNOWN_ACTOR_ID` naming the offending value. **Free-text
+actor names are not accepted by the API in the MVP** — a name is not a stable
+identity and can resolve to several people, so resolution belongs in the
+autocomplete UI where a human disambiguates, not in a server heuristic. If
+name input is ever added, it needs its own spec for unique resolution,
+ambiguous-name error, and unknown-name error; do not infer one.
 
 Deferred catalog fields: `series`, `episode`, `director`, `studio`,
 `content_rating`, `release_date`, `duration_bucket`, multiple production
@@ -208,9 +229,25 @@ relevance and surprises operators. Keep them as **filters**; use RRF only for
    in **one** request (see §D) — not a paged loop — because this is on the
    critical path before embedding. An empty eligible set returns no hits
    before embedding. With no facets, all ready assets of the selected variant
-   remain eligible, including those with no editorial metadata; in that case
-   omit the ID filter entirely and keep only `variant_id`. Existing nonhybrid
-   requests without facets keep the legacy search path.
+   remain eligible, including those with no editorial metadata — but the
+   allow-list is **still applied**. An earlier draft proposed dropping the ID
+   filter in that case as a latency optimization; that was wrong.
+   `video-chunks` carries `variant_id` but **no readiness status**
+   (`lib/es/indices.ts`), so without the allow-list the global vector path can
+   surface chunks belonging to an asset whose variant is not `ready`, while
+   the BM25 path enforces readiness — the same corpus would gain or lose
+   documents purely because a facet was added. The visibility contract is
+   therefore:
+
+   | Request | Ready-ID allow-list | Rationale |
+   | --- | --- | --- |
+   | `hybrid` omitted (default, pure vector) | **not applied** | byte-identical to today's behavior, which is the stated default guarantee |
+   | hybrid on, no facets | **applied** | one consistent corpus across both candidate paths |
+   | hybrid on, facets selected | **applied** | as above, intersected with the facets |
+
+   Enumeration already runs for BM25 eligibility whenever hybrid is on, so
+   applying it costs nothing extra. Existing nonhybrid requests keep the
+   legacy search path unchanged.
 2. Embed the text query once, **application-side**, and reuse that vector for
    every kNN branch. The current file path resolves an EIS query through
    `query_vector_builder`, so Elasticsearch runs inference internally and the
@@ -239,13 +276,28 @@ relevance and surprises operators. Keep them as **filters**; use RRF only for
    A fixed top-20 is wrong on a small catalog: this repository's demo library
    is roughly **36** videos, so a flat 20 would hand the text prior to ~56% of
    the corpus, where "in the top 20" carries almost no information. Retrieve
-   at most **5 chunks per asset per modality** from this set, reusing the same
-   query embedding, `variant_id`, and the `A`-asset ID list. Prefer **one**
-   kNN over that ID set with `k = 5 × A`, then cap per asset in the
-   application; a per-asset `msearch` guarantees the budget exactly but costs
-   `A` kNN executions per modality, so adopt it only if recall testing shows
-   the lexical path is starved. This second path can recover a text-matching
-   video absent from global kNN. BM25 returning zero assets does not empty the
+   candidates from this set in **two stages**, reusing the same query
+   embedding and `variant_id`, because a single pooled kNN cannot satisfy the
+   recall guarantee:
+
+   1. **Guaranteed floor.** For the top `G = min(5, A)` lexical assets, run a
+      bounded per-asset kNN (one `msearch` with `G` entries per modality)
+      taking **2 chunks each**. This guarantees every strongly text-matching
+      asset contributes candidates.
+   2. **Pooled fill.** One kNN over the remaining `A − G` asset IDs with
+      `k = 5 × (A − G)`, capped per asset in the application.
+
+   An earlier draft used only the pooled query and capped per asset
+   afterwards. That is unsound: all returned chunks can belong to a single
+   asset, so a BM25 rank-1 asset can receive **zero** candidates — and capping
+   after retrieval cannot restore candidates that were never returned. Since
+   the acceptance gate explicitly requires a top BM25 asset missing from
+   global kNN to contribute moments, the pooled-only design contradicted its
+   own guarantee. The floor makes the gate achievable; the pooled fill keeps
+   cost bounded. Cost is `1 msearch (G entries) + 1 kNN` per modality; count
+   real ES executions and measure p95 at this guaranteed budget, not at the
+   cheaper unsound one. This second path can recover a text-matching video
+   absent from global kNN. BM25 returning zero assets does not empty the
    global scene path.
 4. Union by `chunk_id` and keep the score for each modality in which the chunk
    was retrieved. Sort each modality's union of *its own* returned hits by its
@@ -258,7 +310,7 @@ relevance and surprises operators. Keep them as **filters**; use RRF only for
    absent from the global window normally sorts below it, except when
    approximate `bbq_hnsw` search genuinely missed it, in which case it is
    allowed to sort high. Do not clamp injected candidates to ranks below the
-   global window. At most `2 × (W + 5A)` raw candidates enter fusion (≤ 400 at
+   global window. At most `2 × (W + 2G + 5(A−G))` raw candidates enter fusion (≤ 400 at
    the maximum settings); deduplication usually reduces this. Missing channel
    evidence contributes zero.
 5. Each candidate gets its parent asset's BM25 rank, if its asset is among
@@ -325,6 +377,30 @@ Two hazards to respect:
    strictly inference-free. It records provider/model/task/dims and is
    invalidated when the provider identity changes, with the same discipline
    as `variant_id`.
+3. **Bind the vector to the revision and content that produced it.** Inference
+   is slower than a save, so two rapid edits can complete out of order and an
+   older vector can land on top of a newer description. Provider invalidation
+   does not cover this — the provider never changed. Store alongside the
+   vector:
+
+   ```jsonc
+   "description_embedding_meta": {
+     "source_revision": 7,
+     "source_digest": "sha256:…",   // over description + abstract
+     "state": "current" | "stale" | "failed",
+     "provider": "eis", "model": "…", "task": "…", "dims": 1024
+   }
+   ```
+
+   On save, mark `stale` immediately and enqueue the embedding. Publish the
+   vector **only if `meta.revision` still equals `source_revision`** at write
+   time; otherwise discard it — a newer edit already owns the field. On
+   inference timeout or error the field stays `stale`/`failed` and the save
+   itself still succeeds, because metadata editing must not depend on an
+   optional channel. **The semantic branch queries only `state: current`
+   vectors**, so a stale or failed asset silently falls back to BM25 rather
+   than matching on text it no longer has. Two rapid consecutive edits are a
+   required test.
 
 Ship it behind `ASSET_SEMANTIC_ENABLED` (default `false`) so BM25-only and
 BM25+semantic can be measured independently on the labeled set. Do not assume
@@ -391,21 +467,45 @@ Every extracted field is optional; the video-embedding channel always runs:
 }
 ```
 
-**Rule 0 (invariant) — the parser produces query structure and nothing else.
-It never participates in retrieval or ranking.**
+**Rule 0 (invariant) — the parser shapes query *inputs* only. It never sees
+results, never assigns a score, and never writes text a user reads.**
+
+An earlier draft of this rule said the parser "never participates in retrieval
+or ranking". That was wrong and self-contradicting: the parser's whole purpose
+is to decide what gets embedded and to propose facet boosts, both of which
+change retrieval inputs and ranking. The precise invariant is narrower:
 
 | Allowed | Forbidden |
 | --- | --- |
 | Read the user's input string | Read any vector, chunk, asset, or retrieval result |
-| Emit `vector_query`, `free_text`, `extracted`, `confidence` | Contribute to scoring, ranking, fusion, or grouping |
-| Be skipped entirely with no loss of correctness | Generate, rewrite, summarize, or explain any result text |
+| Emit `vector_query`, `free_text`, `extracted`, `confidence` | Assign, adjust, or post-process any score or rank directly |
+| Propose validated facet boosts that flow through the **deterministic** scoring formula | Reorder, filter, or drop hits after retrieval |
+| Be skipped entirely with no loss of correctness | Generate, rewrite, summarize, or explain any text shown to a user |
 
-Vector retrieval is always performed by the embedding model. The parser only
-decides *which span of text* is handed to it. No generative model output ever
-reaches a score, a rank, a hit, or a card. This invariant is what keeps the
-retrieval path deterministic and reproducible, and it is why an LLM here is a
-convenience rather than a dependency: with the parser disabled, the system
-degrades to the Phase 3 behavior and remains fully correct.
+So: parser output is an *input* to a fixed, auditable formula, never an
+operator on results. Vector retrieval is always performed by the embedding
+model; the parser only decides which span of text is handed to it. Every boost
+it proposes is applied by the same published formula with the same weights
+whether the value came from the parser, the dictionary, or a UI click — the
+only difference is filter-versus-boost (Rule 1). With the parser disabled the
+system degrades to the Phase 3 behavior and remains fully correct, which is
+what makes an LLM a convenience here rather than a dependency.
+
+**Boost formula for extracted facets.** An extracted facet contributes a
+bounded additive term to the asset-level prior, never a multiplier and never a
+filter:
+
+`score_hybrid += w_facet × Σ_f matched(f) / n_selected`
+
+where `matched(f)` is 1 when the candidate's asset satisfies extracted facet
+`f`, `n_selected` is the number of extracted facets, and `w_facet` is
+provisional at **0.2** — deliberately below `w_text` (0.4) because an inferred
+facet carries less evidence than a lexical match the operator can see. A
+hand-selected facet is a hard filter and contributes no boost. When the same
+facet is both extracted and hand-selected, the hard filter wins and the boost
+is dropped, so a value can never be counted twice. The response's `applied`
+structure lists only facets that actually affected scoring; values that
+matched nothing are reported under `rejected` with reason `no_effect`.
 
 **Rule 1 — extracted facets are boosts; only user-selected facets filter.**
 A facet the operator clicked is a hard filter, unchanged. A facet *inferred*
@@ -418,7 +518,7 @@ broaden a filter" rule still holds. `QUERY_PARSER_FACET_MODE` may be set to
 
 **Rule 2 — the output space is closed, so validation is total.** Every
 extracted value is checked against the pinned catalogs (20 countries, 10 video
-types, the language list, curated tags, `data/people.json`). Anything
+types, the language list, curated tags, `config/people.json`). Anything
 unrecognized is dropped. A parser therefore cannot invent a country code or an
 actor who does not exist.
 
@@ -432,7 +532,7 @@ The entity space is closed and small, so most extraction needs no model:
 
 | Signal | Mechanism | Rough size |
 | --- | --- | --- |
-| Actor names, any script | Longest-match over the person-catalog alias index | Reuses `data/people.json` |
+| Actor names, any script | Longest-match over the person-catalog alias index | Reuses `config/people.json` |
 | `video_type` | Synonym table per locale | ~60 entries |
 | `country` | Demonym table (`Korea`/`Korean`/`한국`/`韩国` → `KR`) | ~60 entries |
 | `year` | Regex rules (`1990s`, `before 1970`, `60年代`) | ~10 rules |
@@ -567,15 +667,32 @@ Two further constraints:
   That gate is sized for ingest window embedding; queueing an interactive parse
   behind a batch of window inferences would defeat the whole latency design.
 
-#### C3. Empty-residual behavior (required, Phase 3)
+#### C3. Empty-residual behavior
 
-When parsing yields no scene terms, the vector channel still runs — it is the
-one non-optional channel — but `scene_terms_present=false` reduces its rank
-weight, the card is labelled *"matched on video metadata"*, and the UI must
-not present the timestamp as evidence of the named person or event. Ranking
-windows by similarity to a bare name is dishonest, and this is the concrete
-rule that prevents it. This behavior is required in Phase 3 even before any
-parser exists, because a user can always type only a name.
+`scene_terms_present` can only be computed by something that recognizes a
+name, and the dictionary matcher does not exist until Phase 3.5. An earlier
+draft required this flag in Phase 3, where the default and `parse_query=false`
+paths do no parsing at all — the flag was therefore uncomputable at the phase
+that demanded it. Split by phase instead:
+
+**Phase 3 (no parser).** Every hit carries the generic asset-versus-scene
+evidence separation already required by the scene-honesty rule: vector
+evidence is shown as vector evidence, a metadata match is shown as
+*"video metadata matched"*, and no card asserts that a named person or event
+occurs at the displayed timestamp. This needs no detector — it is a labelling
+contract that applies to all hits — and it is the honest floor. Note that
+reducing a vector weight would not have made a name-derived timestamp into
+evidence anyway; only the labelling does real work here.
+
+**Phase 3.5 (dictionary matcher present).** When parsing is enabled and yields
+no scene terms, the vector channel still runs — it is the one non-optional
+channel — but `scene_terms_present=false` additionally reduces its rank weight
+and the card is labelled *"matched on video metadata"*. Ranking windows by
+similarity to a bare name is close to meaningless, and down-weighting it stops
+the ordering from looking more informative than it is.
+
+With parsing off at any phase, the Phase 3 labelling contract applies and no
+`scene_terms_present` claim is made either way.
 
 #### C4. Evaluation
 
@@ -711,9 +828,26 @@ Three details the script must handle explicitly:
   is a 409.
 - **Missing document.** `_update` on an absent ID already returns 404
   `document_missing_exception`. Do not add `doc_as_upsert` or `upsert`.
-- **Retry placement.** `retry_on_conflict` belongs on the **ingest** writer
-  only, whose progress updates are idempotent. It must never be set on the
-  metadata PATCH, which has to surface 409 to the editor.
+- **Two different conflicts, two different answers.** `_update` is internally
+  read-modify-write, so a concurrent ingest write can make the *document
+  version* move even when the two writes touch disjoint fields. That is a
+  **transport conflict** (`version_conflict_engine_exception`) and has nothing
+  to do with editorial staleness. A **semantic conflict** is
+  `meta.revision != expected_revision`, raised by the script.
+
+  | Conflict | Cause | Response |
+  | --- | --- | --- |
+  | Transport | concurrent write bumped `_seq_no` | retry, bounded |
+  | Semantic | another editor already saved | `409` + current revision |
+
+  Set `retry_on_conflict` (bounded, e.g. 3) on **both** writers. This is safe
+  because `retry_on_conflict` retries only version conflicts; a script-thrown
+  revision mismatch is not a version conflict and is never retried, so a
+  genuine editorial conflict still surfaces as 409 on the first attempt. An
+  earlier draft of this plan said the metadata PATCH must never use
+  `retry_on_conflict` — that was wrong, and would have let routine ingest
+  progress raise spurious 409s at an editor whose `meta.revision` had not
+  changed. Interleaved ingest/editor writes are a required test.
 
 Note that a partial `_update` merges objects but **replaces arrays wholesale**.
 Switching ingest to a partial update therefore still rewrites the entire
@@ -737,7 +871,7 @@ no text query and stays visual-only in the MVP.
   "filters": {
     "year_from": 1960,
     "year_to": 1965,
-    "actors": ["Audrey Hepburn"],
+    "actor_ids": ["person:audrey-hepburn"],
     "video_type": ["trailer"],
     "primary_language": ["en"],
     "country": ["US"],
@@ -752,9 +886,13 @@ no text query and stays visual-only in the MVP.
 }
 ```
 
-Facet groups use AND across fields. Within each selected array (`actors`,
-`tags`, `video_type`, `primary_language`, `country`) use ANY; exact actor/tag
-keys use the same normalization as metadata save. Year bounds are inclusive,
+Facet groups use AND across fields. Within each selected array (`actor_ids`,
+`tags`, `video_type`, `primary_language`, `country`) use **ANY**; tag keys use
+the same normalization as metadata save. The actor facet is
+`filters.actor_ids` and takes catalog person IDs, matching the write contract
+above — selecting an actor therefore matches assets whose metadata was entered
+in any script, which is the whole point of the ID indirection and must be
+covered by a cross-script test. Year bounds are inclusive,
 must be within the allowed range, and `year_from <= year_to`. Missing metadata
 fails a selected facet. Selected facets intersect the explicit `video_id` and
 ready `variant_id`; never broaden a failed or empty intersection. Cap each
@@ -965,8 +1103,9 @@ moment-only results with whole-video text/names in the hybrid ranker.
 ## Doc / code touch list (when implementing)
 
 - `lib/es/indices.ts`, `docs/data-model.md`
-- `data/people.json` (person catalog) + `lib/metadata/people.ts` (alias index,
-  key normalization, backfill on catalog change)
+- `config/people.json` (person catalog — **not** under `data/`) +
+  `lib/metadata/people.ts` (alias index, key normalization, backfill on
+  catalog change); `Dockerfile` must copy `config/` into the standalone runner
 - `lib/metadata/catalogs.ts` (country/demonym, video-type synonym, language
   tables shared by validation, facets, and the query matcher)
 - `lib/search/query-parse.ts` (deterministic matcher; optional EIS
@@ -1031,14 +1170,20 @@ Required functional gates:
   (cosine ≈ 1.0) before any hybrid on/off relevance comparison is recorded.
 - Measured p50/p95 end-to-end latency is recorded against the stage budget
   table; overruns are reported in response meta, never silently absorbed.
+- **Person catalog packaging:** `config/people.json` is committed, present in
+  the built container, and loads there — verified by running catalog
+  autocomplete and a metadata save **inside the built image**, not only in dev.
 - **Multilingual names:** the same person is found by Hangul, Han, and
   romanized queries, including a name-order variant and a spacing variant;
   selecting the actor facet matches assets whose metadata was entered in a
   different script; a CJK name query does not match unrelated assets sharing a
   single character.
-- **Name-only query:** returns the correct video, is labelled "matched on
-  video metadata", reduces the vector rank weight, and makes no claim that the
-  person appears at the shown timestamp.
+- **Name-only query, Phase 3 (no parser):** returns the correct video and
+  carries the generic asset-versus-scene labelling; no card claims the person
+  appears at the shown timestamp. No `scene_terms_present` flag is asserted.
+- **Name-only query, Phase 3.5 (matcher present):** additionally sets
+  `scene_terms_present=false`, reduces the vector rank weight, and labels the
+  card "matched on video metadata".
 - **Parser scope (Rule 0):** with the parser enabled and disabled, the
   retrieval and ranking code path is identical apart from which text is
   embedded and which boosts are applied; no response field contains
@@ -1062,7 +1207,9 @@ Required functional gates:
   report; no parser credential appears in app config, logs, or responses.
 - **Semantic asset channel (3.5):** enabling `ASSET_SEMANTIC_ENABLED` changes
   no chunk document, no `variant_id`, and no chunk embedding; a paraphrase and
-  a cross-language query improve measurably or the flag stays off.
+  a cross-language query improve measurably or the flag stays off. Two rapid
+  edits never leave an older vector published; an inference failure leaves the
+  save successful and the vector excluded from search, never stale-but-live.
 - Country/region select contains exactly the documented 20 choices, stores
   only the code (`HK`, `TW`, `US`, etc.), and rejects out-of-catalog codes;
   suggestions, if enabled, remain drafts until Save and cannot overwrite

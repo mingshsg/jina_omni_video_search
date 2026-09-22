@@ -2,8 +2,16 @@
 
 ## Hybrid metadata search
 
+- [`hybrid-metadata-search-readiness-review-r3-2026-09-22.md`](./hybrid-metadata-search-readiness-review-r3-2026-09-22.md)
+  — **current verdict** for the expanded round-3 plan: not ready end to end;
+  catalog deployment, actor API, metadata-write races, ready-only retrieval,
+  candidate guarantee, name-only behavior, and optional parser/vector lifecycle
+  need correction. **All eight findings (G1–G8) were verified and corrected in
+  the plan on 2026-09-22**; the review body is unchanged as evidence and the
+  dispositions are in
+  [`todo/04-hybrid-search-readiness-r3-2026-09-22.md`](../todo/04-hybrid-search-readiness-r3-2026-09-22.md).
 - [`hybrid-metadata-search-plan-review-r2-2026-09-22.md`](./hybrid-metadata-search-plan-review-r2-2026-09-22.md)
-  — **current verdict**: round-2 development-readiness review of the revised
+  — historical round-2 development-readiness review of the earlier
   plan. H01–H08 all resolved; **ready to start Phase 1 now**, Phase 2 after one
   query-shape change, Phase 3 after settling the text weight, the ranking
   acceptance gate, and query-embedding path equivalence. Adds
