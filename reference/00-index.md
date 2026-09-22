@@ -16,6 +16,15 @@ are condensed notes with short quotations rather than full page snapshots.
 | **FFmpeg RTSP demuxer options, `protocol_whitelist`, forced 2 s keyframes, `segment` vs `hls`+`temp_file` atomic fragments, `use_wallclock_as_timestamps` / `PROGRAM-DATE-TIME` receive anchor, spawn/stop supervision** (AD-2, AD-3, AD-4, AD-11, AD-16, Phases 2–3) | [ffmpeg-live-capture-and-segmenting.md](ffmpeg-live-capture-and-segmenting.md) |
 | **MediaMTX fixture: ports (RTSP is 8554 by default), TCP-only transport, internal auth, `runOnInit` publisher, `useAbsoluteTimestamp`, fault-injection hooks, pinning** (Phases 2, 9, 10) | [mediamtx-fixture-and-gateway.md](mediamtx-fixture-and-gateway.md) |
 
+## Hybrid metadata search references (added 2026-09-22)
+
+Added by the second-round review of the hybrid metadata plan
+(`reviews/hybrid-metadata-search-plan-review-r2-2026-09-22.md`).
+
+| Concern in the hybrid plan | Reference |
+| --- | --- |
+| **Adding fields to a `dynamic: strict` index, `copy_to` rules under strict mapping, partial vs scripted updates and field-level concurrency, `max_result_window`/`max_terms_count`, per-asset top-N retrieval, kNN score comparability** (Phases 1–3) | [elastic-asset-metadata-and-bounded-retrieval.md](elastic-asset-metadata-and-bounded-retrieval.md) |
+
 ## How these map to the plan
 
 | Concern in our design | Primary references |
@@ -69,6 +78,10 @@ are condensed notes with short quotations rather than full page snapshots.
 - [elastic-data-streams-lifecycle-serverless.md](elastic-data-streams-lifecycle-serverless.md) — data streams, DSL retention, Serverless write semantics, optimistic concurrency, installed-client API coverage
 - [ffmpeg-live-capture-and-segmenting.md](ffmpeg-live-capture-and-segmenting.md) — RTSP demuxer options, protocol whitelist, keyframe forcing, `segment`/`hls` muxers, receive-clock anchoring, process supervision
 - [mediamtx-fixture-and-gateway.md](mediamtx-fixture-and-gateway.md) — MediaMTX defaults, auth, path hooks, fault injection, pinning
+
+### Hybrid metadata search (condensed notes, 2026-09-22)
+
+- [elastic-asset-metadata-and-bounded-retrieval.md](elastic-asset-metadata-and-bounded-retrieval.md) — strict-mapping evolution, `copy_to`, partial/scripted updates and concurrency, result-window and terms limits, per-asset top-N, kNN score comparability
 
 ## Licence note
 
