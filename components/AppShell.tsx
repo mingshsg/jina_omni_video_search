@@ -88,6 +88,13 @@ export function AppShell({
                   {t.navLibrary}
                 </EuiHeaderLink>
               </Link>
+              <Link href="/live" passHref legacyBehavior>
+                <EuiHeaderLink
+                  isActive={pathname === '/live' || pathname.startsWith('/live/')}
+                >
+                  {t.navLive}
+                </EuiHeaderLink>
+              </Link>
             </EuiHeaderLinks>
           </EuiHeaderSectionItem>
           <EuiHeaderSectionItem>

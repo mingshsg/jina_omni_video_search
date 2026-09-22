@@ -7,14 +7,14 @@ export const runtime = 'nodejs';
 
 const bodySchema = z.object({
   query: z.string().trim().min(1).max(2000),
-  modality: z.enum(['visual', 'audio', 'both']).default('both'),
+  modality: z.enum(['visual', 'audio', 'both']).default('visual'),
   variant_id: z.string().trim().min(1).max(64),
   video_id: z
     .union([z.string().trim().min(1).max(128), z.null()])
     .optional()
     .default(null),
   size: z.number().int().min(1).max(100).optional().default(20),
-  sort_by: z.enum(['rrf', 'visual', 'audio']).optional().default('rrf'),
+  sort_by: z.enum(['rrf', 'visual', 'audio']).optional().default('visual'),
 });
 
 type SearchErrorCode =
@@ -53,13 +53,17 @@ export async function POST(request: Request) {
   try {
     // Touch config early so missing env fails with a clear 500, not mid-flight.
     getConfig();
+    const sortBy =
+      body.modality !== 'both' && body.sort_by === 'rrf'
+        ? body.modality
+        : body.sort_by;
     const result = await searchChunks({
       query: body.query,
       modality: body.modality,
       variantId: body.variant_id,
       videoId: body.video_id,
       size: body.size,
-      sortBy: body.sort_by,
+      sortBy,
     });
 
     return NextResponse.json({

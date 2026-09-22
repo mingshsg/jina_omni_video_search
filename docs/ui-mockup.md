@@ -2,7 +2,8 @@
 
 Documents the **built** Phase 9 interface (not a speculative wireframe).
 Implementation: `components/AppShell.tsx`, `app/page.tsx`, `app/ingest/page.tsx`,
-`app/library/page.tsx`. Design system: **EUI 119 + Borealis**, client-only
+`app/library/page.tsx`, `app/live/page.tsx`, `app/live/[sessionId]/page.tsx`.
+Design system: **EUI 119 + Borealis**, client-only
 (`'use client'` + Emotion cache via `app/providers.tsx`). Chinese default locale;
 header ZH/EN switch (NFR-3). **No Tailwind.**
 
@@ -12,7 +13,7 @@ header ZH/EN switch (NFR-3). **No Tailwind.**
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│ [▶ App title]     Search │ Import │ Library      [中文|EN]   │  ← EuiHeader fixed
+│ [▶ App title]  Search │ Image │ Import │ Library │ Live  [中文|EN] │  ← EuiHeader fixed
 ├──────────────────────────────────────────────────────────────┤
 │  Page title                                                  │
 │  Optional short description                                  │
@@ -34,6 +35,12 @@ See [operations.md](./operations.md) Phase 1 notes.
 ## Search (`/`)
 
 Primary job: type a query → ranked windows → click → seek playback.
+
+Nearby hits from the **same video** whose start times span at most
+`2 × chunk_window_ms` are **grouped into one result card**. Top-k counts
+**groups** (default **5**), not raw windows; the client oversamples the search
+API then truncates to N groups. Group cards show the fused time range and, when
+collapsed, small time chips for each member window.
 
 ```
 ┌─ Query row ─────────────────────────────────────────────────┐
@@ -97,19 +104,61 @@ Primary job: choose source mode, optionally review workload, watch SSE progress.
 
 ## Library (`/library`)
 
-Primary job: inventory assets/variants; re-run ingest; remove from ES.
+Primary job: inventory assets/variants; re-run ingest; remove from ES
+(single or batch).
 
 ```
-┌─ Table ─────────────────────────────────────────────────────┐
-│  Title │ Duration │ Status │ Variants │ Actions             │
-│  …     │ 02:37    │ ready  │ standard×3, fine×20            │
-│                            │ [Re-index] [Remove]            │
+┌─ Toolbar ───────────────────────────────────────────────────┐
+│  [Remove selected] [Remove all]   N selected                │
+├─ Table (checkbox selection) ────────────────────────────────┤
+│  ☐ Title │ Duration │ Status │ Variants │ Actions           │
+│  …       │ 02:37    │ ready  │ standard×3, fine×20          │
+│                              │ [Re-index] [Remove]          │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-- Remove confirms via `EuiConfirmModal`; deletes ES docs only (disk files kept).
+- Row checkboxes enable **Remove selected**; **Remove all** clears the listed
+  inventory. Both confirm via `EuiConfirmModal`.
+- Remove (single or batch) deletes ES docs only (disk files kept, NFR-5).
 - Re-index calls job retry for the asset’s current job / variant config.
 - Link affordance back to Search when useful.
+
+---
+
+## Live (`/live`, `/live/[sessionId]`)
+
+Primary job: register RTSP source by `connection_ref` → start session → follow
+search → play retained clip (optional gateway live view).
+
+```
+┌─ Register source ───────────────────────────────────────────┐
+│  name · connection_ref (LIVE_SOURCE_*_URL) · rtsp/tcp       │
+│  [ Create source ]                                          │
+├─ Sources list ──────────────────────────────────────────────┤
+│  name · validation badge · observed badge · [Start][Open]   │
+└─────────────────────────────────────────────────────────────┘
+
+┌─ Session `/live/{sessionId}` ───────────────────────────────┐
+│  observed · worker · lag · queue · spool · window counters  │
+│  Callout when windows.searchable === 0 (not searchable yet) │
+├─ Search (text|image) + Follow ──────┬─ Clip player ─────────┤
+│  hits: thumb · scores · badge       │  timeline strip       │
+│  follow badge / cache hit|miss      │  optional HLS gateway │
+│                                     │  recent SSE event log │
+└─────────────────────────────────────┴───────────────────────┘
+```
+
+| Element | Behavior |
+| --- | --- |
+| connection_ref | Worker-only secret name; UI validates `LIVE_SOURCE_*_(URL\|CONNECTION)` |
+| Observed badges | `created` / `connecting` / `live` / `degraded` / `stopping` / `stopped` / `failed` |
+| Searchable claim | UI never claims searchable until health counter or `searchable` event |
+| Follow | Opens SSE on `query_id`; replaces top-K on `results`; `410` → expired badge |
+| Clip player | `clip_url` from hit; 410 → media-expired callout |
+| Gateway | Optional `LIVE_PLAYBACK_HLS_URL_TEMPLATE` / WebRTC template |
+
+Implementation: `app/live/page.tsx`, `app/live/[sessionId]/page.tsx`,
+`components/live/*`, helpers in `lib/live/ui-state.ts`.
 
 ---
 

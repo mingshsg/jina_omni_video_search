@@ -1,0 +1,310 @@
+[
+  {
+    "lens": "adversarial",
+    "location": "todo/01-live-video-search-todo.md:236-254",
+    "trigger_condition": "Completion is judged against the repository's full live-video plan",
+    "guard_snippet": "Implement and accept the remaining adapters or explicitly cut an RTSP-only release scope",
+    "potential_consequence": "The project is called complete while HLS, SRT, and WHIP work do not exist"
+  },
+  {
+    "lens": "adversarial",
+    "location": "repository identity at HEAD 78d7e56",
+    "trigger_condition": "A clone, checkout, CI job, or release uses the named branch revision",
+    "guard_snippet": "Commit the reviewed live implementation and rerun acceptance on the clean revision",
+    "potential_consequence": "The revision contains the file-video baseline rather than the reviewed live feature"
+  },
+  {
+    "lens": "adversarial",
+    "location": "scripts/worktree-identity.ts:19-30",
+    "trigger_condition": "An untracked live source file changes without its path changing",
+    "guard_snippet": "Hash a deterministic patch or archive containing untracked file bytes",
+    "potential_consequence": "Different live implementations can share one evidence hash"
+  },
+  {
+    "lens": "adversarial",
+    "location": "todo/01-live-video-search-todo.md:226-227 and current E2E manifests",
+    "trigger_condition": "The same-commit and same-run acceptance contract is applied",
+    "guard_snippet": "Create one parent manifest linked to one clean commit and exact sub-run hashes",
+    "potential_consequence": "Results from different dirty trees are combined into a completion claim"
+  },
+  {
+    "lens": "adversarial",
+    "location": "lib/live/readiness-gates.ts:18-30",
+    "trigger_condition": "READY_STRICT runs while browser E2E is NOT RUN",
+    "guard_snippet": "Add Browser E2E to MANDATORY_READY_GATES",
+    "potential_consequence": "Strict readiness succeeds without a documented mandatory gate"
+  },
+  {
+    "lens": "adversarial",
+    "location": "scripts/live-rtsp-readiness.ts:436-500,582-710,922-929",
+    "trigger_condition": "Protocol Resilience PASS is treated as real active-worker recovery proof",
+    "guard_snippet": "Inject faults during a LiveWorkerLoop session and assert recovery through public APIs",
+    "potential_consequence": "Worker recovery can regress while substitute probes stay green"
+  },
+  {
+    "lens": "adversarial",
+    "location": "scripts/live-app-path-e2e.ts:535-599,620-639",
+    "trigger_condition": "A mandatory application gate is NOT RUN or PASS_WITH_NOTES without a FAIL row",
+    "guard_snippet": "Require every named application gate to equal PASS before report.ok",
+    "potential_consequence": "A partial application run is published as full-green"
+  },
+  {
+    "lens": "adversarial",
+    "location": "scripts/live-app-path-e2e.ts:362-617",
+    "trigger_condition": "An E2E run succeeds or fails after creating durable test resources",
+    "guard_snippet": "Track and reconcile created sources, sessions, queries, chunks, and events in finally",
+    "potential_consequence": "Repeated runs pollute Elastic and can leave resumable stale sessions"
+  },
+  {
+    "lens": "adversarial",
+    "location": "lib/live/age-delete.ts:105-151,256-270",
+    "trigger_condition": "More than 5000 eligible chunks or events exist",
+    "guard_snippet": "Page all candidates with PIT and search_after and report continuation state",
+    "potential_consequence": "Cleanup reports success while old data remains"
+  },
+  {
+    "lens": "adversarial",
+    "location": "lib/live/protect-range-repository.ts:76-100",
+    "trigger_condition": "More than 500 relevant protect ranges exist",
+    "guard_snippet": "Query overlapping ranges and exhaust every page before deletion",
+    "potential_consequence": "Protected data outside the first page is deleted"
+  },
+  {
+    "lens": "adversarial",
+    "location": "lib/live/age-delete.ts:284-310",
+    "trigger_condition": "Elasticsearch deletion fails after local media unlink",
+    "guard_snippet": "Persist a deletion intent, hide or delete the document, then reclaim media with reconciliation",
+    "potential_consequence": "Search documents remain while media is missing"
+  },
+  {
+    "lens": "adversarial",
+    "location": "lib/live/session-supervisor.ts:642-695",
+    "trigger_condition": "A configured retained-media cap is reached",
+    "guard_snippet": "Evict eligible retained media separately, persist the result, and remeasure usage",
+    "potential_consequence": "The worker drops work or fails without reducing retained usage"
+  },
+  {
+    "lens": "adversarial",
+    "location": "docker-compose.yml:14-35 and app/api/live/ops/age-delete/route.ts:31-56",
+    "trigger_condition": "Compose runs on a LAN-reachable host",
+    "guard_snippet": "Bind the demo to loopback and require authorization before shared-network use",
+    "potential_consequence": "Remote callers can control capture, retrieve media, or delete retained data"
+  },
+  {
+    "lens": "adversarial",
+    "location": "worker/Dockerfile:1-26",
+    "trigger_condition": "The live worker image is rebuilt or deployed",
+    "guard_snippet": "Pin base and FFmpeg digests and run a hardened non-root runtime stage",
+    "potential_consequence": "Builds drift and media parsing runs with unnecessary privileges"
+  },
+  {
+    "lens": "adversarial",
+    "location": "app/api/live/sources/route.ts:13-19 and lib/live/worker-loop.ts:346-361",
+    "trigger_condition": "A client creates HLS or SRT before those adapters ship",
+    "guard_snippet": "Expose only RTSP or return a synchronous unsupported-protocol response",
+    "potential_consequence": "A 201 response becomes asynchronously invalid"
+  },
+  {
+    "lens": "adversarial",
+    "location": "docs/live-video-operations.md A-08 and todo/01-live-video-search-todo.md:271",
+    "trigger_condition": "A real source changes codec, audio, resolution, or timestamps in place",
+    "guard_snippet": "Probe finalized fragments and open epochs on signature or PTS discontinuity",
+    "potential_consequence": "Incompatible media is combined and time attribution is wrong"
+  },
+  {
+    "lens": "adversarial",
+    "location": "package.json:6-24 and live test sources",
+    "trigger_condition": "Acceptance runs test and build but not standalone typecheck or configured lint",
+    "guard_snippet": "Add typecheck and noninteractive lint to mandatory verification",
+    "potential_consequence": "Contract-drift errors in test fixtures remain hidden"
+  },
+  {
+    "lens": "adversarial",
+    "location": "README.md:10-15, live architecture/data-flow status, TODO Phase 9, reviews/README.md",
+    "trigger_condition": "A maintainer relies on primary documentation for current status",
+    "guard_snippet": "Reconcile every status and keep the current review index newest-first",
+    "potential_consequence": "Readers receive contradictory completion and evidence claims"
+  },
+  {
+    "lens": "edge-case-hunter",
+    "location": "lib/live/protect-range-repository.ts:89-100",
+    "trigger_condition": "More than 500 protect ranges match",
+    "guard_snippet": "pageOverlappingProtectRangesUntilExhausted()",
+    "potential_consequence": "Protected data can be deleted"
+  },
+  {
+    "lens": "edge-case-hunter",
+    "location": "lib/live/age-delete.ts:256-270",
+    "trigger_condition": "More than 5000 old documents match",
+    "guard_snippet": "while (page.length) search_after = page.at(-1).sort",
+    "potential_consequence": "Cleanup silently remains partial"
+  },
+  {
+    "lens": "edge-case-hunter",
+    "location": "lib/live/age-delete.ts:284-310",
+    "trigger_condition": "Elasticsearch delete fails after unlink",
+    "guard_snippet": "persistIntent(); deleteDoc(); unlink(); reconcile()",
+    "potential_consequence": "Search points to missing media"
+  },
+  {
+    "lens": "edge-case-hunter",
+    "location": "lib/live/age-delete.ts:158-160",
+    "trigger_condition": "Dry-run returns deletion counters",
+    "guard_snippet": "return { would_delete: docs.length, deleted: 0 }",
+    "potential_consequence": "Simulation appears already executed"
+  },
+  {
+    "lens": "edge-case-hunter",
+    "location": "scripts/live-app-path-e2e.ts:535-639",
+    "trigger_condition": "Terminal wait expires without FAIL",
+    "guard_snippet": "status = terminal ? 'PASS' : 'FAIL'",
+    "potential_consequence": "Incomplete stop still reports success"
+  },
+  {
+    "lens": "edge-case-hunter",
+    "location": "scripts/live-app-path-e2e.ts:594-623",
+    "trigger_condition": "Reconnect is intentionally skipped",
+    "guard_snippet": "mandatoryGate('Reconnect', status)",
+    "potential_consequence": "Partial run still reports success"
+  },
+  {
+    "lens": "edge-case-hunter",
+    "location": "scripts/live-app-path-e2e.ts:607-617",
+    "trigger_condition": "Failure occurs after session creation",
+    "guard_snippet": "finally { await stopCreatedSessions() }",
+    "potential_consequence": "Later worker resumes stale test session"
+  },
+  {
+    "lens": "edge-case-hunter",
+    "location": "lib/live/session-supervisor.ts:653-695",
+    "trigger_condition": "Retained cap exceeds with no queued item",
+    "guard_snippet": "evictRetainedOrStopBeforeRemux()",
+    "potential_consequence": "Capture fails without reclaiming space"
+  },
+  {
+    "lens": "edge-case-hunter",
+    "location": "app/api/live/sources/route.ts:13-19",
+    "trigger_condition": "Client submits HLS or SRT",
+    "guard_snippet": "z.literal('rtsp') until adapters ship",
+    "potential_consequence": "Accepted source becomes asynchronously invalid"
+  },
+  {
+    "lens": "edge-case-hunter",
+    "location": "scripts/worktree-identity.ts:19-30",
+    "trigger_condition": "Untracked file bytes change only",
+    "guard_snippet": "hash(unifiedDiffIncludingUntrackedBytes)",
+    "potential_consequence": "Evidence identity remains unchanged"
+  },
+  {
+    "lens": "verification-gap",
+    "location": "scripts/worktree-identity.ts:16-37",
+    "trigger_condition": "Dirty evidence is expected to bind untracked source contents",
+    "guard_snippet": "Mutate only untracked bytes and assert a different hash",
+    "potential_consequence": "Acceptance cannot be reproduced against the reviewed source",
+    "gap_shape": "broken-verification-gap",
+    "consumer": "both readiness manifest writers",
+    "evidence": "No test imports collectWorktreeIdentity"
+  },
+  {
+    "lens": "verification-gap",
+    "location": "lib/live/readiness-gates.ts:18-30",
+    "trigger_condition": "Browser E2E remains NOT RUN in strict mode",
+    "guard_snippet": "Add Browser E2E to mandatory gates and assert NOT RUN fails",
+    "potential_consequence": "Strict acceptance stays green without the UI workflow",
+    "gap_shape": "broken-verification-gap",
+    "consumer": "docs/live-video-operations.md completion rule",
+    "evidence": "Aggregator tests cannot fail Browser E2E because it is absent from the mandatory list"
+  },
+  {
+    "lens": "verification-gap",
+    "location": "scripts/live-rtsp-readiness.ts:436-500,582-710",
+    "trigger_condition": "Real worker recovery regresses",
+    "guard_snippet": "Fault the active app-path worker and assert resumed searchable state",
+    "potential_consequence": "Protocol substitute flags remain true",
+    "gap_shape": "broken-verification-gap",
+    "consumer": "Resilience gate",
+    "evidence": "Capture ends before publisher bounce; restart and slowdown use separate paths"
+  },
+  {
+    "lens": "verification-gap",
+    "location": "lib/live/age-delete.test.ts:99-228",
+    "trigger_condition": "Pagination, protect overflow, or partial deletion fails",
+    "guard_snippet": "Add multi-page, overflow, failure-ordering, and reconciliation tests",
+    "potential_consequence": "Destructive cleanup loses protected media or remains partial",
+    "gap_shape": "regression-gap",
+    "consumer": "POST /api/live/ops/age-delete",
+    "evidence": "Current test uses three chunks, two events, one protect range, and a successful memory client"
+  },
+  {
+    "lens": "verification-gap",
+    "location": "lib/live/session-supervisor.ts:642-695",
+    "trigger_condition": "Finite spool limits are reached",
+    "guard_snippet": "Drive SessionRuntime over each cap and assert reclaimed bytes",
+    "potential_consequence": "Optional deployed configuration fails outside tests",
+    "gap_shape": "missing-adoption-gap",
+    "consumer": "finite live spool settings",
+    "evidence": "spool-paths.test.ts checks classification only; supervisor test omits caps"
+  },
+  {
+    "lens": "verification-gap",
+    "location": "package.json:6-24",
+    "trigger_condition": "A test fixture drifts from its production type",
+    "guard_snippet": "Add yarn typecheck to normal and strict gates",
+    "potential_consequence": "Twenty-eight current type errors stay invisible",
+    "gap_shape": "broken-verification-gap",
+    "consumer": "live test fixtures and refactors",
+    "evidence": "test and build pass while standalone tsc fails"
+  },
+  {
+    "lens": "verification-gap",
+    "location": "worker/Dockerfile:1-26 and readiness manifest containers",
+    "trigger_condition": "The actual worker image drifts",
+    "guard_snippet": "Record worker digest, UID, capabilities, filesystem policy, and FFmpeg probe",
+    "potential_consequence": "Pinned fixture images mask an unverified worker",
+    "gap_shape": "missing-adoption-gap",
+    "consumer": "Docker Compose live-worker",
+    "evidence": "The manifest records MediaMTX and publisher digests but no worker image"
+  },
+  {
+    "lens": "structure",
+    "pass": "structure",
+    "original_text": "TODO completed Phases 1-9 plus batch diary, about 1900 words",
+    "revised_text": "CONDENSE to current completion matrix and open checklist; move history to dated reviews",
+    "changes": "Estimated reduction 850-1050 words while preserving linked history"
+  },
+  {
+    "lens": "structure",
+    "pass": "structure",
+    "original_text": "Batch 4 scope qualifications follow the PASS headline",
+    "revised_text": "MOVE exact scope and NOT RUN gates directly below verdict",
+    "changes": "Prevents a scoped batch result from reading as project completion"
+  },
+  {
+    "lens": "structure",
+    "pass": "structure",
+    "original_text": "reviews/README.md omits Batch 4 evidence",
+    "revised_text": "MOVE current completion review and Batch 4 to the top",
+    "changes": "Restores newest-first current-review navigation"
+  },
+  {
+    "lens": "prose",
+    "pass": "prose",
+    "original_text": "Phase 10 remains closed",
+    "revised_text": "Phase 10 has not started; HLS/SRT/WHIP await a product-scope decision",
+    "changes": "Replaces an ambiguous workflow metaphor with observable status"
+  },
+  {
+    "lens": "prose",
+    "pass": "prose",
+    "original_text": "full-green live-app-path-e2e",
+    "revised_text": "application-path API E2E passed; browser E2E remains NOT RUN",
+    "changes": "Names the tested boundary and preserves the exception"
+  },
+  {
+    "lens": "prose",
+    "pass": "prose",
+    "original_text": "README says the full ten-minute soak remains outstanding",
+    "revised_text": "The 2026-09-13 protocol probe completed a ten-minute soak; see the current completion review for remaining gates",
+    "changes": "Removes stale status and directs readers to current evidence"
+  }
+]

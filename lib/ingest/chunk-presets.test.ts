@@ -59,11 +59,19 @@ describe('chunk presets', () => {
     });
     expect(CHUNK_PRESET_DEFS['20s'].overlapMs).toBe(2_000);
     expect(CHUNK_PRESET_DEFS.fine.windowMs).toBe(10_000);
+    expect(CHUNK_PRESET_DEFS['2s']).toEqual({
+      windowMs: 2_000,
+      overlapMs: 1_000,
+      minMs: 1_000,
+    });
   });
 
   it('resolves named preset from request', () => {
     expect(resolveChunkingFromRequest({ chunk_preset: '30s' })).toEqual(
       chunkingForPreset('30s'),
+    );
+    expect(resolveChunkingFromRequest({ chunk_preset: '2s' })).toEqual(
+      chunkingForPreset('2s'),
     );
   });
 
@@ -79,16 +87,19 @@ describe('chunk presets', () => {
 
   it('produces distinct variant_ids per preset', () => {
     const cfg = minimalConfig();
-    const ids = (['standard', '60s', '30s', '20s', 'fine'] as const).map((p) =>
+    const ids = (
+      ['standard', '60s', '30s', '20s', 'fine', '2s'] as const
+    ).map((p) =>
       deriveVariantId(
         variantConfigFromApp(cfg, { chunking: chunkingForPreset(p) }),
       ),
     );
-    expect(new Set(ids).size).toBe(5);
+    expect(new Set(ids).size).toBe(6);
   });
 
   it('formats labels with window/overlap', () => {
     expect(formatChunkPresetLabel('60s')).toBe('60s · 60s/4s');
     expect(formatChunkPresetLabel('fine', 10_000, 2_000)).toBe('fine · 10s/2s');
+    expect(formatChunkPresetLabel('2s')).toBe('2s · 2s/1s');
   });
 });

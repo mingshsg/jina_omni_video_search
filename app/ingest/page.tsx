@@ -80,7 +80,7 @@ export default function IngestPage() {
   const [folderPath, setFolderPath] = useState('');
   const [title, setTitle] = useState('');
   const [chunkPreset, setChunkPreset] =
-    useState<ImportChunkPreset>('standard');
+    useState<ImportChunkPreset>('2s');
   const [autoStart, setAutoStart] = useState(true);
   const [file, setFile] = useState<File | null>(null);
   const [batchFiles, setBatchFiles] = useState<File[]>([]);
@@ -543,6 +543,7 @@ export default function IngestPage() {
       '30s': t.chunkPreset30s,
       '20s': t.chunkPreset20s,
       fine: t.chunkPresetFine,
+      '2s': t.chunkPreset2s,
     };
     return { value: id, text: labels[id] };
   });

@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-/** Load `.env` into `process.env` without overwriting existing vars. */
+/** Load a dotenv file into `process.env` without overwriting existing vars. */
 export function loadDotenv(filePath = path.join(process.cwd(), '.env')): void {
   if (!fs.existsSync(filePath)) return;
   const text = fs.readFileSync(filePath, 'utf8');
@@ -22,6 +22,15 @@ export function loadDotenv(filePath = path.join(process.cwd(), '.env')): void {
       process.env[key] = value;
     }
   }
+}
+
+/**
+ * Load shared `.env` then optional worker overlay `.env.worker`.
+ * Later files do not overwrite keys already set (including by the shell).
+ */
+export function loadWorkerDotenv(cwd = process.cwd()): void {
+  loadDotenv(path.join(cwd, '.env'));
+  loadDotenv(path.join(cwd, '.env.worker'));
 }
 
 export function envFlag(name: string): boolean {

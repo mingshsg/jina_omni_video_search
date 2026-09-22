@@ -9,6 +9,7 @@ export const CHUNK_PRESET_NAMES = [
   '30s',
   '20s',
   'fine',
+  '2s',
   'custom',
 ] as const;
 
@@ -21,6 +22,7 @@ export const IMPORT_CHUNK_PRESET_NAMES = [
   '30s',
   '20s',
   'fine',
+  '2s',
 ] as const;
 
 export type ImportChunkPreset = (typeof IMPORT_CHUNK_PRESET_NAMES)[number];
@@ -47,6 +49,8 @@ export const CHUNK_PRESET_DEFS: Record<
   '20s': { windowMs: 20_000, overlapMs: 2_000, minMs: 2_000 },
   /** Dense indexing — 10 s / 2 s. */
   fine: { windowMs: 10_000, overlapMs: 2_000, minMs: 2_000 },
+  /** Ultra-dense — 2 s window / 1 s overlap (stride 1 s). */
+  '2s': { windowMs: 2_000, overlapMs: 1_000, minMs: 1_000 },
 };
 
 export function isImportChunkPreset(v: string): v is ImportChunkPreset {

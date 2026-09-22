@@ -373,7 +373,7 @@ function hydrateFromAsset(asset: VideoAssetDocument): IngestJob {
         minMs: firstVariant.chunk_min_ms,
       }
     : {
-        preset: 'standard',
+        preset: '2s',
         windowMs: 64_000,
         overlapMs: 4_000,
         minMs: 4_000,

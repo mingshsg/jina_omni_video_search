@@ -1,5 +1,9 @@
 # Interpreted Requirements
 
+> **Scope:** completed file-video ingest and search. Live remote-feed work is a
+> separate extension in
+> [`02-live-video-search-requirements.md`](./02-live-video-search-requirements.md).
+
 This document turns the original request into numbered, testable requirements,
 and records the external constraints that shaped them. Where a requirement
 departs from the literal wording of the request, the reason is stated inline.
@@ -368,7 +372,8 @@ Two caveats govern how this option is used:
 - **2026-08-25, initial draft.** Derived from the original request and three
   rounds of clarification.
 - **2026-08-25, revision after readiness review.** Added NFR-7/8/9, local
-  provider (FR-9 / C2). See `reviews/readiness-review-response.md`.
+  provider (FR-9 / C2). See
+  `reviews/archive/2026-09-10-file-video-search/readiness-review-response.md`.
 - **2026-08-25, Round-2/3 sync.** Variant identity, provider isolation, per-
   provider budgets, hardened URL import, job retry semantics, search contract,
   C3 facts — reflected in the consolidated plan; this requirements file lagged

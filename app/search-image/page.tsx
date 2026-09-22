@@ -18,8 +18,19 @@ import {
   EuiText,
   EuiTitle,
 } from '@elastic/eui';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from 'react';
 import { AppShell } from '@/components/AppShell';
+import {
+  groupSearchHitsTopK,
+  oversampleForGroupedTopK,
+} from '@/lib/es/group-hits';
 import { formatChunkPresetLabel } from '@/lib/ingest/chunk-presets';
 import { useLocale } from '@/lib/i18n/locale-context';
 
@@ -82,7 +93,7 @@ export default function ImageSearchPage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [variantId, setVariantId] = useState('');
   const [videoId, setVideoId] = useState('');
-  const [size, setSize] = useState(20);
+  const [size, setSize] = useState(5);
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [assets, setAssets] = useState<LibraryAsset[]>([]);
   const [variantIds, setVariantIds] = useState<string[]>([]);
@@ -187,7 +198,20 @@ export default function ImageSearchPage() {
     [variantIds, assets],
   );
 
-  const timelineHits = useMemo(() => {
+  const chunkWindowMs = useMemo(() => {
+    const meta = assets
+      .flatMap((a) => a.variants)
+      .find((v) => v.variant_id === variantId);
+    const w = meta?.chunk_window_ms;
+    return typeof w === 'number' && w > 0 ? w : 64_000;
+  }, [assets, variantId]);
+
+  const hitGroups = useMemo(
+    () => groupSearchHitsTopK(hits, chunkWindowMs, size),
+    [hits, chunkWindowMs, size],
+  );
+
+    const timelineHits = useMemo(() => {
     if (!activeHit) return [];
     return hits
       .filter(
@@ -235,7 +259,7 @@ export default function ImageSearchPage() {
       form.append('file', imageFile);
       form.append('variant_id', variantId);
       if (videoId) form.append('video_id', videoId);
-      form.append('size', String(size));
+      form.append('size', String(oversampleForGroupedTopK(size)));
 
       const res = await fetch('/api/search/image', {
         method: 'POST',
@@ -357,12 +381,12 @@ export default function ImageSearchPage() {
           </EuiFormRow>
         </EuiFlexItem>
         <EuiFlexItem grow={false} style={{ width: 120 }}>
-          <EuiFormRow label={t.topKLabel}>
+          <EuiFormRow label={t.topKLabel} helpText={t.topKHelp}>
             <EuiFieldNumber
               value={size}
               min={1}
               max={100}
-              onChange={(e) => setSize(Number(e.target.value) || 20)}
+              onChange={(e) => setSize(Number(e.target.value) || 5)}
             />
           </EuiFormRow>
         </EuiFlexItem>
@@ -394,25 +418,26 @@ export default function ImageSearchPage() {
             />
           ) : (
             <EuiFlexGroup direction="column" gutterSize="s">
-              {hits.map((hit) => (
-                <EuiFlexItem key={hit.chunk_id} grow={false}>
+              {hitGroups.map((group) => {
+                const active = group.members.some(
+                  (m) => m.chunk_id === activeHit?.chunk_id,
+                );
+                return (
+                <EuiFlexItem key={group.key} grow={false}>
                   <EuiPanel
                     hasBorder
                     paddingSize="s"
                     style={{
                       cursor: 'pointer',
-                      outline:
-                        activeHit?.chunk_id === hit.chunk_id
-                          ? '2px solid #0077CC'
-                          : undefined,
+                      outline: active ? '2px solid #0077CC' : undefined,
                     }}
-                    onClick={() => seekToHit(hit)}
+                    onClick={() => seekToHit(group.representative)}
                   >
                     <EuiFlexGroup gutterSize="m" alignItems="center">
                       <EuiFlexItem grow={false}>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
-                          src={hit.thumb_url}
+                          src={group.representative.thumb_url}
                           alt=""
                           width={120}
                           height={68}
@@ -425,17 +450,20 @@ export default function ImageSearchPage() {
                       </EuiFlexItem>
                       <EuiFlexItem>
                         <EuiText size="s">
-                          <strong>{hit.title}</strong>
+                          <strong>{group.representative.title}</strong>
                         </EuiText>
                         <EuiText size="s" color="subdued">
-                          {hit.start_label} – {hit.end_label}
+                          {group.start_label} – {group.end_label}
                         </EuiText>
                         <EuiSpacer size="xs" />
                         <EuiFlexGroup gutterSize="s" alignItems="center" wrap>
                           <EuiFlexItem grow={false}>
                             <EuiText size="xs">
                               {t.scoreVisualLabel}{' '}
-                              {formatScore(hit.score_visual ?? hit.score)}
+                              {formatScore(
+                                group.representative.score_visual ??
+                                  group.representative.score,
+                              )}
                             </EuiText>
                           </EuiFlexItem>
                           <EuiFlexItem grow={false}>
@@ -443,12 +471,50 @@ export default function ImageSearchPage() {
                               {t.modalityVisual}
                             </EuiBadge>
                           </EuiFlexItem>
+                          {group.members.length > 1 && (
+                            <EuiFlexItem grow={false}>
+                              <EuiBadge color="hollow">
+                                {group.members.length === 1
+                                  ? t.groupedMomentsOne
+                                  : t.groupedMoments.replace(
+                                      '{count}',
+                                      String(group.members.length),
+                                    )}
+                              </EuiBadge>
+                            </EuiFlexItem>
+                          )}
                         </EuiFlexGroup>
+                        {group.members.length > 1 && (
+                          <>
+                            <EuiSpacer size="xs" />
+                            <EuiFlexGroup gutterSize="xs" wrap>
+                              {group.members.map((m) => (
+                                <EuiFlexItem key={m.chunk_id} grow={false}>
+                                  <EuiButton
+                                    size="s"
+                                    color={
+                                      activeHit?.chunk_id === m.chunk_id
+                                        ? 'primary'
+                                        : 'text'
+                                    }
+                                    onClick={(e: ReactMouseEvent) => {
+                                      e.stopPropagation();
+                                      seekToHit(m);
+                                    }}
+                                  >
+                                    {m.start_label}
+                                  </EuiButton>
+                                </EuiFlexItem>
+                              ))}
+                            </EuiFlexGroup>
+                          </>
+                        )}
                       </EuiFlexItem>
                     </EuiFlexGroup>
                   </EuiPanel>
                 </EuiFlexItem>
-              ))}
+                );
+              })}
             </EuiFlexGroup>
           )}
         </EuiFlexItem>

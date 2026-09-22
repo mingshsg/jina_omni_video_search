@@ -86,7 +86,7 @@ All under `data/` are gitignored except `.gitkeep` placeholders.
 | standard (64 s / 4 s) | 3 | ~40.1 s | ~5.1 win/min |
 | fine (10 s / 2 s) | 20 | ~65.2 s | ~19.9 win/min |
 
-Source: [reviews/e2e-verification-2026-08-26.md](../reviews/e2e-verification-2026-08-26.md).
+Source: [reviews/e2e-verification-2026-08-26.md](../reviews/archive/2026-09-10-file-video-search/e2e-verification-2026-08-26.md).
 
 ---
 

@@ -1,0 +1,51 @@
+# MediaMTX — optional WHIP / HLS / SRT gateway profile (Phase 10).
+# Do NOT replace the default RTSP fixture (`mediamtx.yml`).
+# Copy/adapt only when LIVE_ALLOWED_PROTOCOLS includes whip|hls|srt and
+# corresponding ports are allowlisted.
+#
+# SECURITY: this example does NOT grant anonymous publish/read/API access.
+# Replace EVERY placeholder before binding outside loopback. Inject secrets
+# via env / local override files — never commit real credentials.
+#
+# Worker never speaks WHIP: browser POSTs to WHIP; worker pulls internal RTSP.
+
+logLevel: info
+rtsp: true
+# Bind management / publish surfaces locally for the unauthenticated demo.
+rtspAddress: 127.0.0.1:8554
+rtspTransports: [tcp]
+rtspEncryption: "no"
+
+# Opt-in surfaces (keep disabled in the RTSP MVP fixture).
+rtmp: false
+hls: true
+hlsAddress: 127.0.0.1:8888
+webrtc: true
+webrtcAddress: 127.0.0.1:8889
+# WHIP is served under the WebRTC listener in MediaMTX 1.21.
+srt: true
+srtAddress: 127.0.0.1:8890
+api: true
+apiAddress: 127.0.0.1:9997
+
+authMethod: internal
+authInternalUsers:
+  # Replace placeholders. Empty user/pass with broad permissions is forbidden here.
+  - user: REPLACE_WHIP_PUBLISHER_USER
+    pass: REPLACE_WHIP_PUBLISHER_PASS
+    permissions:
+      - action: publish
+        path: whipcam
+  - user: REPLACE_WHIP_READER_USER
+    pass: REPLACE_WHIP_READER_PASS
+    permissions:
+      - action: read
+        path: whipcam
+  - user: REPLACE_MEDIAMTX_API_USER
+    pass: REPLACE_MEDIAMTX_API_PASS
+    permissions:
+      - action: api
+
+paths:
+  whipcam:
+    source: publisher

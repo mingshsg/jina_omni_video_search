@@ -5,7 +5,20 @@ dual-track dense vectors in Elastic Serverless, and find a moment by text.
 
 **Status (2026-08-26):** Phases 0–11 complete for the EIS path. End-to-end
 verified on the public-domain *Breakfast at Tiffany’s* trailer (dual presets).
-Details: [reviews/e2e-verification-2026-08-26.md](reviews/e2e-verification-2026-08-26.md).
+Details: [archived file-video E2E review](reviews/archive/2026-09-10-file-video-search/e2e-verification-2026-08-26.md).
+
+**Live-video branch status (2026-09-11): Phases 1–9 landed** (contracts through
+RTSP readiness evidence). Phase 9 verdict: **PASS WITH NOTES** —
+[`reviews/live-rtsp-readiness-2026-09-11.md`](reviews/live-rtsp-readiness-2026-09-11.md)
+(short MediaMTX soak, EIS follow-inference-once, build/unit/security/file smoke;
+full 10-minute soak and Playwright browser E2E still outstanding). Phase 10
+(HLS/SRT/WHIP) is next. Tracked work:
+[`todo/01-live-video-search-todo.md`](todo/01-live-video-search-todo.md). Start
+the worker with `yarn live-worker` (exclusive spool lock + heartbeat). Do **not**
+treat MVP evidence as multistream production readiness. Planning verdict:
+[`reviews/live-video-planning-review-2026-09-10.md`](reviews/live-video-planning-review-2026-09-10.md).
+The live plan never installs or starts Elasticsearch locally; all Elastic access
+uses the external endpoint and API key configured in `.env`.
 
 ---
 
@@ -52,7 +65,7 @@ Optional:
 | `LOCAL_IMPORT_ROOT` | Enable local-path import mode |
 | `JINA_API_KEY` | Hosted Jina provider (+ set `EMBED_PROVIDER=jina`) |
 | `LOCAL_EMBED_URL` | Local provider (+ set `EMBED_PROVIDER=local`) |
-| `CHUNK_PRESET` | Process default when request omits `chunk_preset`: `standard` (64s/4s), `60s`, `30s`, `20s`, or `fine` (10s/2s). Per-import UI/API overrides this. |
+| `CHUNK_PRESET` | Process default when request omits `chunk_preset`: `2s` (2s/1s), `standard` (64s/4s), `60s`, `30s`, `20s`, or `fine` (10s/2s). Per-import UI/API overrides this. |
 
 ---
 
@@ -86,7 +99,9 @@ APP_PORT=3000 VIDEO_DATA_DIR=/Volumes/Videos/jina-data docker compose up --build
 
 Open **http://localhost:3000**. Stop with `Ctrl+C` or `docker compose down`.
 
-Do **not** bake `.env` into the image; compose passes it via `env_file`.
+Do **not** bake `.env` into the image; compose passes env via `env_file`.
+Web uses `.env` only; live-worker uses `.env` + `.env.worker` (see
+`.env.worker.example` for `LIVE_SOURCE_*`).
 
 UI stack (pinned): Next.js **14.2.35** · React **18.3.1** · EUI **119.1.0** ·
 Borealis **8.0.0** · Emotion 11 · **no Tailwind**. EUI is client-side only
@@ -119,8 +134,17 @@ Borealis **8.0.0** · Emotion 11 · **no Tailwind**. EUI is client-side only
 | [docs/api-contract.md](docs/api-contract.md) | REST + SSE |
 | [docs/ui-mockup.md](docs/ui-mockup.md) | Built UI layout |
 | [docs/operations.md](docs/operations.md) | Measured spike / probe / E2E numbers |
+| [docs/live-video-architecture.md](docs/live-video-architecture.md) | Planned remote live-feed architecture |
+| [docs/live-video-api-contract.md](docs/live-video-api-contract.md) | Planned source/session/search APIs |
+| [docs/live-video-data-model.md](docs/live-video-data-model.md) | Planned live source/session/chunk storage |
+| [docs/live-video-data-flow.md](docs/live-video-data-flow.md) | Planned capture, indexing, and recovery sequences |
+| [docs/live-video-state-recovery.md](docs/live-video-state-recovery.md) | Planned state transitions and crash recovery matrix |
+| [docs/live-video-operations.md](docs/live-video-operations.md) | Planned configuration, latency budget, and gates |
 | [plan/00-implementation-plan.md](plan/00-implementation-plan.md) | Single plan |
+| [plan/01-live-video-search-implementation-plan.md](plan/01-live-video-search-implementation-plan.md) | Live-video implementation plan |
+| [plan/02-live-video-traceability.md](plan/02-live-video-traceability.md) | Live capability, phase, and evidence matrix |
 | [todo/00-todo.md](todo/00-todo.md) | Phase checklist |
+| [todo/01-live-video-search-todo.md](todo/01-live-video-search-todo.md) | Live-video tracked work |
 | [chn.docs/架构与数据流.md](chn.docs/架构与数据流.md) | 中文架构要点 |
 
 ---
@@ -140,4 +164,4 @@ Borealis **8.0.0** · Emotion 11 · **no Tailwind**. EUI is client-side only
 - Do **not** compare scores to Elastic’s published Tiffany demo (different
   chunking / candidate set).
 
-Self-review: [reviews/self-review-2026-08-26.md](reviews/self-review-2026-08-26.md).
+Self-review: [archived file-video self-review](reviews/archive/2026-09-10-file-video-search/self-review-2026-08-26.md).

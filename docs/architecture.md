@@ -171,5 +171,5 @@ only), production multi-tenant hardening, containerised ffmpeg image.
 | [data-flow.md](./data-flow.md) | Ingest + search sequences |
 | [operations.md](./operations.md) | Measured spike / probe / E2E numbers |
 | [api-contract.md](./api-contract.md) | Job machine, SSE, REST |
-| [reviews/e2e-verification-2026-08-26.md](../reviews/e2e-verification-2026-08-26.md) | Phase 10 Tiffany trailer results |
-| [reviews/self-review-2026-08-26.md](../reviews/self-review-2026-08-26.md) | Known limits after close-out |
+| [reviews/e2e-verification-2026-08-26.md](../reviews/archive/2026-09-10-file-video-search/e2e-verification-2026-08-26.md) | Phase 10 Tiffany trailer results |
+| [reviews/self-review-2026-08-26.md](../reviews/archive/2026-09-10-file-video-search/self-review-2026-08-26.md) | Known limits after close-out |

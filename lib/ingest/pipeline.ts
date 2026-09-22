@@ -10,15 +10,11 @@ import {
   bulkUpsertChunks,
   type ChunkDocument,
 } from '../es/index-chunks';
+import { prepareFiniteMedia } from '../media/prepare-finite-media';
 import { embedBudgetBytes } from '../video/budget';
 import { encodePlaybackProxy } from '../video/playback';
 import { planChunks, type ChunkWindow } from '../video/plan-chunks';
-import {
-  encodeAudioProxy,
-  encodeVideoProxy,
-  ProxyBudgetExhaustedError,
-} from '../video/proxy-encode';
-import { extractThumbnail } from '../video/thumbnail';
+import { ProxyBudgetExhaustedError } from '../video/proxy-encode';
 import {
   chunkingFromConfig,
   deriveVariantId,
@@ -285,30 +281,6 @@ export async function runIngestPipeline(job: IngestJob): Promise<void> {
           { persist: false },
         );
 
-        const videoMeta = await encodeVideoProxy({
-          inputPath: job.mediaPath,
-          outputPath: videoProxyPath,
-          startMs: win.start_ms,
-          endMs: win.end_ms,
-          budgetBytes: budget,
-          proxySettings: variantCfg.proxySettings,
-        });
-
-        const audioMeta = await encodeAudioProxy({
-          inputPath: job.mediaPath,
-          outputPath: audioProxyPath,
-          startMs: win.start_ms,
-          endMs: win.end_ms,
-          hasAudio: job.probe.has_audio,
-        });
-
-        const thumb = await extractThumbnail({
-          inputPath: job.mediaPath,
-          outputPath: thumbPath,
-          startMs: win.start_ms,
-          endMs: win.end_ms,
-        });
-
         await updateJob(
           job,
           {
@@ -319,15 +291,24 @@ export async function runIngestPipeline(job: IngestJob): Promise<void> {
           { persist: false },
         );
 
-        const videoBuf = fs.readFileSync(videoProxyPath);
-        const videoEmbed = await provider.embedVideo(videoBuf, 'passage');
-
-        let audioEmbedVec: number[] | undefined;
-        if (audioMeta && job.probe.has_audio) {
-          const audioBuf = fs.readFileSync(audioProxyPath);
-          const audioEmbed = await provider.embedAudio(audioBuf, 'passage');
-          audioEmbedVec = audioEmbed.embedding;
-        }
+        const prepared = await prepareFiniteMedia({
+          inputPath: job.mediaPath,
+          startMs: win.start_ms,
+          endMs: win.end_ms,
+          hasAudio: job.probe.has_audio,
+          budgetBytes: budget,
+          proxySettings: variantCfg.proxySettings,
+          provider,
+          paths: {
+            videoProxy: videoProxyPath,
+            audioProxy: audioProxyPath,
+            thumb: thumbPath,
+          },
+          options: {
+            concurrentEmbed: false,
+            extractThumb: true,
+          },
+        });
 
         const doc: ChunkDocument = {
           video_id: job.videoId,
@@ -338,30 +319,30 @@ export async function runIngestPipeline(job: IngestJob): Promise<void> {
           duration_ms: win.end_ms - win.start_ms,
           start_label: formatMsLabel(win.start_ms),
           end_label: formatMsLabel(win.end_ms),
-          embedding_video: videoEmbed.embedding,
-          embedding_audio: audioEmbedVec,
+          embedding_video: prepared.embedding_video,
+          embedding_audio: prepared.embedding_audio,
           provider: provider.provider,
           model: provider.model,
           task: provider.task,
           normalized_by: provider.normalizedBy,
           video_proxy: {
-            bytes: videoMeta.bytes,
-            width: videoMeta.width,
-            height: videoMeta.height,
-            frames: videoMeta.frames,
-            crf: videoMeta.crf,
-            strategy: videoMeta.strategy,
-            ladder_exhausted: videoMeta.ladder_exhausted,
+            bytes: prepared.videoMeta.bytes,
+            width: prepared.videoMeta.width,
+            height: prepared.videoMeta.height,
+            frames: prepared.videoMeta.frames,
+            crf: prepared.videoMeta.crf,
+            strategy: prepared.videoMeta.strategy,
+            ladder_exhausted: prepared.videoMeta.ladder_exhausted,
           },
-          audio_proxy: audioMeta
+          audio_proxy: prepared.audioMeta
             ? {
-                bytes: audioMeta.bytes,
-                bitrate: audioMeta.bitrate,
-                codec: audioMeta.codec,
+                bytes: prepared.audioMeta.bytes,
+                bitrate: prepared.audioMeta.bitrate,
+                codec: prepared.audioMeta.codec,
               }
             : undefined,
-          thumb_path: thumb.output_path,
-          has_audio: Boolean(audioMeta),
+          thumb_path: prepared.thumb?.output_path,
+          has_audio: prepared.has_audio,
           video_title: job.title,
           source_mode: job.mode,
           created_at: new Date().toISOString(),

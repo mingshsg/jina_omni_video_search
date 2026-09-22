@@ -5,6 +5,7 @@ import {
   EuiBadge,
   EuiBasicTable,
   type EuiBasicTableColumn,
+  type EuiTableSelectionType,
   EuiButton,
   EuiCallOut,
   EuiConfirmModal,
@@ -47,6 +48,8 @@ type LibraryAsset = {
   }>;
 };
 
+type BatchMode = 'selected' | 'all';
+
 function statusColor(
   status: string,
 ): 'default' | 'primary' | 'success' | 'warning' | 'danger' {
@@ -65,6 +68,16 @@ function statusColor(
   }
 }
 
+function fillTemplate(
+  template: string,
+  vars: Record<string, string | number>,
+): string {
+  return Object.entries(vars).reduce(
+    (out, [key, value]) => out.replaceAll(`{${key}}`, String(value)),
+    template,
+  );
+}
+
 export default function LibraryPage() {
   const { t, locale } = useLocale();
   const [assets, setAssets] = useState<LibraryAsset[]>([]);
@@ -72,7 +85,10 @@ export default function LibraryPage() {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [batchBusy, setBatchBusy] = useState(false);
+  const [selected, setSelected] = useState<LibraryAsset[]>([]);
   const [removeTarget, setRemoveTarget] = useState<LibraryAsset | null>(null);
+  const [batchMode, setBatchMode] = useState<BatchMode | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -85,6 +101,7 @@ export default function LibraryPage() {
       };
       if (!res.ok) throw new Error(data.error?.message ?? t.libraryError);
       setAssets(data.assets ?? []);
+      setSelected([]);
     } catch (err) {
       setError(err instanceof Error ? err.message : t.libraryError);
     } finally {
@@ -143,6 +160,58 @@ export default function LibraryPage() {
       }
     },
     [t.libraryError, t.removeDone, load],
+  );
+
+  const removeBatch = useCallback(
+    async (mode: BatchMode) => {
+      const targets = mode === 'all' ? assets : selected;
+      const videoIds = targets.map((a) => a.video_id);
+      if (videoIds.length === 0) return;
+
+      setBatchBusy(true);
+      setToast(null);
+      setError(null);
+      try {
+        const res = await fetch('/api/library/batch-delete', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept-Language': locale,
+          },
+          body: JSON.stringify({ video_ids: videoIds }),
+        });
+        const data = (await res.json()) as {
+          requested?: number;
+          removed?: number;
+          failed?: number;
+          error?: { message: string };
+        };
+        if (!res.ok) throw new Error(data.error?.message ?? t.libraryError);
+        setToast(
+          fillTemplate(t.batchRemoveDone, {
+            removed: data.removed ?? 0,
+            requested: data.requested ?? videoIds.length,
+          }),
+        );
+        setBatchMode(null);
+        setSelected([]);
+        await load();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : t.libraryError);
+      } finally {
+        setBatchBusy(false);
+      }
+    },
+    [assets, selected, locale, t.libraryError, t.batchRemoveDone, load],
+  );
+
+  const selection: EuiTableSelectionType<LibraryAsset> = useMemo(
+    () => ({
+      selected,
+      onSelectionChange: (items: LibraryAsset[]) => setSelected(items),
+      selectable: () => !batchBusy && busyId === null,
+    }),
+    [selected, batchBusy, busyId],
   );
 
   const columns: EuiBasicTableColumn<LibraryAsset>[] = useMemo(
@@ -226,7 +295,8 @@ export default function LibraryPage() {
             type: 'icon',
             icon: 'refresh',
             available: (item: LibraryAsset) => Boolean(item.job_id),
-            enabled: (item: LibraryAsset) => busyId !== item.video_id,
+            enabled: (item: LibraryAsset) =>
+              !batchBusy && busyId !== item.video_id,
             onClick: (item: LibraryAsset) => {
               void retry(item);
             },
@@ -237,14 +307,17 @@ export default function LibraryPage() {
             type: 'icon',
             icon: 'trash',
             color: 'danger',
-            enabled: (item: LibraryAsset) => busyId !== item.video_id,
+            enabled: (item: LibraryAsset) =>
+              !batchBusy && busyId !== item.video_id,
             onClick: (item: LibraryAsset) => setRemoveTarget(item),
           },
         ],
       },
     ],
-    [t, busyId, retry],
+    [t, busyId, batchBusy, retry],
   );
+
+  const batchCount = batchMode === 'all' ? assets.length : selected.length;
 
   return (
     <AppShell
@@ -274,6 +347,43 @@ export default function LibraryPage() {
       </EuiText>
       <EuiSpacer size="s" />
 
+      {assets.length > 0 && (
+        <>
+          <EuiFlexGroup gutterSize="s" alignItems="center" wrap>
+            <EuiFlexItem grow={false}>
+              <EuiButton
+                color="danger"
+                iconType="trash"
+                isDisabled={selected.length === 0 || batchBusy}
+                isLoading={batchBusy && batchMode === 'selected'}
+                onClick={() => setBatchMode('selected')}
+              >
+                {t.batchRemoveSelected}
+              </EuiButton>
+            </EuiFlexItem>
+            <EuiFlexItem grow={false}>
+              <EuiButton
+                color="danger"
+                iconType="trash"
+                isDisabled={assets.length === 0 || batchBusy}
+                isLoading={batchBusy && batchMode === 'all'}
+                onClick={() => setBatchMode('all')}
+              >
+                {t.batchRemoveAll}
+              </EuiButton>
+            </EuiFlexItem>
+            {selected.length > 0 && (
+              <EuiFlexItem grow={false}>
+                <EuiText size="s" color="subdued">
+                  {fillTemplate(t.selectedCount, { count: selected.length })}
+                </EuiText>
+              </EuiFlexItem>
+            )}
+          </EuiFlexGroup>
+          <EuiSpacer size="m" />
+        </>
+      )}
+
       {!loading && assets.length === 0 ? (
         <EuiEmptyPrompt
           title={<h2>{t.libraryEmpty}</h2>}
@@ -286,9 +396,11 @@ export default function LibraryPage() {
       ) : (
         <EuiBasicTable
           items={assets}
+          itemId="video_id"
           columns={columns}
           loading={loading}
           rowHeader="title"
+          selection={selection}
         />
       )}
 
@@ -301,11 +413,33 @@ export default function LibraryPage() {
           confirmButtonText={t.actionRemove}
           buttonColor="danger"
           defaultFocusedButton="confirm"
+          isLoading={busyId === removeTarget.video_id}
         >
           <p>{t.removeConfirm}</p>
           <EuiText size="s">
             <strong>{removeTarget.title || removeTarget.video_id}</strong>
           </EuiText>
+        </EuiConfirmModal>
+      )}
+
+      {batchMode && (
+        <EuiConfirmModal
+          title={
+            batchMode === 'all' ? t.batchRemoveAll : t.batchRemoveSelected
+          }
+          onCancel={() => {
+            if (!batchBusy) setBatchMode(null);
+          }}
+          onConfirm={() => void removeBatch(batchMode)}
+          cancelButtonText={t.cancelConfirm}
+          confirmButtonText={
+            batchMode === 'all' ? t.batchRemoveAll : t.batchRemoveSelected
+          }
+          buttonColor="danger"
+          defaultFocusedButton="confirm"
+          isLoading={batchBusy}
+        >
+          <p>{fillTemplate(t.batchRemoveConfirm, { count: batchCount })}</p>
         </EuiConfirmModal>
       )}
     </AppShell>

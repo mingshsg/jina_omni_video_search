@@ -1,0 +1,41 @@
+# Live RTSP fixture: MediaMTX + FFmpeg publisher (separate from app image).
+#
+# Usage:
+#   docker compose -f docker-compose.live.yml up
+#   # Worker / host then pulls:
+#   # rtsp://127.0.0.1:8554/fixture
+#
+# Requires LIVE_ALLOWED_HOSTS including 127.0.0.1/localhost and
+# LIVE_ALLOWED_PORTS including 8554 (defaults in .env.example).
+#
+# Pinned digests recorded 2026-09-11 (Phase 9 readiness):
+#   bluenviron/mediamtx@sha256:19fddade8d6110a3d718ac0045681fbeba344ae563a066205fe5929a87f7582f
+#   linuxserver/ffmpeg@sha256:2d1569b07dd249fd8a4eeff0afb3c7e4a2e83e6b37d97bf28837f6ccd57b23d8
+
+services:
+  mediamtx:
+    image: bluenviron/mediamtx@sha256:19fddade8d6110a3d718ac0045681fbeba344ae563a066205fe5929a87f7582f
+    ports:
+      - "8554:8554"
+      - "9997:9997"
+    volumes:
+      - ./test/fixtures/live/mediamtx.yml:/mediamtx.yml:ro
+    command: ["/mediamtx.yml"]
+    restart: unless-stopped
+
+  # Official MediaMTX image has no FFmpeg — publisher is a separate service.
+  live-publisher:
+    image: linuxserver/ffmpeg@sha256:2d1569b07dd249fd8a4eeff0afb3c7e4a2e83e6b37d97bf28837f6ccd57b23d8
+    depends_on:
+      - mediamtx
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        sleep 2
+        exec ffmpeg -hide_banner -loglevel warning -re \
+          -f lavfi -i "testsrc=size=640x360:rate=25" \
+          -f lavfi -i "sine=frequency=1000:sample_rate=16000" \
+          -c:v libx264 -pix_fmt yuv420p -tune zerolatency -g 50 \
+          -c:a aac -ar 16000 -ac 1 \
+          -f rtsp -rtsp_transport tcp rtsp://mediamtx:8554/fixture
+    restart: unless-stopped

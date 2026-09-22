@@ -1,5 +1,8 @@
 # Implementation Plan
 
+> **Scope:** completed file-video ingest and search. The live remote-feed plan
+> is [`01-live-video-search-implementation-plan.md`](./01-live-video-search-implementation-plan.md).
+
 **This is the single consolidated plan for the project.** It supersedes and
 absorbs every earlier plan fragment, including the plan previously kept in
 Cursor's own plan storage outside this repository. If any other plan document
@@ -755,9 +758,9 @@ durable job queue are explicitly out of scope and bounded by NFR-8.
 - **2026-08-25, consolidation.** Merged every plan fragment, including the
   external Cursor-stored plan, into this single document. Folded in all findings
   from
-  [reviews/current-readiness-review-2026-08-25.md](../reviews/current-readiness-review-2026-08-25.md)
+  [reviews/current-readiness-review-2026-08-25.md](../reviews/archive/2026-09-10-file-video-search/current-readiness-review-2026-08-25.md)
   as answered in
-  [reviews/review-response-2026-08-25b.md](../reviews/review-response-2026-08-25b.md):
+  [reviews/review-response-2026-08-25b.md](../reviews/archive/2026-09-10-file-video-search/review-response-2026-08-25b.md):
   variant identity, provider isolation and task pinning, per-provider byte
   limits with the hosted Jina figure marked unmeasured, endpoint discovery,
   hardened URL import, corrected acceptance criteria, encoder terminal
@@ -769,4 +772,4 @@ durable job queue are explicitly out of scope and bounded by NFR-8.
   provider budget env vars; fixed local-provider budget wording; sanitized URL
   provenance; softened unproven claims; requirements and `chn.docs` brought
   into sync with this plan. Response:
-  [reviews/review-response-2026-08-25-r4.md](../reviews/review-response-2026-08-25-r4.md).
+  [reviews/review-response-2026-08-25-r4.md](../reviews/archive/2026-09-10-file-video-search/review-response-2026-08-25-r4.md).

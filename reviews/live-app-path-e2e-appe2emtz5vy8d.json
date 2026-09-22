@@ -1,0 +1,24 @@
+{
+  "runId": "appe2emtz5vy8d",
+  "started_at": "2026-09-13T01:55:02.797Z",
+  "evidence_class": "application_path",
+  "base_url": "http://127.0.0.1:3010",
+  "spawn": true,
+  "git": {
+    "commit": "78d7e569edc3f975e1b96199d14bf0a87c93a15a",
+    "branch": "live-video-search",
+    "dirty": true,
+    "content_hash": "f6109633abb72d73"
+  },
+  "gates": [
+    {
+      "gate": "App API reachable",
+      "status": "FAIL",
+      "evidence": "GET http://127.0.0.1:3010/api/live/sources → 500 ",
+      "notes": "spawned next/worker but live routes never answered 200"
+    }
+  ],
+  "error": "live API not reachable",
+  "finished_at": "2026-09-13T01:57:06.362Z",
+  "ok": false
+}

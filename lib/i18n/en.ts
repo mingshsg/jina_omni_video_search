@@ -24,7 +24,7 @@ export const ingestErrorsEn: Record<IngestErrorCode, string> = {
   INGEST_PROBE_ZERO_DURATION: 'The file has no playable video duration.',
   INGEST_INVALID_MODE: 'Invalid import mode.',
   INGEST_INVALID_CHUNKING:
-    'Invalid chunk preset or window/overlap values. Use standard, 60s, 30s, 20s, fine — or valid window_ms + overlap_ms.',
+    'Invalid chunk preset or window/overlap values. Use standard, 60s, 30s, 20s, fine, 2s — or valid window_ms + overlap_ms.',
   INGEST_BATCH_EMPTY: 'No video files found for this batch.',
   INGEST_BATCH_TOO_LARGE: 'Too many files in one batch. Split into smaller batches.',
   INGEST_INTERNAL: 'An unexpected error occurred during import.',

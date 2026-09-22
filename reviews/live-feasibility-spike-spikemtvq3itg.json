@@ -1,0 +1,70 @@
+{
+  "runId": "spikemtvq3itg",
+  "windowCount": 50,
+  "fragmentNeed": 151,
+  "scratchStream": "live-spike-spikemtvq3itg",
+  "rtsp_flags": {
+    "rtsp_transport": "tcp",
+    "timeout_us": 15000000,
+    "protocol_whitelist": "file,crypto,data,rtsp,tcp,udp,rtp,http,https,tls"
+  },
+  "started_at": "2026-09-10T16:09:43.690Z",
+  "capture_ms": 343654,
+  "fragment_duration_ms": {
+    "n": 151,
+    "p50": 2000,
+    "p95": 2000,
+    "p99": 2000
+  },
+  "fragment_drift_from_2000_ms": {
+    "n": 151,
+    "p50": 0,
+    "p95": 0,
+    "p99": 0
+  },
+  "receive_anchor_uncertainty_ms": {
+    "n": 151,
+    "p50": 48064,
+    "p95": 83851,
+    "p99": 84914
+  },
+  "stage_timings_ms": {
+    "remux": {
+      "n": 50,
+      "p50": 398.03783400007524,
+      "p95": 1260.7945419999305,
+      "p99": 7261.214083999977
+    },
+    "proxy": {
+      "n": 50,
+      "p50": 2296.426749999984,
+      "p95": 6022.025957999984,
+      "p99": 10409.548457999947
+    },
+    "inference": {
+      "n": 50,
+      "p50": 601.4072499999311,
+      "p95": 695.0627910000039,
+      "p99": 775.8052920000046
+    },
+    "index_refresh": {
+      "n": 50,
+      "p50": 2649.250333999982,
+      "p95": 4732.589917000034,
+      "p99": 4945.330958999926
+    }
+  },
+  "end_to_end_close_to_searchable_p95_ms": 12200.327625000034,
+  "finished_at": "2026-09-10T16:21:33.716Z",
+  "ok": true,
+  "notes": [
+    "Retention forever / unlimited spool unchanged.",
+    "Scratch stream deleted after run.",
+    "Architecture remains fragment-aligned 4/3."
+  ],
+  "budget": {
+    "close_to_searchable_target_ms": 10000,
+    "p95_ms": 12200.327625000034,
+    "within_budget": false
+  }
+}

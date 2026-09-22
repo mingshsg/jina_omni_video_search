@@ -1,7 +1,20 @@
 # Reference documents
 
-Downloaded: 2026-08-25. Offline snapshots used while planning this demo.
-Prefer the live `source` URL in each file's frontmatter when you need the latest text.
+Downloaded: 2026-08-25 (file-video set) and 2026-09-10 (live-video set). Offline
+snapshots used while planning this demo. Prefer the live `source` URL in each
+file's frontmatter when you need the latest text.
+
+## Live-video planning references (added 2026-09-10)
+
+Added by the development-readiness review of the live-video plan
+(`reviews/archive/2026-09-10-live-video-planning/development-readiness-review.md`). These
+are condensed notes with short quotations rather than full page snapshots.
+
+| Concern in the live-video plan | Reference |
+| --- | --- |
+| **Data streams: create-only, `@timestamp`, `_id` uniqueness only within the write index, DSL retention is a minimum, Serverless 200 ms write batching, configurable `refresh_interval`, client 8.19.2 API coverage** (AD-6, AD-7, AD-8, AD-15, Phase 1, Phase 5) | [elastic-data-streams-lifecycle-serverless.md](elastic-data-streams-lifecycle-serverless.md) |
+| **FFmpeg RTSP demuxer options, `protocol_whitelist`, forced 2 s keyframes, `segment` vs `hls`+`temp_file` atomic fragments, `use_wallclock_as_timestamps` / `PROGRAM-DATE-TIME` receive anchor, spawn/stop supervision** (AD-2, AD-3, AD-4, AD-11, AD-16, Phases 2–3) | [ffmpeg-live-capture-and-segmenting.md](ffmpeg-live-capture-and-segmenting.md) |
+| **MediaMTX fixture: ports (RTSP is 8554 by default), TCP-only transport, internal auth, `runOnInit` publisher, `useAbsoluteTimestamp`, fault-injection hooks, pinning** (Phases 2, 9, 10) | [mediamtx-fixture-and-gateway.md](mediamtx-fixture-and-gateway.md) |
 
 ## How these map to the plan
 
@@ -50,6 +63,12 @@ Prefer the live `source` URL in each file's frontmatter when you need the latest
 ### Paper
 
 - [arxiv-jina-embeddings-v5-omni.md](arxiv-jina-embeddings-v5-omni.md) — technical report HTML snapshot (truncated)
+
+### Live-video (condensed notes, 2026-09-10)
+
+- [elastic-data-streams-lifecycle-serverless.md](elastic-data-streams-lifecycle-serverless.md) — data streams, DSL retention, Serverless write semantics, optimistic concurrency, installed-client API coverage
+- [ffmpeg-live-capture-and-segmenting.md](ffmpeg-live-capture-and-segmenting.md) — RTSP demuxer options, protocol whitelist, keyframe forcing, `segment`/`hls` muxers, receive-clock anchoring, process supervision
+- [mediamtx-fixture-and-gateway.md](mediamtx-fixture-and-gateway.md) — MediaMTX defaults, auth, path hooks, fault injection, pinning
 
 ## Licence note
 

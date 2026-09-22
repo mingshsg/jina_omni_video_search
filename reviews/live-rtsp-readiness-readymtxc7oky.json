@@ -1,0 +1,73 @@
+{
+  "runId": "readymtxc7oky",
+  "started_at": "2026-09-11T19:16:35.506Z",
+  "git": {
+    "commit": "78d7e569edc3f975e1b96199d14bf0a87c93a15a",
+    "branch": "live-video-search"
+  },
+  "containers": {
+    "mediamtx_tag": "1.21.0",
+    "mediamtx_digest": "",
+    "ffmpeg_tag": "version-8.0-cli",
+    "ffmpeg_digest": ""
+  },
+  "gates": [
+    {
+      "gate": "Unit",
+      "status": "PASS",
+      "evidence": "yarn vitest run lib/live lib/es lib/media lib/ingest worker → exit 0"
+    },
+    {
+      "gate": "Security (web rejects LIVE_SOURCE_*)",
+      "status": "PASS",
+      "evidence": "assertWebEnvHasNoLiveSourceSecrets in-process"
+    },
+    {
+      "gate": "Security (secret scan)",
+      "status": "PASS",
+      "evidence": "no ApiKey/userinfo patterns under lib/app/components/worker/scripts/docs"
+    },
+    {
+      "gate": "Protocol",
+      "status": "NOT RUN",
+      "evidence": "READY_SKIP_PROTOCOL=1"
+    },
+    {
+      "gate": "Resilience",
+      "status": "NOT RUN",
+      "evidence": "READY_SKIP_PROTOCOL=1"
+    },
+    {
+      "gate": "Latency",
+      "status": "NOT RUN",
+      "evidence": "READY_SKIP_PROTOCOL=1"
+    },
+    {
+      "gate": "Search",
+      "status": "NOT RUN",
+      "evidence": "READY_SKIP_PROTOCOL=1"
+    },
+    {
+      "gate": "Playback",
+      "status": "NOT RUN",
+      "evidence": "READY_SKIP_PROTOCOL=1"
+    },
+    {
+      "gate": "Build",
+      "status": "PASS",
+      "evidence": "yarn build → exit 0"
+    },
+    {
+      "gate": "Regression (file-search smoke)",
+      "status": "NOT RUN",
+      "evidence": "Set READY_RUN_FILE_SMOKE=1 to include"
+    },
+    {
+      "gate": "Browser E2E (Playwright)",
+      "status": "NOT RUN",
+      "evidence": "No Playwright in repo; UI flows covered by Phase 8 unit helpers + manual checklist"
+    }
+  ],
+  "finished_at": "2026-09-11T19:17:41.123Z",
+  "ok": true
+}

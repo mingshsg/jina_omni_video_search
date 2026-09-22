@@ -10,6 +10,7 @@ export type UiMessages = {
   navImageSearch: string;
   navImport: string;
   navLibrary: string;
+  navLive: string;
   localeZh: string;
   localeEn: string;
 
@@ -23,6 +24,7 @@ export type UiMessages = {
   variantLabel: string;
   variantAllHint: string;
   topKLabel: string;
+  topKHelp: string;
   videoFilterLabel: string;
   videoFilterAll: string;
   resultsTitle: string;
@@ -44,6 +46,8 @@ export type UiMessages = {
   loadingVariants: string;
   noVariants: string;
   seekingTo: string;
+  groupedMoments: string;
+  groupedMomentsOne: string;
 
   // Image search
   imageSearchTitle: string;
@@ -100,6 +104,7 @@ export type UiMessages = {
   chunkPreset30s: string;
   chunkPreset20s: string;
   chunkPresetFine: string;
+  chunkPreset2s: string;
   submitImport: string;
   confirmWorkload: string;
   cancelConfirm: string;
@@ -146,6 +151,92 @@ export type UiMessages = {
   libraryError: string;
   retryStarted: string;
   removeDone: string;
+  batchRemoveSelected: string;
+  batchRemoveAll: string;
+  batchRemoveConfirm: string;
+  batchRemoveDone: string;
+  selectedCount: string;
+
+  // Live video
+  liveTitle: string;
+  liveDescription: string;
+  liveSessionTitle: string;
+  liveSourcesTitle: string;
+  liveRegisterSource: string;
+  liveSourceNameLabel: string;
+  liveSourceNamePlaceholder: string;
+  liveConnectionRefLabel: string;
+  liveConnectionRefPlaceholder: string;
+  liveConnectionRefHelp: string;
+  liveProtocolLabel: string;
+  liveTransportLabel: string;
+  liveSourceEnabled: string;
+  liveCreateSource: string;
+  liveRefreshSources: string;
+  liveNoSources: string;
+  liveStartSession: string;
+  liveStopSession: string;
+  liveOpenSession: string;
+  liveValidationState: string;
+  liveObservedState: string;
+  liveDesiredState: string;
+  liveWorkerAvailable: string;
+  liveWorkerUnavailable: string;
+  liveLagCapture: string;
+  liveLagProcessing: string;
+  liveQueueDepth: string;
+  liveSpoolBytes: string;
+  liveReconnects: string;
+  liveWindowsSearchable: string;
+  liveWindowsFailed: string;
+  liveWindowsDropped: string;
+  liveLastSearchable: string;
+  liveLastMedia: string;
+  liveFreshnessHint: string;
+  liveNotSearchableYet: string;
+  liveSearchTitle: string;
+  liveFollowLabel: string;
+  liveFollowHelp: string;
+  liveFollowActive: string;
+  liveFollowExpired: string;
+  liveFollowStop: string;
+  liveCacheHit: string;
+  liveCacheMiss: string;
+  liveImageSearch: string;
+  liveTextSearch: string;
+  liveClipPlayer: string;
+  liveGatewayPlayer: string;
+  liveGatewayUnavailable: string;
+  liveGatewayOpen: string;
+  liveMediaExpired: string;
+  liveSelectSourceFirst: string;
+  liveInvalidConnectionRef: string;
+  liveSourceError: string;
+  liveSessionError: string;
+  liveBackToLive: string;
+  liveEventsTitle: string;
+  liveStateCreated: string;
+  liveStateConnecting: string;
+  liveStateLive: string;
+  liveStateDegraded: string;
+  liveStateStopping: string;
+  liveStateStopped: string;
+  liveStateFailed: string;
+  liveValidationPending: string;
+  liveValidationReady: string;
+  liveValidationInvalid: string;
+  liveEndpointLabel: string;
+  liveVariantPinned: string;
+  liveSessionIdLabel: string;
+  liveSourceIdLabel: string;
+  liveIdempotencyHint: string;
+  liveDeleteSource: string;
+  liveDeleteSourceConfirm: string;
+  liveDeleteSourceHint: string;
+  liveHideE2eSources: string;
+  liveDeleteAllE2eSources: string;
+  liveDeleteAllE2eConfirm: string;
+  liveDeleteE2eDone: string;
 };
 
 export const uiEn: UiMessages = {
@@ -155,6 +246,7 @@ export const uiEn: UiMessages = {
   navImageSearch: 'Image search',
   navImport: 'Import',
   navLibrary: 'Library',
+  navLive: 'Live',
   localeZh: '中文',
   localeEn: 'EN',
 
@@ -167,6 +259,8 @@ export const uiEn: UiMessages = {
   variantLabel: 'Variant',
   variantAllHint: 'Select an indexed variant',
   topKLabel: 'Top-k',
+  topKHelp:
+    'Number of result groups. Nearby windows from the same video (within 2× chunk length) count as one.',
   videoFilterLabel: 'Video',
   videoFilterAll: 'All videos',
   resultsTitle: 'Results',
@@ -184,11 +278,13 @@ export const uiEn: UiMessages = {
   sortByVisual: 'Visual',
   sortByAudio: 'Audio',
   sortByHelp:
-    'RRF is fused rank. Visual and audio are knn similarity scores (cosine-related), not RRF.',
+    'RRF fuses visual+audio and is only available when modality is Both. Visual/audio are knn similarity scores.',
   selectVariantFirst: 'Choose a variant before searching.',
   loadingVariants: 'Loading variants…',
   noVariants: 'No ready variants yet. Import a video first.',
   seekingTo: 'Seek to',
+  groupedMoments: '{count} moments',
+  groupedMomentsOne: '1 moment',
 
   imageSearchTitle: 'Image search',
   imageSearchSubtitle: 'Upload a picture · find matching video moments',
@@ -239,12 +335,13 @@ export const uiEn: UiMessages = {
   autoStartHelp: 'Off = show workload estimate and wait for confirm',
   chunkPresetSelectLabel: 'Chunk window',
   chunkPresetHelp:
-    'Overlap keeps adjacent windows sharing a few seconds so cuts are not missed. standard 64s/4s · 60s/4s · 30s/4s · 20s/2s · fine 10s/2s. Each choice creates a distinct searchable variant.',
-  chunkPresetStandard: 'standard — 64 s window / 4 s overlap (default)',
+    'Overlap keeps adjacent windows sharing a few seconds so cuts are not missed. standard 64s/4s · 60s/4s · 30s/4s · 20s/2s · fine 10s/2s · 2s/1s. Each choice creates a distinct searchable variant.',
+  chunkPresetStandard: 'standard — 64 s window / 4 s overlap',
   chunkPreset60s: '60s — 60 s window / 4 s overlap',
   chunkPreset30s: '30s — 30 s window / 4 s overlap',
   chunkPreset20s: '20s — 20 s window / 2 s overlap',
   chunkPresetFine: 'fine — 10 s window / 2 s overlap',
+  chunkPreset2s: '2s — 2 s window / 1 s overlap (default)',
   submitImport: 'Start import',
   confirmWorkload: 'Confirm and start',
   cancelConfirm: 'Dismiss',
@@ -289,6 +386,99 @@ export const uiEn: UiMessages = {
   libraryError: 'Could not load library',
   retryStarted: 'Re-index started',
   removeDone: 'Removed from index',
+  batchRemoveSelected: 'Remove selected',
+  batchRemoveAll: 'Remove all',
+  batchRemoveConfirm:
+    'Remove {count} video(s) from the search index? Media files on disk are kept.',
+  batchRemoveDone: 'Removed {removed} of {requested} from index',
+  selectedCount: '{count} selected',
+
+  liveTitle: 'Live video',
+  liveDescription:
+    'Register an RTSP source by connection_ref, start a session, follow-search, play retained clips',
+  liveSessionTitle: 'Live session',
+  liveSourcesTitle: 'Sources',
+  liveRegisterSource: 'Register source',
+  liveSourceNameLabel: 'Display name',
+  liveSourceNamePlaceholder: 'Lobby camera',
+  liveConnectionRefLabel: 'Connection ref',
+  liveConnectionRefPlaceholder: 'LIVE_SOURCE_DEMO_URL',
+  liveConnectionRefHelp:
+    'Names a worker-only env secret (LIVE_SOURCE_*_URL|CONNECTION). Never paste RTSP URLs or passwords here.',
+  liveProtocolLabel: 'Protocol',
+  liveTransportLabel: 'Transport',
+  liveSourceEnabled: 'Enabled',
+  liveCreateSource: 'Create source',
+  liveRefreshSources: 'Refresh',
+  liveNoSources: 'No live sources yet. Register one to begin.',
+  liveStartSession: 'Start session',
+  liveStopSession: 'Stop',
+  liveOpenSession: 'Open',
+  liveValidationState: 'Validation',
+  liveObservedState: 'Observed',
+  liveDesiredState: 'Desired',
+  liveWorkerAvailable: 'Worker online',
+  liveWorkerUnavailable: 'Worker unavailable',
+  liveLagCapture: 'Capture lag',
+  liveLagProcessing: 'Processing lag',
+  liveQueueDepth: 'Queue depth',
+  liveSpoolBytes: 'Spool',
+  liveReconnects: 'Reconnects',
+  liveWindowsSearchable: 'Searchable windows',
+  liveWindowsFailed: 'Failed',
+  liveWindowsDropped: 'Dropped',
+  liveLastSearchable: 'Last searchable',
+  liveLastMedia: 'Last media',
+  liveFreshnessHint: 'Results update when a durable searchable event arrives.',
+  liveNotSearchableYet: 'No searchable windows yet — waiting for indexing ack.',
+  liveSearchTitle: 'Live search',
+  liveFollowLabel: 'Follow',
+  liveFollowHelp:
+    'Keeps the query open and refreshes top-K when new windows become searchable.',
+  liveFollowActive: 'Following',
+  liveFollowExpired: 'Follow handle expired — search again.',
+  liveFollowStop: 'Stop follow',
+  liveCacheHit: 'Query vector cache hit',
+  liveCacheMiss: 'Query vector cache miss',
+  liveImageSearch: 'Image',
+  liveTextSearch: 'Text',
+  liveClipPlayer: 'Retained clip',
+  liveGatewayPlayer: 'Live gateway view',
+  liveGatewayUnavailable:
+    'No MediaMTX HLS/WebRTC URL configured (optional LIVE_PLAYBACK_*_TEMPLATE).',
+  liveGatewayOpen: 'Open gateway URL',
+  liveMediaExpired: 'Retained media unavailable (410)',
+  liveSelectSourceFirst: 'Choose a ready source first.',
+  liveInvalidConnectionRef:
+    'connection_ref must look like LIVE_SOURCE_NAME_URL or …_CONNECTION.',
+  liveSourceError: 'Live source request failed',
+  liveSessionError: 'Live session request failed',
+  liveBackToLive: 'Back to live sources',
+  liveEventsTitle: 'Session events',
+  liveStateCreated: 'created',
+  liveStateConnecting: 'connecting',
+  liveStateLive: 'live',
+  liveStateDegraded: 'degraded',
+  liveStateStopping: 'stopping',
+  liveStateStopped: 'stopped',
+  liveStateFailed: 'failed',
+  liveValidationPending: 'pending validation',
+  liveValidationReady: 'ready',
+  liveValidationInvalid: 'invalid',
+  liveEndpointLabel: 'Endpoint',
+  liveVariantPinned: 'Variant',
+  liveSessionIdLabel: 'Session',
+  liveSourceIdLabel: 'Source',
+  liveIdempotencyHint: 'Each start uses a fresh idempotency key.',
+  liveDeleteSource: 'Delete',
+  liveDeleteSourceConfirm:
+    'Delete this live source? Stop any active session first. Indexed windows are not cascade-deleted.',
+  liveDeleteSourceHint: 'Removes the source registry entry only.',
+  liveHideE2eSources: 'Hide app-e2e-* sources',
+  liveDeleteAllE2eSources: 'Delete all e2e sources',
+  liveDeleteAllE2eConfirm:
+    'Delete every source whose name starts with app-e2e-? Active sessions must be stopped first.',
+  liveDeleteE2eDone: 'E2E sources cleaned up',
 };
 
 export const uiZh: UiMessages = {
@@ -298,6 +488,7 @@ export const uiZh: UiMessages = {
   navImageSearch: '以图搜片',
   navImport: '导入',
   navLibrary: '片库',
+  navLive: '直播',
   localeZh: '中文',
   localeEn: 'EN',
 
@@ -310,6 +501,8 @@ export const uiZh: UiMessages = {
   variantLabel: '变体',
   variantAllHint: '选择已索引的变体',
   topKLabel: 'Top-k',
+  topKHelp:
+    '结果组数量。同一视频中时间接近的窗口（跨度 ≤ 2×分块长度）计为 1 条。',
   videoFilterLabel: '视频',
   videoFilterAll: '全部视频',
   resultsTitle: '结果',
@@ -327,11 +520,13 @@ export const uiZh: UiMessages = {
   sortByVisual: '视觉',
   sortByAudio: '音频',
   sortByHelp:
-    'RRF 为融合排名分；视觉/音频为 knn 相似度（与余弦相关），不是 RRF。',
+    'RRF 融合视觉与音频，仅在模态为「视觉+音频」时可选。视觉/音频为 knn 相似度分。',
   selectVariantFirst: '请先选择变体再检索。',
   loadingVariants: '正在加载变体…',
   noVariants: '尚无可用变体，请先导入视频。',
   seekingTo: '跳转到',
+  groupedMoments: '{count} 个瞬间',
+  groupedMomentsOne: '1 个瞬间',
 
   imageSearchTitle: '以图搜片',
   imageSearchSubtitle: '上传图片 · 匹配视频画面瞬间',
@@ -382,12 +577,13 @@ export const uiZh: UiMessages = {
   autoStartHelp: '关闭后先显示工作量估算，确认后再索引',
   chunkPresetSelectLabel: '分块窗口',
   chunkPresetHelp:
-    '重叠段让相邻窗口共享若干秒，避免切点漏检。standard 64s/4s · 60s/4s · 30s/4s · 20s/2s · fine 10s/2s。每次选择会生成独立的可检索变体，便于对比。',
-  chunkPresetStandard: 'standard — 64 秒窗口 / 4 秒重叠（默认）',
+    '重叠段让相邻窗口共享若干秒，避免切点漏检。standard 64s/4s · 60s/4s · 30s/4s · 20s/2s · fine 10s/2s · 2s/1s。每次选择会生成独立的可检索变体，便于对比。',
+  chunkPresetStandard: 'standard — 64 秒窗口 / 4 秒重叠',
   chunkPreset60s: '60s — 60 秒窗口 / 4 秒重叠',
   chunkPreset30s: '30s — 30 秒窗口 / 4 秒重叠',
   chunkPreset20s: '20s — 20 秒窗口 / 2 秒重叠',
   chunkPresetFine: 'fine — 10 秒窗口 / 2 秒重叠',
+  chunkPreset2s: '2s — 2 秒窗口 / 1 秒重叠（默认）',
   submitImport: '开始导入',
   confirmWorkload: '确认并开始',
   cancelConfirm: '关闭',
@@ -432,6 +628,97 @@ export const uiZh: UiMessages = {
   libraryError: '无法加载片库',
   retryStarted: '已开始重新索引',
   removeDone: '已从索引移除',
+  batchRemoveSelected: '删除所选',
+  batchRemoveAll: '全部删除',
+  batchRemoveConfirm: '从检索索引中移除 {count} 个视频？磁盘上的媒体文件会保留。',
+  batchRemoveDone: '已从索引移除 {removed}/{requested} 个',
+  selectedCount: '已选 {count} 个',
+
+  liveTitle: '直播视频',
+  liveDescription:
+    '用 connection_ref 注册 RTSP 源、启动会话、跟随检索、播放保留片段',
+  liveSessionTitle: '直播会话',
+  liveSourcesTitle: '直播源',
+  liveRegisterSource: '注册直播源',
+  liveSourceNameLabel: '显示名称',
+  liveSourceNamePlaceholder: '大堂摄像头',
+  liveConnectionRefLabel: '连接引用',
+  liveConnectionRefPlaceholder: 'LIVE_SOURCE_DEMO_URL',
+  liveConnectionRefHelp:
+    '指向 worker 环境中的密钥名（LIVE_SOURCE_*_URL|CONNECTION）。切勿在此粘贴 RTSP URL 或密码。',
+  liveProtocolLabel: '协议',
+  liveTransportLabel: '传输',
+  liveSourceEnabled: '启用',
+  liveCreateSource: '创建直播源',
+  liveRefreshSources: '刷新',
+  liveNoSources: '尚无直播源，请先注册。',
+  liveStartSession: '启动会话',
+  liveStopSession: '停止',
+  liveOpenSession: '打开',
+  liveValidationState: '校验状态',
+  liveObservedState: '观测状态',
+  liveDesiredState: '期望状态',
+  liveWorkerAvailable: 'Worker 在线',
+  liveWorkerUnavailable: 'Worker 不可用',
+  liveLagCapture: '采集延迟',
+  liveLagProcessing: '处理延迟',
+  liveQueueDepth: '队列深度',
+  liveSpoolBytes: 'Spool',
+  liveReconnects: '重连次数',
+  liveWindowsSearchable: '可检索窗口',
+  liveWindowsFailed: '失败',
+  liveWindowsDropped: '丢弃',
+  liveLastSearchable: '最近可检索',
+  liveLastMedia: '最近媒体',
+  liveFreshnessHint: '仅在收到 durable searchable 事件后刷新结果。',
+  liveNotSearchableYet: '尚无可检索窗口 — 等待索引确认。',
+  liveSearchTitle: '直播检索',
+  liveFollowLabel: '跟随',
+  liveFollowHelp: '保持查询打开；新窗口变为 searchable 时刷新 Top-K。',
+  liveFollowActive: '跟随中',
+  liveFollowExpired: '跟随句柄已过期 — 请重新检索。',
+  liveFollowStop: '停止跟随',
+  liveCacheHit: '查询向量缓存命中',
+  liveCacheMiss: '查询向量缓存未命中',
+  liveImageSearch: '图片',
+  liveTextSearch: '文本',
+  liveClipPlayer: '保留片段',
+  liveGatewayPlayer: '网关实时画面',
+  liveGatewayUnavailable:
+    '未配置 MediaMTX HLS/WebRTC（可选 LIVE_PLAYBACK_*_TEMPLATE）。',
+  liveGatewayOpen: '打开网关地址',
+  liveMediaExpired: '保留媒体不可用（410）',
+  liveSelectSourceFirst: '请先选择已就绪的直播源。',
+  liveInvalidConnectionRef:
+    'connection_ref 须形如 LIVE_SOURCE_NAME_URL 或 …_CONNECTION。',
+  liveSourceError: '直播源请求失败',
+  liveSessionError: '直播会话请求失败',
+  liveBackToLive: '返回直播源列表',
+  liveEventsTitle: '会话事件',
+  liveStateCreated: '已创建',
+  liveStateConnecting: '连接中',
+  liveStateLive: '直播中',
+  liveStateDegraded: '降级',
+  liveStateStopping: '停止中',
+  liveStateStopped: '已停止',
+  liveStateFailed: '失败',
+  liveValidationPending: '待校验',
+  liveValidationReady: '就绪',
+  liveValidationInvalid: '无效',
+  liveEndpointLabel: '端点',
+  liveVariantPinned: '变体',
+  liveSessionIdLabel: '会话',
+  liveSourceIdLabel: '源',
+  liveIdempotencyHint: '每次启动使用新的幂等键。',
+  liveDeleteSource: '删除',
+  liveDeleteSourceConfirm:
+    '删除此直播源？请先停止进行中的会话。索引窗口不会级联删除。',
+  liveDeleteSourceHint: '仅删除源注册条目。',
+  liveHideE2eSources: '隐藏 app-e2e-* 源',
+  liveDeleteAllE2eSources: '删除全部 e2e 源',
+  liveDeleteAllE2eConfirm:
+    '删除所有名称以 app-e2e- 开头的源？若有活跃会话请先停止。',
+  liveDeleteE2eDone: '已清理 e2e 源',
 };
 
 const uiMaps: Record<Locale, UiMessages> = {

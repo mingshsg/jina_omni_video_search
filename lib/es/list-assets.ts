@@ -119,3 +119,76 @@ export async function removeAssetFromIndex(
     deleted_chunks: typeof chunks.deleted === 'number' ? chunks.deleted : 0,
   };
 }
+
+export const LIBRARY_BATCH_DELETE_MAX = 200;
+
+export type BatchRemoveAssetResult = {
+  video_id: string;
+  ok: boolean;
+  deleted_asset: boolean;
+  deleted_chunks: number;
+  error?: string;
+};
+
+/**
+ * Remove many assets (+ chunks) from Elasticsearch.
+ * Does **not** delete files on disk (NFR-5). Per-id failures are reported;
+ * other ids still proceed.
+ */
+export async function removeAssetsFromIndex(
+  videoIds: string[],
+): Promise<{
+  requested: number;
+  removed: number;
+  failed: number;
+  results: BatchRemoveAssetResult[];
+}> {
+  const seen = new Set<string>();
+  const ids: string[] = [];
+  for (const raw of videoIds) {
+    const id = typeof raw === 'string' ? raw.trim() : '';
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    ids.push(id);
+  }
+
+  const results: BatchRemoveAssetResult[] = [];
+  let removed = 0;
+  let failed = 0;
+
+  for (const videoId of ids) {
+    try {
+      const result = await removeAssetFromIndex(videoId);
+      if (result.deleted_asset || result.deleted_chunks > 0) {
+        removed += 1;
+        results.push({
+          video_id: videoId,
+          ok: true,
+          deleted_asset: result.deleted_asset,
+          deleted_chunks: result.deleted_chunks,
+        });
+      } else {
+        failed += 1;
+        results.push({
+          video_id: videoId,
+          ok: false,
+          deleted_asset: false,
+          deleted_chunks: 0,
+          error: 'not_found',
+        });
+      }
+    } catch (err) {
+      failed += 1;
+      const message = err instanceof Error ? err.message : 'Remove failed';
+      results.push({
+        video_id: videoId,
+        ok: false,
+        deleted_asset: false,
+        deleted_chunks: 0,
+        error: message.replace(/ApiKey\s+\S+/gi, 'ApiKey [redacted]'),
+      });
+    }
+  }
+
+  return { requested: ids.length, removed, failed, results };
+}

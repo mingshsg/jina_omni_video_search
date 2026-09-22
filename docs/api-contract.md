@@ -102,7 +102,7 @@ first progress facts when `auto_start` is true):
 | `inference_calls` | `windows` if no audio; `2 * windows` if `has_audio` |
 | `has_audio` | from ffprobe |
 | `variant_id` | derived from current config |
-| `chunk_preset` | `standard` \| `60s` \| `30s` \| `20s` \| `fine` \| `custom` |
+| `chunk_preset` | `standard` \| `60s` \| `30s` \| `20s` \| `fine` \| `2s` \| `custom` |
 
 This is a **workload** estimate (windows / inference calls), not currency cost.
 
@@ -198,7 +198,7 @@ JSON body (discriminated by `mode`):
 | Field | Default | Notes |
 | --- | --- | --- |
 | `auto_start` | `true` | If `false`, job stops at `awaiting_confirm` until confirm |
-| `chunk_preset` | env `CHUNK_PRESET` | Named window: `standard` (64s/4s), `60s` (60s/4s), `30s` (30s/4s), `20s` (20s/2s), `fine` (10s/2s). Hashes into `variant_id` so presets coexist. |
+| `chunk_preset` | env `CHUNK_PRESET` | Named window: `standard` (64s/4s), `60s` (60s/4s), `30s` (30s/4s), `20s` (20s/2s), `fine` (10s/2s), `2s` (2s/1s). Hashes into `variant_id` so presets coexist. |
 | `window_ms` + `overlap_ms` | — | Optional free-form alternative (both required together); optional `min_ms`. Labels as `custom` unless `chunk_preset` is also set. |
 
 **200 response:**
@@ -334,22 +334,22 @@ returns after accept).
 ```json
 {
   "query": "a cat on a windowsill",
-  "modality": "both",
+  "modality": "visual",
   "variant_id": "a1b2c3d4e5f67890",
   "video_id": null,
   "size": 20,
-  "sort_by": "rrf"
+  "sort_by": "visual"
 }
 ```
 
 | Field | Required | Values / rules |
 | --- | --- | --- |
 | `query` | yes | non-empty string (max 2000) |
-| `modality` | no (default `both`) | `visual` \| `audio` \| `both` |
-| `variant_id` | yes | kNN **pre-filter** on every child retriever |
+| `modality` | no (default `visual`) | `visual` \| `audio` \| `both` |
+| `variant_id` | **yes** | kNN **pre-filter** on every child retriever |
 | `video_id` | no | optional single-video filter (`null` / omit = all videos in variant) |
 | `size` | no (default 20) | top-k; server clamps to **1..100** |
-| `sort_by` | no (default `rrf`) | `rrf` \| `visual` \| `audio` — see sort below |
+| `sort_by` | no (default `visual`) | `rrf` \| `visual` \| `audio` — `rrf` only when `modality=both` (otherwise coerced to the active modality) |
 
 ### RRF / knn parameters (from config)
 
@@ -428,7 +428,7 @@ Server-side. Variant / `video_id` filters still apply.
 
 | `sort_by` | Hit list | Order |
 | --- | --- | --- |
-| `rrf` (default) | RRF retriever (`modality=both`) or the single knn list | fused RRF / knn order |
+| `rrf` | RRF retriever (`modality=both` only) | fused RRF order |
 | `visual` | Visual knn window, then top-`size` | `score_visual` descending |
 | `audio` | Audio knn window, then top-`size` | `score_audio` descending |
 
@@ -589,6 +589,34 @@ Elasticsearch. **Does not delete** files under `data/` (NFR-5).
 
 **200:** `{ "video_id", …deletion summary }`.
 
+### `POST /api/library/batch-delete`
+
+Remove many videos from Elasticsearch in one request. **Does not delete** files
+under `data/` (NFR-5).
+
+**Body:** `{ "video_ids": ["uuid", …] }` (1–200 ids).
+
+| Code | HTTP | When |
+| --- | --- | --- |
+| `LIBRARY_INVALID` | 400 | Missing/invalid body or id |
+| `LIBRARY_FAILED` | 500 | Unexpected ES failure |
+
+**200:**
+
+```json
+{
+  "requested": 3,
+  "removed": 2,
+  "failed": 1,
+  "results": [
+    { "video_id": "…", "ok": true, "deleted_asset": true, "deleted_chunks": 12 },
+    { "video_id": "…", "ok": false, "deleted_asset": false, "deleted_chunks": 0, "error": "not_found" }
+  ]
+}
+```
+
+Per-id failures do not abort the rest of the batch.
+
 ---
 
 ## Media APIs (Phase 9)
@@ -614,4 +642,5 @@ Serves the chunk JPEG (from chunk `thumb_path` or conventional path under
 | 2026-08-26 | Phase 8: finalize search contract — RRF weights/window, badge rule, provider query vectors |
 | 2026-08-26 | Phase 11: library + media/thumb routes; status marked verified vs code |
 | 2026-09-03 | Search hits: `score_visual` / `score_audio` (knn similarity) + `rank_*`; `sort_by` `rrf`\|`visual`\|`audio`. `score` remains RRF when modality=both. |
-| 2026-09-04 | `POST /api/search/image` — image→video visual knn; UI `/search-image`. |
+| 2026-09-22 | Library batch delete: `POST /api/library/batch-delete` + multi-select UI |
+| 2026-09-22 | Library batch delete: `POST /api/library/batch-delete` + multi-select UI |

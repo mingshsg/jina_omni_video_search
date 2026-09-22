@@ -1,0 +1,74 @@
+{
+  "runId": "readymtx44euc",
+  "started_at": "2026-09-11T15:30:05.988Z",
+  "git": {
+    "commit": "78d7e569edc3f975e1b96199d14bf0a87c93a15a",
+    "branch": "live-video-search"
+  },
+  "containers": {
+    "mediamtx_tag": "1.21.0",
+    "mediamtx_digest": "bluenviron/mediamtx@sha256:19fddade8d6110a3d718ac0045681fbeba344ae563a066205fe5929a87f7582f",
+    "ffmpeg_tag": "version-8.0-cli",
+    "ffmpeg_digest": "linuxserver/ffmpeg@sha256:2d1569b07dd249fd8a4eeff0afb3c7e4a2e83e6b37d97bf28837f6ccd57b23d8"
+  },
+  "gates": [
+    {
+      "gate": "Unit",
+      "status": "PASS",
+      "evidence": "yarn vitest run lib/live lib/es lib/media lib/ingest worker → exit 0"
+    },
+    {
+      "gate": "Security (web rejects LIVE_SOURCE_*)",
+      "status": "PASS",
+      "evidence": "assertWebEnvHasNoLiveSourceSecrets in-process"
+    },
+    {
+      "gate": "Security (secret scan)",
+      "status": "PASS",
+      "evidence": "no ApiKey/userinfo patterns under lib/app/components/worker/scripts/docs"
+    },
+    {
+      "gate": "Protocol",
+      "status": "NOT RUN",
+      "evidence": "READY_SKIP_PROTOCOL=1"
+    },
+    {
+      "gate": "Resilience",
+      "status": "NOT RUN",
+      "evidence": "READY_SKIP_PROTOCOL=1"
+    },
+    {
+      "gate": "Latency",
+      "status": "NOT RUN",
+      "evidence": "READY_SKIP_PROTOCOL=1"
+    },
+    {
+      "gate": "Search",
+      "status": "NOT RUN",
+      "evidence": "READY_SKIP_PROTOCOL=1"
+    },
+    {
+      "gate": "Playback",
+      "status": "NOT RUN",
+      "evidence": "READY_SKIP_PROTOCOL=1"
+    },
+    {
+      "gate": "Build",
+      "status": "FAIL",
+      "evidence": "yarn build → exit 1",
+      "notes": "Failed to compile.\n\n./components/live/LiveHitCard.tsx:90:19\nType error: Parameter 'e' implicitly has an 'any' type.\n\n\u001b[0m \u001b[90m 88 |\u001b[39m       }}\u001b[0m\n\u001b[0m \u001b[90m 89 |\u001b[39m       onClick\u001b[33m=\u001b[39m{() \u001b[33m=>\u001b[39m onSelect(hit)}\u001b[0m\n\u001b[0m\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 90 |\u001b[39m       onKeyDown\u001b[33m=\u001b[39m{(e) \u001b[33m=>\u001b[39m {\u001b[0m\n\u001b[0m \u001b[90m    |\u001b[39m                   \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\u001b[0m\n\u001b[0m \u001b[90m 91 |\u001b[39m         \u001b[36mif\u001b[39m (e\u001b[33m.\u001b[39mkey \u001b[33m===\u001b[39m \u001b[32m'Enter'\u001b[39m \u001b[33m||\u001b[39m e\u001b[33m.\u001b[39mkey \u001b[33m===\u001b[39m \u001b[32m' '\u001b[39m) {\u001b[0m\n\u001b[0m \u001b[90m 92 |\u001b[39m           e\u001b[33m.\u001b[39mpreventDefault()\u001b[33m;\u001b[39m\u001b[0m\n\u001b[0m \u001b[90m 93 |\u001b[39m           onSelect(hit)\u001b[33m;\u001b[39m\u001b[0m\nNext.js build worker exited with code: 1 and signal: null\nerror Command failed with exit code 1.\n"
+    },
+    {
+      "gate": "Regression (file-search smoke)",
+      "status": "NOT RUN",
+      "evidence": "Set READY_RUN_FILE_SMOKE=1 to include"
+    },
+    {
+      "gate": "Browser E2E (Playwright)",
+      "status": "NOT RUN",
+      "evidence": "No Playwright in repo; UI flows covered by Phase 8 unit helpers + manual checklist"
+    }
+  ],
+  "finished_at": "2026-09-11T15:31:10.089Z",
+  "ok": false
+}

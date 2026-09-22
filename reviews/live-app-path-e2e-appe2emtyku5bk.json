@@ -1,0 +1,49 @@
+{
+  "runId": "appe2emtyku5bk",
+  "started_at": "2026-09-12T16:05:46.736Z",
+  "evidence_class": "application_path",
+  "base_url": "http://127.0.0.1:3010",
+  "spawn": true,
+  "git": {
+    "commit": "78d7e569edc3f975e1b96199d14bf0a87c93a15a",
+    "branch": "live-video-search",
+    "dirty": true,
+    "content_hash": "a008fcb523336631"
+  },
+  "gates": [
+    {
+      "gate": "App API reachable",
+      "status": "PASS",
+      "evidence": "GET http://127.0.0.1:3010/api/live/sources → 200 {\"sources\":[{\"source_id\":\"e8386eb5-89aa-487f-a1e5-52b0c7ea9b04\",\"name\":\"app-e2e-appe2emtyie3md\",\"protocol\":\"rtsp\",\"sourc"
+    },
+    {
+      "gate": "Create source",
+      "status": "PASS",
+      "evidence": "POST /api/live/sources → 201 id=0e7a1b2e-cfda-4b5a-9a2c-9a913741751a"
+    },
+    {
+      "gate": "Source validation (pending→ready)",
+      "status": "PASS",
+      "evidence": "validation_state=ready host=127.0.0.1:8554"
+    },
+    {
+      "gate": "Create session",
+      "status": "PASS",
+      "evidence": "POST /api/live/sessions → 202 id=ls_f0f84499d962b71c90f40d1139b35bd9",
+      "notes": "{\"session\":{\"session_id\":\"ls_f0f84499d962b71c90f40d1139b35bd9\",\"source_id\":\"0e7a1b2e-cfda-4b5a-9a2c-9a913741751a\",\"desired_state\":\"running\",\"observed_state\":\"created\",\"revision\":0,\"variant_id\":\"835f1df3b5ecadd9\",\"created_at\":\"2026-09-12T16:06:02.316Z\"},\"links\":{\"self\":\"/api/live/sessions/ls_f0f84499d962b71c90f40d1139b35bd9\",\"events\":\"/api/live/sessions/ls_f0f84499d962b71c90f40d1139b35bd9/events\"}}"
+    },
+    {
+      "gate": "Start session",
+      "status": "PASS",
+      "evidence": "POST .../start → 202"
+    },
+    {
+      "gate": "Application path",
+      "status": "FAIL",
+      "evidence": "timeout waiting for 2 searchable windows; last={\"session_id\":\"ls_f0f84499d962b71c90f40d1139b35bd9\",\"source_id\":\"0e7a1b2e-cfda-4b5a-9a2c-9a913741751a\",\"desired_state\":\"running\",\"observed_state\":\"degraded\",\"revision\":17,\"stream_epoch\":1,\"last_sequence_no_in_current_epoch\":137,\"last_media_at\":\"2026-09-12T16:10:58.612Z\",\"last_searchable_at\":null,\"capture_lag_ms\":null,\"processing_lag_ms\":null,\"queue_depth\":11,\"spool_bytes\":11374487,\"windows\":{\"searchable\":17,\"failed\":0,\"dropped\":13},\"reconnect_count\":0,\"current_error\":null,\"worker_available\":true,\"variant_id\":\"835f1df3b5ecadd9\",\"updated_at\":\"2026-09-12T16:11:04.087Z\"}"
+    }
+  ],
+  "error": "timeout waiting for 2 searchable windows; last={\"session_id\":\"ls_f0f84499d962b71c90f40d1139b35bd9\",\"source_id\":\"0e7a1b2e-cfda-4b5a-9a2c-9a913741751a\",\"desired_state\":\"running\",\"observed_state\":\"degraded\",\"revision\":17,\"stream_epoch\":1,\"last_sequence_no_in_current_epoch\":137,\"last_media_at\":\"2026-09-12T16:10:58.612Z\",\"last_searchable_at\":null,\"capture_lag_ms\":null,\"processing_lag_ms\":null,\"queue_depth\":11,\"spool_bytes\":11374487,\"windows\":{\"searchable\":17,\"failed\":0,\"dropped\":13},\"reconnect_count\":0,\"current_error\":null,\"worker_available\":true,\"variant_id\":\"835f1df3b5ecadd9\",\"updated_at\":\"2026-09-12T16:11:04.087Z\"}",
+  "finished_at": "2026-09-12T16:11:09.082Z",
+  "ok": false
+}

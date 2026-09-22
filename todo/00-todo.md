@@ -1,5 +1,8 @@
 # TODO
 
+> **Scope:** completed file-video work. Active live-video planning and delivery
+> is tracked in [`01-live-video-search-todo.md`](./01-live-video-search-todo.md).
+
 Status legend: `[ ]` not started, `[~]` in progress, `[x]` done, `[-]` cancelled.
 Last updated: 2026-09-04 — image-to-video search (`/search-image`).
 
@@ -28,7 +31,7 @@ Requirements: [requirements/01-interpreted-requirements.md](../requirements/01-i
 - [x] Download related documents into `reference/`
 - [x] Update `reference/constraints-cheat-sheet.md`, `elastic-eui-constraints.md`
 - [x] Consolidate plan; initialise Git; baseline commit `262412b`
-- [x] Respond to Round 4 in `reviews/review-response-2026-08-25-r4.md`; correct
+- [x] Respond to Round 4 in `reviews/archive/2026-09-10-file-video-search/review-response-2026-08-25-r4.md`; correct
       false sync claim in `review-response-2026-08-25b.md` addendum
 - [x] Write `docs/data-model.md` with **executable mapping JSON** (before Phase 3)
 - [x] Write `docs/api-contract.md` with SSE schema and job state machine (before
@@ -191,7 +194,7 @@ media size (verify in Phase 10).
 - [x] Click-to-play path: media Range 206 (lib + HTTP `/api/media`)
 - [x] Import modes: upload stream OK; URL sanitize/provenance OK (full URL
       re-download optional); local skipped (`LOCAL_IMPORT_ROOT` unset)
-- [x] Findings: `reviews/e2e-verification-2026-08-26.md`; runner
+- [x] Findings: `reviews/archive/2026-09-10-file-video-search/e2e-verification-2026-08-26.md`; runner
       `scripts/phase10-e2e.ts`
 
 **Acceptance:** dual-preset coexistence + same-corpus metrics recorded.
@@ -200,7 +203,7 @@ media size (verify in Phase 10).
 ## Phase 11: close-out
 
 - [x] Docs: empirical claims → measurements; constants → cited sources
-- [x] README refresh; self-review in `reviews/self-review-2026-08-26.md`
+- [x] README refresh; self-review in `reviews/archive/2026-09-10-file-video-search/self-review-2026-08-26.md`
 - [x] Refresh `docs/architecture.md`, `data-flow.md`, `ui-mockup.md`,
       `operations.md`; verify `data-model.md` + `api-contract.md` vs code
 
@@ -243,6 +246,16 @@ media size (verify in Phase 10).
   (`APP_PORT=3001 docker compose up -d --build`; Dockerfile uses
   `node:22-bookworm-slim` to avoid Hub pulls of full bookworm /
   `# syntax=` frontend when offline). Verified: `/search-image` → 200.
+
+## Follow-ups
+
+- [x] Add import chunk preset `2s` (2 s window / 1 s overlap); rebuild app
+      container (2026-09-22)
+- [x] Library batch delete (`POST /api/library/batch-delete` + multi-select UI);
+      rebuild app container (2026-09-22)
+- [x] Search defaults: modality=visual; RRF sort disabled unless Both
+- [x] Search result grouping: same-video hits within `2×chunk_window` collapse;
+      Top-k counts groups (UI default 5); rebuild app (2026-09-22)
 
 ## Blocked / waiting on user
 

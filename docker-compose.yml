@@ -2,20 +2,30 @@
 #
 # Usage:
 #   1. Ensure .env has ELASTICSEARCH_URL, ELASTICSEARCH_API_KEY, EMBED_INFERENCE_ID, …
-#   2. (once) yarn setup-indices   # from host, or see README
-#   3. VIDEO_DATA_DIR=/path/to/videos docker compose up --build
+#   2. Copy .env.worker.example → .env.worker and add LIVE_SOURCE_* secrets (worker only)
+#   3. (once) yarn setup-indices   # from host, or see README
+#   4. VIDEO_DATA_DIR=/path/to/videos docker compose up --build
 #
 # Videos / proxies / thumbs land under VIDEO_DATA_DIR (mapped to /app/data).
+#
+# Env split (A-02): web loads `.env` only (must NOT contain LIVE_SOURCE_*).
+# Worker loads `.env` + `.env.worker` (secrets live only in `.env.worker`).
+#
+# Demo binds to loopback by default (M8/A-21): no auth on live APIs.
+# Override host bind only when you intentionally expose the demo:
+#   APP_BIND=0.0.0.0 docker compose up
 
 services:
   app:
     build: .
     ports:
-      - "${APP_PORT:-3000}:3000"
+      - "${APP_BIND:-127.0.0.1}:${APP_PORT:-3000}:3000"
     env_file:
       - .env
     environment:
       MEDIA_ROOT: /app/data
+      LIVE_SPOOL_DIR: /app/data/live-spool
+      # Web must not receive LIVE_SOURCE_* — keep them out of `.env` and only in `.env.worker`
       # Optional: mount a second host folder and set this to enable "local path" import
       # LOCAL_IMPORT_ROOT: /import
     volumes:
@@ -23,4 +33,29 @@ services:
       - ${VIDEO_DATA_DIR:-./data}:/app/data
       # Uncomment to allow local-path import from a host directory:
       # - ${LOCAL_IMPORT_HOST:-./import}:/import
+    # MVP: one web replica (local follow-search handles are process-local)
+    deploy:
+      replicas: 1
+    restart: unless-stopped
+
+  # Separate live worker image (FFmpeg + Node). Shares spool + Elastic with app.
+  live-worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    env_file:
+      - .env
+      - .env.worker
+    environment:
+      LIVE_SPOOL_DIR: /app/data/live-spool
+      MEDIA_ROOT: /app/data
+    volumes:
+      - ${VIDEO_DATA_DIR:-./data}:/app/data
+    # Reach MediaMTX published on the host (docker-compose.live.yml :8554).
+    # LIVE_SOURCE_* must use host.docker.internal, not 127.0.0.1 (that is the container loopback).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # MVP: exactly one worker; exclusive ${LIVE_SPOOL_DIR}/.worker.lock
+    deploy:
+      replicas: 1
     restart: unless-stopped

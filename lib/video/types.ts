@@ -48,12 +48,14 @@ export class ProxyBudgetExhaustedError extends Error {
   }
 }
 
-/** Scale filter: fit inside long-edge rung, preserve aspect ratio. */
+/** Scale filter: fit inside long-edge rung, preserve aspect ratio, even dims. */
 export function scaleFilterForLongEdge(longEdge: number): string {
+  // `-2` keeps the free axis even for libx264. Do not add
+  // force_original_aspect_ratio=decrease here — it can override `-2` and yield
+  // odd heights (e.g. 720x405) that fail libx264.
   return (
     `scale='if(gt(iw\\,ih)\\,min(iw\\,${longEdge})\\,-2)` +
-    `':'if(gt(iw\\,ih)\\,-2\\,min(ih\\,${longEdge}))'` +
-    `:force_original_aspect_ratio=decrease`
+    `':'if(gt(iw\\,ih)\\,-2\\,min(ih\\,${longEdge}))'`
   );
 }
 

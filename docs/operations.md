@@ -146,7 +146,7 @@ From `lib/video/types.ts` (used by proxy encode):
 
 ## Phase 10 E2E (Tiffany trailer)
 
-Full report: [reviews/e2e-verification-2026-08-26.md](../reviews/e2e-verification-2026-08-26.md).
+Full report: [reviews/e2e-verification-2026-08-26.md](../reviews/archive/2026-09-10-file-video-search/e2e-verification-2026-08-26.md).
 Runner: `yarn phase10-e2e`.
 
 | Item | Value | Kind |

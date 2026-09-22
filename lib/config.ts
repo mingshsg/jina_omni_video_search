@@ -122,12 +122,12 @@ const envSchema = z
     LOCAL_EMBED_URL: z.string().optional().default(''),
 
     CHUNK_PRESET: z
-      .enum(['standard', '60s', '30s', '20s', 'fine'])
+      .enum(['standard', '60s', '30s', '20s', 'fine', '2s'])
       .optional()
-      .default('standard'),
-    CHUNK_WINDOW_MS: positiveInt(64000),
-    CHUNK_OVERLAP_MS: positiveInt(4000),
-    CHUNK_MIN_MS: positiveInt(4000),
+      .default('2s'),
+    CHUNK_WINDOW_MS: positiveInt(2000),
+    CHUNK_OVERLAP_MS: positiveInt(1000),
+    CHUNK_MIN_MS: positiveInt(1000),
 
     SEARCH_RANK_WINDOW_SIZE: positiveInt(50),
     SEARCH_RANK_CONSTANT: positiveInt(60),
@@ -199,4 +199,9 @@ export function getConfig(): AppConfig {
     cached = loadConfig();
   }
   return cached;
+}
+
+/** Reset singleton — for scripts/tests only. */
+export function resetConfig(): void {
+  cached = null;
 }

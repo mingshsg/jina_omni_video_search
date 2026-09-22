@@ -1,0 +1,43 @@
+# MediaMTX v1.21.0 — RTSP fixture for live-video Phase 2/9.
+# Pin digest at acceptance time. Default RTSP port is 8554 (not 554).
+# LIVE_ALLOWED_PORTS must include 8554; LIVE_ALLOWED_HOSTS must include
+# localhost and/or 127.0.0.1 for local pulls.
+
+logLevel: info
+rtsp: true
+rtspAddress: :8554
+rtspTransports: [tcp]
+rtspEncryption: "no"
+
+# Disable protocols not needed for the RTSP MVP fixture.
+rtmp: false
+hls: false
+webrtc: false
+srt: false
+api: true
+apiAddress: :9997
+
+# Open fixture path for local/dev (publisher is on Docker network; reader on host).
+authMethod: internal
+authInternalUsers:
+  - user: any
+    pass:
+    permissions:
+      - action: publish
+        path: fixture
+      - action: read
+        path: fixture
+      # Optional host webcam publisher (scripts/live-webcam-publish.sh); fixture path unchanged.
+      - action: publish
+        path: webcam
+      - action: read
+        path: webcam
+      - action: api
+      - action: metrics
+
+paths:
+  fixture:
+    source: publisher
+  # Additive path for macOS/local ffmpeg → MediaMTX (does not replace /fixture).
+  webcam:
+    source: publisher

@@ -1,0 +1,24 @@
+{
+  "runId": "appe2emty5dbmx",
+  "started_at": "2026-09-12T08:52:47.529Z",
+  "evidence_class": "application_path",
+  "base_url": "http://127.0.0.1:3020",
+  "spawn": true,
+  "git": {
+    "commit": "78d7e569edc3f975e1b96199d14bf0a87c93a15a",
+    "branch": "live-video-search",
+    "dirty": true,
+    "content_hash": "085f7afc5230e3e3"
+  },
+  "gates": [
+    {
+      "gate": "App API reachable",
+      "status": "FAIL",
+      "evidence": "GET http://127.0.0.1:3020/api/live/sources → timeout fetch failed",
+      "notes": "spawned next/worker but live routes never answered 200"
+    }
+  ],
+  "error": "live API not reachable",
+  "finished_at": "2026-09-12T08:54:48.049Z",
+  "ok": false
+}
