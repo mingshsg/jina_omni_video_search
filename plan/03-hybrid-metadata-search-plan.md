@@ -391,6 +391,22 @@ Every extracted field is optional; the video-embedding channel always runs:
 }
 ```
 
+**Rule 0 (invariant) — the parser produces query structure and nothing else.
+It never participates in retrieval or ranking.**
+
+| Allowed | Forbidden |
+| --- | --- |
+| Read the user's input string | Read any vector, chunk, asset, or retrieval result |
+| Emit `vector_query`, `free_text`, `extracted`, `confidence` | Contribute to scoring, ranking, fusion, or grouping |
+| Be skipped entirely with no loss of correctness | Generate, rewrite, summarize, or explain any result text |
+
+Vector retrieval is always performed by the embedding model. The parser only
+decides *which span of text* is handed to it. No generative model output ever
+reaches a score, a rank, a hit, or a card. This invariant is what keeps the
+retrieval path deterministic and reproducible, and it is why an LLM here is a
+convenience rather than a dependency: with the parser disabled, the system
+degrades to the Phase 3 behavior and remains fully correct.
+
 **Rule 1 — extracted facets are boosts; only user-selected facets filter.**
 A facet the operator clicked is a hard filter, unchanged. A facet *inferred*
 from typed text has been confirmed by nobody, so it is shown as a removable
@@ -457,9 +473,8 @@ user messages and any provider-native structured-output settings. It also
 avoids embedding the user's query into an ES|QL statement, avoids the
 `esql.command.completion.enabled` cluster setting and its 100-row default
 limit, and avoids planner overhead on a one-row synthetic query.
-`COMPLETION` *is* the right tool for row-wise enrichment of retrieved
-results — for example generating a one-line "why this matched" per hit — and
-is recorded as a Phase 5 option below, not discarded.
+`COMPLETION` is **not** retained for any other purpose in this feature; see
+the retrieval invariant below.
 
 **Structured output.** The prompt receives the query, the closed vocabularies
 (small enough to inline), and *candidate* actor matches pre-retrieved by the
@@ -696,7 +711,8 @@ no text query and stays visual-only in the MVP.
   },
   "hybrid": {
     "use_text": true,
-    "text_mode": "bm25"
+    "text_mode": "bm25",
+    "parse_query": true
   },
   "sort_by": "hybrid"
 }
@@ -709,6 +725,26 @@ must be within the allowed range, and `year_from <= year_to`. Missing metadata
 fails a selected facet. Selected facets intersect the explicit `video_id` and
 ready `variant_id`; never broaden a failed or empty intersection. Cap each
 selected array at 20 values and reject invalid/overlimit requests with 400.
+
+**`hybrid.parse_query` — per-search parser toggle.** Query understanding is a
+user-facing choice at search time, not only a deployment setting, so an
+operator can compare parsed and unparsed behavior on the same query without a
+redeploy.
+
+| `parse_query` | Server config | Behavior | `parser` in response meta |
+| --- | --- | --- | --- |
+| omitted | parser configured | parse (recommended default: **on**) | `eis` or `dictionary` |
+| omitted | `QUERY_PARSER_PROVIDER=none` | no parsing | `raw` |
+| `true` | configured | parse | `eis` or `dictionary` |
+| `true` | `none` | no parsing; not an error | `unavailable` |
+| `false` | any | **skip all parsing** — dictionary *and* model | `disabled` |
+
+`false` skips the whole parsing tier, not just the model: the raw query goes
+to every channel exactly as in the Phase 3 MVP, no chips are shown, and no
+facet is inferred. Turning the toggle off must never change which facets the
+operator selected by hand. The UI presents it as one control (a
+"smart query parsing" switch next to the search box); it is hidden or disabled
+when no parser is configured. An image request never accepts `parse_query`.
 
 `modality` selects vector channels. `sort_by` selects ranking. If `hybrid`
 is omitted or `use_text=false`, keep the current file-search defaults and
@@ -730,8 +766,9 @@ For hybrid hits, `score` equals `score_hybrid` and `score_kind=hybrid_rrf`;
 retain `score_visual`, `score_audio`, `rank_visual`, and `rank_audio` as scene
 evidence, plus optional `asset_text_score` (BM25), `rank_text` (asset rank),
 and `metadata_match` (boolean). The response meta includes
-`ranking_strategy`, `text_channel_status`, candidate counts, and elapsed time
-per branch. Existing nonhybrid response meanings remain intact. Grouping uses
+`ranking_strategy`, `text_channel_status`, `parser`
+(`eis`/`dictionary`/`raw`/`disabled`/`unavailable`), the extracted structure
+actually applied, candidate counts, and elapsed time per branch. Existing nonhybrid response meanings remain intact. Grouping uses
 the final hybrid ordering and score; the UI labels vector and metadata
 contributions separately. For field-specific reasons, add validated named
 queries or highlights later; a generic metadata-match label is the MVP.
@@ -750,7 +787,10 @@ live behaviour stays unchanged.
 2. **Import** — no metadata panel in the MVP; operators add metadata after
    the asset appears in Library. No suggestion runs during ingest. An import
    form/payload is a separate follow-on across upload, path/URL, and batch.
-3. **Search** — facets and “Include title / description / names in ranking”;
+3. **Search** — facets, “Include title / description / names in ranking”, and
+   a **smart query parsing** switch (hidden when no parser is configured);
+   when it is on, extracted signals appear as removable chips and turning it
+   off clears them without touching hand-selected facets;
    moment cards show visual/audio scores and a separate video metadata match
    indicator. They do not say that a person was detected in the shown scene.
 
@@ -824,6 +864,8 @@ If denormalization (v2) is added later: bulk update-by-query on chunks when
 | Parser transport | **EIS `chat_completion` via `_inference`**, reusing the existing Elasticsearch credentials — not a second vendor path, and not ES|QL `COMPLETION` (single-string input, cluster-setting dependency, planner overhead). Endpoint ID is the only app-side knob |
 | Parser model | **`google-gemini-3.5-flash-lite`** (EIS catalogue, GA). Lite class is correct for ~6-field extraction; revisit only if the parse eval demands it |
 | Agent Builder | Rejected for query parsing — agentic and multi-turn, latency measured in seconds |
+| Parser scope | **Query parsing only.** No generative output ever reaches a score, rank, hit, or card; retrieval stays deterministic (Rule 0) |
+| Parser control | Per-search `hybrid.parse_query` toggle in addition to server config; `false` skips dictionary *and* model and falls back to Phase 3 behavior |
 | Extracted vs selected facets | **Extracted = boost (removable chip); user-selected = hard filter.** Parser errors must not empty the page |
 | Name-only query | Vector channel still runs, weight reduced, labelled "matched on video metadata"; never present the timestamp as person/event evidence |
 | Live video | Out of scope for MVP (different asset model) |
@@ -919,6 +961,14 @@ Required functional gates:
 - **Name-only query:** returns the correct video, is labelled "matched on
   video metadata", reduces the vector rank weight, and makes no claim that the
   person appears at the shown timestamp.
+- **Parser scope (Rule 0):** with the parser enabled and disabled, the
+  retrieval and ranking code path is identical apart from which text is
+  embedded and which boosts are applied; no response field contains
+  model-generated prose.
+- **Per-search toggle:** `parse_query=false` produces byte-identical results
+  to the same request with no parser configured; hand-selected facets are
+  unaffected by the toggle; the `parser` meta value matches the table above in
+  all five combinations.
 - **Query parser (3.5 / 3.6):** runs correctly with
   `QUERY_PARSER_PROVIDER=none`; extracted facets appear as removable chips and
   apply as boosts, never as silent filters; every extracted value validates

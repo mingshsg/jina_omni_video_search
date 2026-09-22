@@ -110,11 +110,23 @@ parse set gates Phase 3.6. Whether EIS exposes provider-native structured
 output is a Phase 3.6 verification item. Every numeric default remains
 provisional.
 
-Post-revision SHA-256 (round 3 + parser-transport decision; the round-2 review
-records the pre-revision inputs):
+- [x] **Parser scope clarified (user, 2026-09-22).** Rule 0 added: the parser
+      produces query structure only and never participates in retrieval or
+      ranking. No generative output may reach a score, rank, hit, or card. The
+      ES|QL `COMPLETION` per-hit-explanation idea is withdrawn entirely rather
+      than deferred, so there is no ambiguity about generative output entering
+      the result path.
+- [x] **Per-search toggle (user, 2026-09-22).** `hybrid.parse_query` plus a UI
+      switch, with a five-case precedence table and a `parser` field in
+      response meta. `false` skips dictionary *and* model and reproduces
+      Phase 3 behavior byte-for-byte; the toggle never alters hand-selected
+      facets.
+
+Post-revision SHA-256 (round 3 + parser transport, scope, and toggle; the
+round-2 review records the pre-revision inputs):
 
 ```text
-c9db8d77d35d36d7211b8161fb3a44f258df26ddd3b6c24f6544ffa202ae07f0  plan/03-hybrid-metadata-search-plan.md
-61d2c89ca4dbd1207b1676a1d89fed0af17a58c89fe0541e231047c8ddf777bc  todo/02-hybrid-metadata-search-todo.md
-cc3c1eab693b43bb74cb76b9328ef2b248e5126e25078ff92b197a0d400587d9  chn.docs/混合元数据检索规划.md
+68dcbaa3abe7207d4b34f3aa3f8baf09af6b51ed163a032d913f716f73e12ae3  plan/03-hybrid-metadata-search-plan.md
+1f0f98976b7734bb3040d3171ac321b03ca38ea6fde5651448d38a6fd5c20c9a  todo/02-hybrid-metadata-search-todo.md
+3d8f29a062948633d1c8ca7d81ad463746246e93b97316d824e0063670cd2736  chn.docs/混合元数据检索规划.md
 ```

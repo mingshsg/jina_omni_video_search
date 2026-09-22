@@ -125,6 +125,13 @@ ES mechanics: [`reference/elastic-asset-metadata-and-bounded-retrieval.md`](../r
       validation
 - [ ] Removable chips in the UI; extracted facets apply as **boosts**, and
       only promote to hard filters when the user clicks the chip
+- [ ] Per-search `hybrid.parse_query` toggle + UI switch; `false` skips
+      dictionary *and* model and reproduces Phase 3 behavior exactly; hidden
+      when no parser is configured; never alters hand-selected facets
+- [ ] Response meta `parser` = `eis|dictionary|raw|disabled|unavailable`, plus
+      the extracted structure actually applied
+- [ ] Enforce Rule 0: parser output never reaches a score, rank, hit, or card;
+      retrieval/ranking code path identical with the parser on and off
 - [ ] Measure BM25-only vs BM25+semantic, and raw vs dictionary parsing, on
       the labeled sets before changing any default
 
@@ -185,6 +192,3 @@ ES mechanics: [`reference/elastic-asset-metadata-and-bounded-retrieval.md`](../r
 - [ ] Import metadata form/payload across upload, path/URL, batch (separate
       scope from Library-first MVP)
 - [ ] Time-coded transcript/caption/recognition for verified scene presence
-- [ ] Optional per-hit "why this matched" explanations via ES|QL `COMPLETION`
-      (row-wise enrichment is what that command is actually for) — separate
-      latency budget, not on the interactive path
