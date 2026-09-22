@@ -1,5 +1,22 @@
 # Reviews
 
+## Hybrid metadata search
+
+- [`hybrid-metadata-search-plan-review-r2-2026-09-22.md`](./hybrid-metadata-search-plan-review-r2-2026-09-22.md)
+  — **current verdict**: round-2 development-readiness review of the revised
+  plan. H01–H08 all resolved; **ready to start Phase 1 now**, Phase 2 after one
+  query-shape change, Phase 3 after settling the text weight, the ranking
+  acceptance gate, and query-embedding path equivalence. Adds
+  [`reference/elastic-asset-metadata-and-bounded-retrieval.md`](../reference/elastic-asset-metadata-and-bounded-retrieval.md).
+- [`hybrid-metadata-search-plan-review-2026-09-22.md`](./hybrid-metadata-search-plan-review-2026-09-22.md)
+  — round-1 plan review: sound direction; revise candidate recall, metadata
+  persistence, ranking/score contracts, migration, filtering, and
+  scene-evidence semantics before implementation sign-off. Its corrections are
+  now recorded in
+  [`plan/03-hybrid-metadata-search-plan.md`](../plan/03-hybrid-metadata-search-plan.md);
+  implementation and measurement remain open in
+  [`todo/02-hybrid-metadata-search-todo.md`](../todo/02-hybrid-metadata-search-todo.md).
+
 Active live-video reviews at this level:
 
 - [`live-video-batch6-residuals-2026-09-13.md`](./live-video-batch6-residuals-2026-09-13.md)

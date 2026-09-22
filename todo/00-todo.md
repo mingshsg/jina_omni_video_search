@@ -256,6 +256,10 @@ media size (verify in Phase 10).
 - [x] Search defaults: modality=visual; RRF sort disabled unless Both
 - [x] Search result grouping: same-video hits within `2×chunk_window` collapse;
       Top-k counts groups (UI default 5); rebuild app (2026-09-22)
+- [x] Default chunk preset `2s` (2s/1s); pushed `live-video-search` (2026-09-22)
+- [~] **Hybrid metadata search** — plan in
+      [`plan/03-hybrid-metadata-search-plan.md`](../plan/03-hybrid-metadata-search-plan.md);
+      track [`todo/02-hybrid-metadata-search-todo.md`](./02-hybrid-metadata-search-todo.md)
 
 ## Blocked / waiting on user
 
