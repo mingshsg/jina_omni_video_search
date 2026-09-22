@@ -103,6 +103,11 @@ third-party documentation with source URLs in each file's frontmatter.
 - **One concern per PR.** In particular, the change that converts ingest writes
   to partial updates touches existing code and must not be mixed with new
   feature work.
+- **Branching.** Feature and planning work goes on a `plan/*` or feature branch
+  and lands through a PR against `live-video-search`. Repo-level conventions
+  (this file, `.gitignore`) may land directly. Planning branches are kept after
+  merge when the squashed commit would otherwise lose a useful correction
+  history — `plan/hybrid-metadata-search` is retained for that reason.
 - **Run `yarn test` and `yarn build` before saying you are done**, and say which
   gates you did *not* run.
 
