@@ -128,14 +128,25 @@ ES mechanics: [`reference/elastic-asset-metadata-and-bounded-retrieval.md`](../r
 - [ ] Measure BM25-only vs BM25+semantic, and raw vs dictionary parsing, on
       the labeled sets before changing any default
 
-## Phase 3.6 — Optional LLM query parser (operator-supplied model)
+## Phase 3.6 — Optional EIS query parser
 
-- [ ] Config window: `QUERY_PARSER_PROVIDER` (`none|dictionary|llm`),
-      `QUERY_PARSER_URL`, `_MODEL`, `_API_KEY` (ignored `.env`), `_TIMEOUT_MS`
-      (800), `_MAX_TOKENS` (256), `_FACET_MODE` (boost), `_CACHE_TTL_MS`,
-      `_CACHE_MAX`; startup validation names the offending variable
-- [ ] OpenAI-compatible client returning strict JSON; prompt carries closed
-      vocabularies + candidate actor matches only, never the whole catalog
+- [ ] Create an EIS `chat_completion` inference endpoint backed by
+      **`google-gemini-3.5-flash-lite`**; verify availability by calling it
+      once (do not infer from a Serverless version number)
+- [ ] Determine whether EIS passes provider-native structured output
+      (`responseSchema` / JSON mime type) through `task_settings`; if not, use
+      prompt + validation + a single repair retry
+- [ ] Config window: `QUERY_PARSER_PROVIDER` (`none|dictionary|eis`),
+      `QUERY_PARSER_INFERENCE_ID`, `_TIMEOUT_MS` (800, explicit — Serverless
+      inference default is 120 s), `_MAX_TOKENS` (256), `_FACET_MODE` (boost),
+      `_CACHE_TTL_MS`, `_CACHE_MAX`; startup validation names the offending
+      variable
+- [ ] Client reuses the `lib/embed/eis.ts` transport pattern against
+      `/_inference/chat_completion/<id>` — no new credentials, no parser URL
+      or model name in app config; its **own** concurrency gate, never
+      `EMBED_CONCURRENCY`
+- [ ] Prompt carries closed vocabularies + candidate actor matches only, never
+      the whole catalog; returns minimal JSON, `null` over guesses
 - [ ] Validate every extracted value against a pinned catalog; drop anything
       unrecognized so the model cannot invent codes or people
 - [ ] Three-tier degradation (llm → dictionary → raw); timeout or malformed
@@ -143,7 +154,10 @@ ES mechanics: [`reference/elastic-asset-metadata-and-bounded-retrieval.md`](../r
 - [ ] Parse cache mirroring `lib/live/query-cache.ts`; skip the model when
       nothing is ambiguous; speculative parallel embed of the full query
 - [ ] ~50-pair labeled parse set; report **over-trigger rate** (not accuracy)
-      for dictionary-only vs dictionary+LLM
+      for dictionary-only vs dictionary+EIS, recording endpoint ID, resolved
+      model, and measured p50/p95 parse latency
+- [ ] Confirm no parser credential or endpoint secret reaches app config,
+      logs, or API responses
 
 ## Phase 4a — Local Suggest (optional to core search)
 
@@ -171,3 +185,6 @@ ES mechanics: [`reference/elastic-asset-metadata-and-bounded-retrieval.md`](../r
 - [ ] Import metadata form/payload across upload, path/URL, batch (separate
       scope from Library-first MVP)
 - [ ] Time-coded transcript/caption/recognition for verified scene presence
+- [ ] Optional per-hit "why this matched" explanations via ES|QL `COMPLETION`
+      (row-wise enrichment is what that command is actually for) — separate
+      latency budget, not on the interactive path

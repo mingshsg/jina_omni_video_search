@@ -433,27 +433,60 @@ cannot decide whether `interview` in "Audrey Hepburn interview" is a
 the LLM is being bought for — **disambiguation and generalization, not
 extraction**.
 
-The model is supplied and hosted by the operator; this project provides only a
-configuration window and an OpenAI-compatible client. The prompt receives the
-query, the closed vocabularies, and *candidate* actor matches pre-retrieved by
-the matcher — never the whole catalog — and must return strict JSON in the
-shape above.
+**Transport: Elastic Inference Service, called directly.** The parser reuses
+the existing Elasticsearch connection rather than introducing a second AI
+vendor path. `lib/embed/eis.ts` already issues
+`client.transport.request({ path: '/_inference/embedding/<id>' })`; the parser
+issues the same shape against a `chat_completion` endpoint. Consequences:
+
+- **No new credential surface.** Same `ELASTICSEARCH_URL` and
+  `ELASTICSEARCH_API_KEY`; no parser URL, model name, or API key in app config.
+- **The inference endpoint ID is the only knob.** Swapping the model is a
+  server-side `PUT _inference/chat_completion/<id>` with no app redeploy and
+  no secret rotation.
+- **Pinned default: `google-gemini-3.5-flash-lite`** (EIS catalogue, GA). A
+  Lite model is the right class for extracting ~6 fields from a short string;
+  full Flash is over-specified. Record the resolved model ID in the parse
+  evaluation report.
+
+**Why not ES|QL `COMPLETION`.** `ROW q = "…" | COMPLETION parsed = q WITH {…}`
+is valid and GA on Serverless, but it is the wrong vehicle here: it requires
+task type `completion`, whose input is a single string, whereas calling
+`_inference` directly allows **`chat_completion`** with separated system and
+user messages and any provider-native structured-output settings. It also
+avoids embedding the user's query into an ES|QL statement, avoids the
+`esql.command.completion.enabled` cluster setting and its 100-row default
+limit, and avoids planner overhead on a one-row synthetic query.
+`COMPLETION` *is* the right tool for row-wise enrichment of retrieved
+results — for example generating a one-line "why this matched" per hit — and
+is recorded as a Phase 5 option below, not discarded.
+
+**Structured output.** The prompt receives the query, the closed vocabularies
+(small enough to inline), and *candidate* actor matches pre-retrieved by the
+matcher — never the whole catalog — and must return minimal JSON with no
+prose, preferring `null` over a guess. Prompt engineering makes well-formed
+output *likely*, not *guaranteed*, so it is never the correctness mechanism:
+Rule 2 validation is. **Phase 3.6 verification item:** determine whether EIS
+passes provider-native structured output (Gemini `responseSchema` / JSON mime
+type) through `task_settings`. If it does, use it; if not, prompt plus
+validation plus a single repair retry.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `QUERY_PARSER_PROVIDER` | `dictionary` | `none` \| `dictionary` \| `llm` |
-| `QUERY_PARSER_URL` | none | OpenAI-compatible `/v1/chat/completions` base URL |
-| `QUERY_PARSER_MODEL` | none | Model name passed through verbatim |
-| `QUERY_PARSER_API_KEY` | none | Ignored `.env` only; never logged or returned |
-| `QUERY_PARSER_TIMEOUT_MS` | `800` | Hard deadline; on expiry fall back to `dictionary` |
+| `QUERY_PARSER_PROVIDER` | `dictionary` | `none` \| `dictionary` \| `eis` |
+| `QUERY_PARSER_INFERENCE_ID` | none | EIS `chat_completion` endpoint ID (e.g. one backed by `google-gemini-3.5-flash-lite`) |
+| `QUERY_PARSER_TIMEOUT_MS` | `800` | Hard deadline; on expiry fall back to `dictionary`. **Must be set explicitly** — the Serverless inference default is 120 s |
 | `QUERY_PARSER_MAX_TOKENS` | `256` | Output ceiling; the schema is small |
 | `QUERY_PARSER_FACET_MODE` | `boost` | `boost` \| `filter` (evaluation only) |
 | `QUERY_PARSER_CACHE_TTL_MS` | `300000` | Parse-result cache |
 | `QUERY_PARSER_CACHE_MAX` | `128` | Parse-result cache entries |
 
-Setting `QUERY_PARSER_PROVIDER=llm` without a URL and model fails startup
-validation with the offending variable name, matching the existing
-`EMBED_PROVIDER` pattern.
+Setting `QUERY_PARSER_PROVIDER=eis` without `QUERY_PARSER_INFERENCE_ID` fails
+startup validation with the offending variable name, matching the existing
+`EMBED_PROVIDER` pattern. Availability must be checked at runtime rather than
+inferred from a version number — Serverless version reporting is documented as
+non-indicative — so Phase 3.6 begins by creating the endpoint and calling it
+once.
 
 **Latency.** Parsing is a *serial* stage — the residual determines what to
 embed — so it does not fit the 1,500 ms envelope unmitigated. Three
@@ -467,7 +500,23 @@ mitigations, all required:
 3. **Speculative parallel embed.** Issue `embed(full_query)` and
    `parse(query)` concurrently. When the residual equals the full query — the
    common case — the vector is already warm; otherwise re-embed. This trades
-   an occasional extra inference for the serial hop.
+   an occasional extra inference for the serial hop. Both calls now target the
+   same service, which makes this trivial to wire.
+
+Measured baseline for sizing: EIS text embedding round-trips in ~157 ms in
+this repository's own compatibility report. A completion producing ~150 tokens
+will be materially slower — budget **400–900 ms** and confirm by measurement.
+
+Two further constraints:
+
+- **Region.** Every Gemini entry in the EIS catalogue is US-only, so a
+  non-US Serverless project adds a cross-region hop, and the query text leaves
+  for a US region. Where that is unacceptable, the multi-region alternatives in
+  the catalogue are larger models; record the choice rather than defaulting
+  silently.
+- **Concurrency.** The parser must **not** share the `EMBED_CONCURRENCY` gate.
+  That gate is sized for ingest window embedding; queueing an interactive parse
+  behind a batch of window inferences would defeat the whole latency design.
 
 #### C3. Empty-residual behavior (required, Phase 3)
 
@@ -754,7 +803,7 @@ If denormalization (v2) is added later: bulk update-by-query on chunks when
 | **2 — Facets** | Complete bounded asset-ID lookup; text/image API + UI facets | Filters never leak, truncate silently, or disappear on lookup error |
 | **3 — Hybrid** | BM25 assets, two scene candidate paths, application fusion, hybrid sort/UI | Metadata rank-1 asset absent from global kNN becomes eligible; missing metadata visual match remains; scene labels stay honest; name-only queries use the C3 empty-residual behavior |
 | **3.5 — Semantic assets + deterministic parser** | `meta.description_embedding` behind `ASSET_SEMANTIC_ENABLED`; catalog/regex query matcher with removable chips | Paraphrase and cross-language queries measurably improve or the flag stays off; extracted facets apply as boosts and are removable; no chunk re-embedding |
-| **3.6 — Optional LLM parser (operator-supplied)** | Configuration window + OpenAI-compatible client; validated, boosts-only, cached, with dictionary fallback | Runs correctly with `QUERY_PARSER_PROVIDER=none`; over-trigger rate measured against the parse set; timeout falls back without failing the search |
+| **3.6 — Optional EIS query parser** | EIS `chat_completion` endpoint (default model `google-gemini-3.5-flash-lite`) called via `_inference`; validated, boosts-only, cached, dictionary fallback | Runs correctly with `QUERY_PARSER_PROVIDER=none`; over-trigger rate measured against the parse set; timeout falls back without failing the search |
 | **4a — Local Suggest (optional to core search)** | Deterministic year/language clues in editor only | Draft only; no overwrite; save carries per-field provenance |
 | **4b — Generative Suggest (separate decision)** | Caption/classifier/ASR provider after configuration and evaluation | Provider, budget, and quality gates recorded before enablement |
 | **5 — Optional scale** | Asset text embeddings or denormalized cheap facets | Explicit model/vector lifecycle, migration, and measured latency/quality benefit |
@@ -771,7 +820,10 @@ If denormalization (v2) is added later: bulk update-by-query on chunks when
 | Actor identity | **Person catalog with alias sets**; `actor_ids` filters, `actor_aliases` feed BM25, `actor_keys` add cheap fuzz. `actors_key` is removed |
 | Analyzers | `standard` alone is unsafe for CJK; add a `cjk` sub-field, and prefer `nori`/`smartcn`/`icu`/`phonetic` if the Phase 1 probe finds them bundled |
 | Description embeddings | **Yes, Phase 3.5, flagged** — asset-level channel only, never in a chunk vector field; chunks still never re-embed |
-| Query parsing | Deterministic catalog matcher in 3.5; optional operator-supplied LLM in 3.6 for disambiguation/generalization only |
+| Query parsing | Deterministic catalog matcher in 3.5; optional LLM in 3.6 for disambiguation/generalization only |
+| Parser transport | **EIS `chat_completion` via `_inference`**, reusing the existing Elasticsearch credentials — not a second vendor path, and not ES|QL `COMPLETION` (single-string input, cluster-setting dependency, planner overhead). Endpoint ID is the only app-side knob |
+| Parser model | **`google-gemini-3.5-flash-lite`** (EIS catalogue, GA). Lite class is correct for ~6-field extraction; revisit only if the parse eval demands it |
+| Agent Builder | Rejected for query parsing — agentic and multi-turn, latency measured in seconds |
 | Extracted vs selected facets | **Extracted = boost (removable chip); user-selected = hard filter.** Parser errors must not empty the page |
 | Name-only query | Vector channel still runs, weight reduced, labelled "matched on video metadata"; never present the timestamp as person/event evidence |
 | Live video | Out of scope for MVP (different asset model) |
@@ -797,9 +849,10 @@ moment-only results with whole-video text/names in the hybrid ranker.
   key normalization, backfill on catalog change)
 - `lib/metadata/catalogs.ts` (country/demonym, video-type synonym, language
   tables shared by validation, facets, and the query matcher)
-- `lib/search/query-parse.ts` (deterministic matcher; optional LLM client
-  behind `QUERY_PARSER_PROVIDER`, mirroring `lib/live/query-cache.ts` for the
-  parse cache)
+- `lib/search/query-parse.ts` (deterministic matcher; optional EIS
+  `chat_completion` client behind `QUERY_PARSER_PROVIDER`, reusing the
+  `lib/embed/eis.ts` transport pattern and mirroring `lib/live/query-cache.ts`
+  for the parse cache; its own concurrency gate, not `EMBED_CONCURRENCY`)
 - `lib/es/index-assets.ts`, `lib/ingest/job-store.ts`, new `lib/es/asset-meta.ts`
 - `lib/es/list-assets.ts` (editor DTO or dedicated GET; do not reuse capped list for facets)
 - `lib/es/search.ts` / `search-core.ts` (candidate expansion + application fusion)
@@ -869,9 +922,10 @@ Required functional gates:
 - **Query parser (3.5 / 3.6):** runs correctly with
   `QUERY_PARSER_PROVIDER=none`; extracted facets appear as removable chips and
   apply as boosts, never as silent filters; every extracted value validates
-  against a pinned catalog; LLM timeout or malformed output falls back to the
-  dictionary without failing the search; over-trigger rate is reported on the
-  parse set.
+  against a pinned catalog; parser timeout or malformed output falls back to
+  the dictionary without failing the search; over-trigger rate is reported on
+  the parse set; the EIS endpoint ID and resolved model are recorded in the
+  report; no parser credential appears in app config, logs, or responses.
 - **Semantic asset channel (3.5):** enabling `ASSET_SEMANTIC_ENABLED` changes
   no chunk document, no `variant_id`, and no chunk embedding; a paraphrase and
   a cross-language query improve measurably or the flag stays off.

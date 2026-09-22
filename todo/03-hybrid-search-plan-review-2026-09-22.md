@@ -96,13 +96,25 @@ Raised by the user after the round-2 review, planned in the same
       card is labelled "matched on video metadata" rather than presenting a
       noise-derived timestamp as person evidence.
 
-Open: the labeled relevance set still gates Phase 3, and a separate ~50-pair
-parse set gates Phase 3.6. Every numeric default remains provisional.
+- [x] **Parser transport decided (user, 2026-09-22).** Use Elastic Inference
+      Service via `_inference` `chat_completion`, pinned to
+      `google-gemini-3.5-flash-lite`. Reuses existing Elasticsearch
+      credentials, so the config window collapses to an endpoint ID plus
+      timeout/cache knobs. Agent Builder rejected (agentic, seconds of
+      latency). ES|QL `COMPLETION` rejected for parsing (single-string input,
+      cluster-setting dependency, planner overhead) but retained as a Phase 5
+      option for row-wise per-hit explanations.
 
-Post-revision SHA-256 (round 3; the round-2 review records the pre-revision inputs):
+Open: the labeled relevance set still gates Phase 3, and a separate ~50-pair
+parse set gates Phase 3.6. Whether EIS exposes provider-native structured
+output is a Phase 3.6 verification item. Every numeric default remains
+provisional.
+
+Post-revision SHA-256 (round 3 + parser-transport decision; the round-2 review
+records the pre-revision inputs):
 
 ```text
-49c81c3e20ede18ebac0905cc9fa3470c3a4cacdd5381216f8c8fb19ee993479  plan/03-hybrid-metadata-search-plan.md
-5256cd35a57c1bd51ea0e4d2c5758d6549fc70f4d0d3fe83650f6a4a10ccc9a5  todo/02-hybrid-metadata-search-todo.md
-64c699d3f79c0df4b253e6b0c5b653928facc03e650290d6c472dc80f6328f27  chn.docs/混合元数据检索规划.md
+c9db8d77d35d36d7211b8161fb3a44f258df26ddd3b6c24f6544ffa202ae07f0  plan/03-hybrid-metadata-search-plan.md
+61d2c89ca4dbd1207b1676a1d89fed0af17a58c89fe0541e231047c8ddf777bc  todo/02-hybrid-metadata-search-todo.md
+cc3c1eab693b43bb74cb76b9328ef2b248e5126e25078ff92b197a0d400587d9  chn.docs/混合元数据检索规划.md
 ```
