@@ -41,15 +41,18 @@ user rather than found by a review:
   only when the work is already unique and an actor still lacks `zh`/
   `native`. Worst case 2 searches + 2 reads total — unchanged from before,
   but now `question`-scoped so it's cheaper per call than before.
-- **`names` schema** (agent payload → normalized candidate → saved actor,
-  all three layers use the same shape):
+- **Agent `names` output schema** (unknown names are omitted):
   ```ts
   names: {
-    en: string;                                 // required
-    zh?: string | null;                         // optional, wanted for ANY actor
-    native?: { lang: string; name: string } | null; // optional, actor's own script
+    en: string;                              // required
+    zh?: string;                             // optional, wanted for ANY actor
+    native?: { lang: string; name: string }; // optional, actor's own script
   }
   ```
+  The server sanitizer accepts older agent replies containing `null` and
+  removes those keys before validation. The app's normalized candidate view
+  currently represents absent `zh` and `native` as `null`; this does not
+  change the skill's omit-unknown output contract.
   `native` is omitted by the skill (and defensively dropped by the sanitizer)
   when it would duplicate `zh` or match `en` verbatim — it should only
   appear when it adds real information. The native-script string is never
@@ -142,12 +145,6 @@ user rather than found by a review:
 
 ## Explicitly NOT verified in this pass
 
-- Whether `read_url` calls actually carried a `question` argument.
-  `smoke-suggest-agent.ts` only returns the final converse response, not the
-  agent's intermediate tool-call trace, so this was **not** directly
-  observed — only inferred from the faster, correct outcomes above.
-  Confirming it directly would need Kibana's Agent Builder conversation
-  trace/transcript UI, which this pass did not use.
 - No browser/manual QA of the new "+" buttons or the redesigned actor cards.
 - No rigorous measurement of whether the `question` parameter reduces token
   cost or latency in production — the timings above are informal,
@@ -155,3 +152,7 @@ user rather than found by a review:
 - No re-litigation of the unrelated hybrid-search P1 findings from
   `todo/22-hybrid-independent-code-review-2026-09-23.md` — out of scope for
   this pass, flagged separately.
+
+(Whether `read_url` calls carry a `question` argument is no longer on this
+list — it was directly confirmed the same day via the tool-call trace work
+in `plan/07-suggest-tool-call-trace.md`.)

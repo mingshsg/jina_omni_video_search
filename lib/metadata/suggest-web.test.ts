@@ -182,6 +182,35 @@ describe('applyAgentPayloadToLocal', () => {
     expect(result.suggestions.abstract).toBeUndefined();
     expect(result.web?.actor_candidates).toEqual([]);
   });
+
+  it('passes the tool-call trace through to web.tool_trace when provided', () => {
+    const local = buildLocalSuggestions({ title: '琅琊榜' });
+    const trace = [
+      { tool_id: 'jina.search_web', query: '琅琊榜 site:wikipedia.org' },
+      {
+        tool_id: 'jina.read_url',
+        question: 'What year did this release?',
+        url: 'https://en.wikipedia.org/wiki/Nirvana_in_Fire',
+      },
+    ];
+    const result = applyAgentPayloadToLocal({
+      local,
+      maxReads: 2,
+      toolTrace: trace,
+      payload: { status: 'ok', fields: {}, actors: [] },
+    });
+    expect(result.web?.tool_trace).toEqual(trace);
+  });
+
+  it('leaves web.tool_trace undefined when no trace was captured', () => {
+    const local = buildLocalSuggestions({ title: '琅琊榜' });
+    const result = applyAgentPayloadToLocal({
+      local,
+      maxReads: 2,
+      payload: { status: 'ok', fields: {}, actors: [] },
+    });
+    expect(result.web?.tool_trace).toBeUndefined();
+  });
 });
 
 describe('pickReadableCandidates', () => {

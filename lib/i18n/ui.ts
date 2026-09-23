@@ -240,6 +240,10 @@ export type UiMessages = {
   metaSuggestPendingValue: string;
   metaActorCandidateZh: string;
   metaActorCandidateNative: string;
+  metaSuggestTraceTitle: string;
+  metaSuggestTraceSearch: string;
+  metaSuggestTraceRead: string;
+  metaSuggestTraceQuestion: string;
 
   // Live video
   liveTitle: string;
@@ -572,6 +576,10 @@ export const uiEn: UiMessages = {
   metaSuggestPendingValue: 'Suggested value',
   metaActorCandidateZh: 'Chinese',
   metaActorCandidateNative: 'Native name',
+  metaSuggestTraceTitle: 'Research call trace',
+  metaSuggestTraceSearch: 'Searched',
+  metaSuggestTraceRead: 'Read',
+  metaSuggestTraceQuestion: 'Question asked',
 
   liveTitle: 'Live video',
   liveDescription:
@@ -906,6 +914,10 @@ export const uiZh: UiMessages = {
   metaSuggestPendingValue: '建议值',
   metaActorCandidateZh: '中文名',
   metaActorCandidateNative: '本名',
+  metaSuggestTraceTitle: '本次调用明细',
+  metaSuggestTraceSearch: '搜索',
+  metaSuggestTraceRead: '阅读',
+  metaSuggestTraceQuestion: '提问',
 
   liveTitle: '直播视频',
   liveDescription:

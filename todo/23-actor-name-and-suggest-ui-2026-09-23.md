@@ -4,6 +4,10 @@ Plan: [`plan/06-actor-name-generalization-and-suggest-ui.md`](../plan/06-actor-n
 Requested directly by the user (not a review finding). Scope: PR-D
 (schema/catalog), PR-E (skill/tool instructions), PR-F (UI).
 
+Current recheck: [`hybrid-code-recheck-2026-09-23.md`](../reviews/hybrid-code-recheck-2026-09-23.md). The skill already omits missing name keys. The editor's country PATCH provenance and pending-suggestion request ID/retrieval time were corrected in this pass. Browser verification of the new controls remains open.
+The Suggest callback now also tracks country changes; final `yarn build` PASS.
+Rebuilt-app Suggest smoke: [`hybrid-suggest-post-rebuild-smoke-2026-09-23.md`](../reviews/hybrid-suggest-post-rebuild-smoke-2026-09-23.md) — one Korean title passed POST/GET with progress, seven suggested fields, eight actor candidates, and four tool calls. Browser control interaction remains open.
+
 ## PR-D — schema/catalog generalization
 
 - [x] `lib/metadata/people.ts`: `PersonLocale` narrowed to `'en' | 'zh'`;
@@ -79,16 +83,21 @@ Requested directly by the user (not a review finding). Scope: PR-D
         is *consistent with* the two-phase, `question`-scoped read budget
         doing less work per call, but this is anecdotal (n=1 per title, no
         controlled A/B) — **not** a measured before/after gate.
-- [ ] **STILL NOT VERIFIABLE from this script** — whether `read_url` calls
-      actually carried a `question` argument. `smoke-suggest-agent.ts` only
-      prints the final converse response (candidates/fields/actors), not the
-      agent's intermediate tool-call trace, so no automated evidence either
-      way was captured here. The two fast, correct, single-candidate PASSes
-      above are consistent with the agent following the new two-phase/
-      `question`-scoped instructions, but that is inference from outcome and
-      timing, not direct observation of the tool call arguments. Confirming
-      this directly would need Kibana's Agent Builder conversation trace/
-      transcript UI (not exercised by this script).
+- [x] **RESOLVED (2026-09-23, later same-day follow-up)** — the
+      `question` argument on `read_url` calls is now directly observed, not
+      inferred. `scripts/smoke-suggest-agent.ts` and the production
+      `converseSuggestAgent()` path in `lib/metadata/agent-builder-suggest.ts`
+      both gained a best-effort tool-call trace (`extractToolTrace()` reads
+      the converse response's `steps` array). A fresh `琅琊榜` smoke run
+      shows, verbatim:
+      `{ "tool_id": "jina.read_url", "question": "What year did this work
+      first release, what country/language is it from, what kind of work is
+      it (film/TV series/documentary), what are its genres, synopsis, and
+      principal cast with English and Chinese names?", "url":
+      "https://en.wikipedia.org/wiki/Nirvana_in_Fire" }` — confirming the
+      live agent is in fact calling `read_url` with a `question` argument,
+      exactly as the skill instructs. Full feature details in
+      `plan/07-suggest-tool-call-trace.md`.
 - [ ] **NOT RUN** — no rigorous before/after token-cost or latency
       measurement for the `question`-scoped reads; the timings above are
       informal, single-sample observations, not a measured gate.

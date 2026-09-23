@@ -21,6 +21,7 @@ import {
   isAgentBuilderSuggestConfigured,
   type AgentBuilderFieldDraft,
   type AgentBuilderSuggestPayload,
+  type AgentToolTraceEntry,
 } from './agent-builder-suggest';
 import {
   isJinaWebConfigured,
@@ -79,6 +80,13 @@ export interface SuggestWebMeta {
   elapsed_ms: number;
   agent_id?: string;
   actor_candidates?: SuggestWebActorCandidate[];
+  /**
+   * Best-effort trace of the agent's own search_web/read_url tool calls
+   * (query/question/url per call), for UI transparency into how a
+   * suggestion was researched. Empty when unavailable (e.g. local/jina-rest
+   * providers, which have no equivalent multi-step trace).
+   */
+  tool_trace?: AgentToolTraceEntry[];
 }
 
 export interface SuggestWebActorCandidate {
@@ -233,6 +241,7 @@ export function applyAgentPayloadToLocal(params: {
   retrievedAt?: string;
   agentId?: string;
   elapsedMs?: number;
+  toolTrace?: AgentToolTraceEntry[];
 }): EnrichedSuggestResult {
   const {
     local,
@@ -241,6 +250,7 @@ export function applyAgentPayloadToLocal(params: {
     retrievedAt = new Date().toISOString(),
     agentId,
     elapsedMs = 0,
+    toolTrace,
   } = params;
   const suggestions = { ...local.suggestions };
   const candidates: SuggestWebCandidate[] = (payload.candidates ?? [])
@@ -445,6 +455,7 @@ export function applyAgentPayloadToLocal(params: {
       elapsed_ms: elapsedMs,
       agent_id: agentId,
       actor_candidates: actorCandidates,
+      tool_trace: toolTrace,
     },
   };
 }
@@ -535,6 +546,7 @@ async function enrichViaAgentBuilder(params: {
   onProgress?: (stage: SuggestProgressStage) => void;
 }): Promise<EnrichedSuggestResult> {
   const { local, cfg, work, t0, signal, onProgress } = params;
+  let toolTrace: AgentToolTraceEntry[] | undefined;
   try {
     onProgress?.('researching');
     const payload = await converseSuggestAgent({
@@ -544,6 +556,9 @@ async function enrichViaAgentBuilder(params: {
       videoTypeHint: local.suggestions.video_type?.value ?? null,
       cfg,
       signal,
+      onTrace: (trace) => {
+        toolTrace = trace;
+      },
     });
     onProgress?.('validating');
     return applyAgentPayloadToLocal({
@@ -553,6 +568,7 @@ async function enrichViaAgentBuilder(params: {
       retrievedAt: new Date().toISOString(),
       agentId: cfg.SUGGEST_AGENT_ID.trim() || undefined,
       elapsedMs: Math.round(performance.now() - t0),
+      toolTrace,
     });
   } catch (err) {
     const reason =

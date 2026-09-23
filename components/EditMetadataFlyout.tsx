@@ -2,6 +2,7 @@
 
 import {
   EuiButton,
+  EuiAccordion,
   EuiButtonEmpty,
   EuiComboBox,
   type EuiComboBoxOptionOption,
@@ -94,6 +95,13 @@ type SuggestActorCandidate = {
   matched_person_id: string | null;
 };
 
+type SuggestToolTraceEntry = {
+  tool_id: string;
+  query?: string;
+  question?: string;
+  url?: string;
+};
+
 type SuggestResult = {
   request_id: string;
   meta_revision: number;
@@ -112,6 +120,7 @@ type SuggestResult = {
     status?: 'ok' | 'ambiguous' | 'empty' | 'unavailable' | 'skipped';
     reason?: string;
     actor_candidates?: SuggestActorCandidate[];
+    tool_trace?: SuggestToolTraceEntry[];
   } | null;
 };
 
@@ -223,6 +232,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
     [],
   );
   const [actorCandidates, setActorCandidates] = useState<SuggestActorCandidate[]>([]);
+  const [toolTrace, setToolTrace] = useState<SuggestToolTraceEntry[]>([]);
   const [fieldSources, setFieldSources] = useState<SuggestedSources>({});
   const [fieldProvenance, setFieldProvenance] = useState<FieldProvenance>({});
   const [pendingSuggestions, setPendingSuggestions] = useState<PendingSuggestions>({});
@@ -313,6 +323,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
     setFieldProvenance(provenance);
     setInfo(null);
     setActorCandidates([]);
+    setToolTrace([]);
     setPendingSuggestions({});
     const ids = data.meta.actor_ids ?? [];
     setSelectedActors(
@@ -476,6 +487,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
     setSuggesting(true);
     setSuggestStage('queued');
     setActorCandidates([]);
+    setToolTrace([]);
     setPendingSuggestions({});
     setError(null);
     setInfo(null);
@@ -552,6 +564,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
           request_id: data.request_id,
         })),
       );
+      setToolTrace(data.web?.tool_trace ?? []);
       if (
         (data.status === 'empty' || !data.suggestions) &&
         candidates.length === 0
@@ -1224,6 +1237,44 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
                     })}
                   </ul>
                 </EuiCallOut>
+                <EuiSpacer size="m" />
+              </>
+            )}
+            {toolTrace.length > 0 && (
+              <>
+                <EuiAccordion
+                  id="meta-suggest-tool-trace"
+                  buttonContent={`${t.metaSuggestTraceTitle} (${toolTrace.length})`}
+                >
+                  <EuiSpacer size="s" />
+                  <ul>
+                    {toolTrace.map((entry, index) => (
+                      <li key={`${entry.tool_id}:${index}`}>
+                        <EuiText size="xs">
+                          {entry.query && (
+                            <p>
+                              {t.metaSuggestTraceSearch}: {entry.query}
+                            </p>
+                          )}
+                          {entry.url && (
+                            <p>
+                              {t.metaSuggestTraceRead}:{' '}
+                              <a href={entry.url} target="_blank" rel="noreferrer">
+                                {entry.url}
+                              </a>
+                            </p>
+                          )}
+                          {entry.question && (
+                            <p>
+                              {t.metaSuggestTraceQuestion}: {entry.question}
+                            </p>
+                          )}
+                        </EuiText>
+                        <EuiSpacer size="s" />
+                      </li>
+                    ))}
+                  </ul>
+                </EuiAccordion>
                 <EuiSpacer size="m" />
               </>
             )}

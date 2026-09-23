@@ -3,6 +3,7 @@ import {
   AgentBuilderError,
   extractAgentJson,
   extractConverseMessage,
+  extractToolTrace,
   parseAgentSuggestPayload,
   sanitizeAgentSuggestRaw,
   stripNullKeys,
@@ -294,6 +295,45 @@ describe('extractConverseMessage', () => {
       response: {},
     });
     expect(message).toContain('"status":"ok"');
+  });
+});
+
+describe('extractToolTrace', () => {
+  it('extracts query/question/url from tool_call steps, skipping load_skill', () => {
+    const trace = extractToolTrace({
+      steps: [
+        { type: 'tool_call', tool_id: 'load_skill', params: { skill: 'x' } },
+        {
+          type: 'tool_call',
+          tool_id: 'jina.search_web',
+          params: { query: '더 글로리 site:wikipedia.org' },
+        },
+        { type: 'reasoning' },
+        {
+          type: 'tool_call',
+          tool_id: 'jina.read_url',
+          params: {
+            question: 'What year did this release?',
+            url: 'https://en.wikipedia.org/wiki/The_Glory_(TV_series)',
+          },
+        },
+      ],
+    });
+    expect(trace).toEqual([
+      { tool_id: 'jina.search_web', query: '더 글로리 site:wikipedia.org' },
+      {
+        tool_id: 'jina.read_url',
+        question: 'What year did this release?',
+        url: 'https://en.wikipedia.org/wiki/The_Glory_(TV_series)',
+      },
+    ]);
+  });
+
+  it('never throws on malformed input, returns an empty array instead', () => {
+    expect(extractToolTrace(null)).toEqual([]);
+    expect(extractToolTrace({})).toEqual([]);
+    expect(extractToolTrace({ steps: 'not-an-array' })).toEqual([]);
+    expect(extractToolTrace({ steps: [{ type: 'tool_call' }] })).toEqual([]);
   });
 });
 

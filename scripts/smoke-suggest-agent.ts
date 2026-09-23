@@ -2,7 +2,7 @@
  * Read-only/cost-bearing Agent Builder smoke for grounded title lookup.
  * Usage: yarn tsx scripts/smoke-suggest-agent.ts "더 글로리"
  */
-import { converseSuggestAgent } from '../lib/metadata/agent-builder-suggest';
+import { converseSuggestAgent, type AgentToolTraceEntry } from '../lib/metadata/agent-builder-suggest';
 import { loadDotenv } from './load-dotenv';
 
 async function main() {
@@ -11,9 +11,13 @@ async function main() {
   if (!title) {
     throw new Error('Pass one film or drama title');
   }
+  let toolTrace: AgentToolTraceEntry[] = [];
   const result = await converseSuggestAgent({
     rawTitle: title,
     workTitle: title,
+    onTrace: (trace) => {
+      toolTrace = trace;
+    },
   });
   console.log(
     JSON.stringify(
@@ -41,6 +45,7 @@ async function main() {
           source: actor.url ?? null,
         })),
         notes: result.notes ?? null,
+        tool_trace: toolTrace,
       },
       null,
       2,

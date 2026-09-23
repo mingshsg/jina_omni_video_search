@@ -24,6 +24,23 @@ export interface AgentBuilderFieldDraft {
   evidence?: string;
 }
 
+/**
+ * One tool call the agent made while answering a converse request —
+ * surfaced for UI/debugging transparency ("what did it actually search for
+ * and read, with what question"). Best-effort: derived from the converse
+ * response's `steps` array, which is not part of any documented/stable
+ * Agent Builder contract, so parsing is defensive and never throws.
+ */
+export interface AgentToolTraceEntry {
+  tool_id: string;
+  /** search_web's query, when present. */
+  query?: string;
+  /** read_url's scoping question, when present. */
+  question?: string;
+  /** read_url's target page, when present. */
+  url?: string;
+}
+
 export interface AgentBuilderSuggestPayload {
   status: 'ok' | 'ambiguous' | 'empty' | 'unavailable';
   candidates?: Array<{
@@ -536,6 +553,34 @@ export function extractConverseMessage(body: unknown): string {
 }
 
 /**
+ * Best-effort extraction of tool_call steps from a converse response body.
+ * Never throws — an empty array just means no trace is available (e.g. the
+ * response shape changed, or there simply were no tool calls).
+ */
+export function extractToolTrace(body: unknown): AgentToolTraceEntry[] {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return [];
+  const steps = (body as Record<string, unknown>).steps;
+  if (!Array.isArray(steps)) return [];
+  const trace: AgentToolTraceEntry[] = [];
+  for (const step of steps) {
+    if (!step || typeof step !== 'object') continue;
+    const s = step as Record<string, unknown>;
+    if (s.type !== 'tool_call') continue;
+    const toolId = s.tool_id;
+    if (typeof toolId !== 'string' || toolId === 'load_skill') continue;
+    const rawParams = s.params;
+    const p =
+      rawParams && typeof rawParams === 'object' ? (rawParams as Record<string, unknown>) : {};
+    const entry: AgentToolTraceEntry = { tool_id: toolId };
+    if (typeof p.query === 'string') entry.query = p.query;
+    if (typeof p.question === 'string') entry.question = p.question;
+    if (typeof p.url === 'string') entry.url = p.url;
+    trace.push(entry);
+  }
+  return trace;
+}
+
+/**
  * One-shot converse with the metadata research agent.
  * Expects the agent to return the grounded_title_lookup JSON schema.
  */
@@ -546,6 +591,8 @@ export async function converseSuggestAgent(params: {
   videoTypeHint?: string | null;
   cfg?: AppConfig;
   signal?: AbortSignal;
+  /** Best-effort callback with the tool-call trace, for UI/debug display. */
+  onTrace?: (trace: AgentToolTraceEntry[]) => void;
 }): Promise<AgentBuilderSuggestPayload> {
   const cfg = params.cfg ?? getConfig();
   if (!isAgentBuilderSuggestConfigured(cfg)) {
@@ -607,6 +654,13 @@ export async function converseSuggestAgent(params: {
       body = JSON.parse(responseText);
     } catch {
       throw new AgentBuilderError('malformed', 'Converse response was not JSON');
+    }
+    if (params.onTrace) {
+      try {
+        params.onTrace(extractToolTrace(body));
+      } catch {
+        // Trace is best-effort UI/debug sugar — never let it fail the request.
+      }
     }
     const message = extractConverseMessage(body);
     return parseAgentSuggestPayload(extractAgentJson(message));
