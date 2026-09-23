@@ -123,17 +123,35 @@ user rather than found by a review:
   (only the pre-existing "Props must be serializable" warnings for
   `onClose`/`onSaved`, unrelated to this change).
 
+## Live verification (follow-up session, 2026-09-23)
+
+- The `.env` in this repo already held working Elastic Cloud credentials
+  (`ELASTICSEARCH_URL` + `ELASTICSEARCH_API_KEY`; Kibana host derived from the
+  ES URL). `yarn tsx scripts/ensure-suggest-agent.ts` was run and PUT-updated
+  both the `grounded_title_lookup` skill and the `video_metadata_research`
+  agent (HTTP 200, `ok: true`).
+- `yarn tsx scripts/smoke-suggest-agent.ts` was then run against two titles:
+  `더 글로리` (PASS, 23.03s, actors in `{ en, native: { lang: "ko", name } }`
+  shape) and `琅琊榜` (PASS, 29.74s, no timeout retry, actors in `{ en, zh }`
+  shape). Both confirm the new `en`/`zh`/`native` schema is live end-to-end,
+  and both were faster than the historical pre-change baseline (38.9s /
+  43.1s), which is consistent with — but not rigorous proof of — the
+  two-phase `question`-scoped read budget doing less work.
+- Full details: `todo/23-actor-name-and-suggest-ui-2026-09-23.md` §"Live
+  verification".
+
 ## Explicitly NOT verified in this pass
 
-- The live Kibana agent/skill was **not** re-pushed — no credentials/network
-  access from this session. The user needs to run
-  `yarn tsx scripts/ensure-suggest-agent.ts` themselves, then
-  `yarn tsx scripts/smoke-suggest-agent.ts` to confirm the live MCP
-  `read_url` tool actually accepts a `question` argument as documented.
+- Whether `read_url` calls actually carried a `question` argument.
+  `smoke-suggest-agent.ts` only returns the final converse response, not the
+  agent's intermediate tool-call trace, so this was **not** directly
+  observed — only inferred from the faster, correct outcomes above.
+  Confirming it directly would need Kibana's Agent Builder conversation
+  trace/transcript UI, which this pass did not use.
 - No browser/manual QA of the new "+" buttons or the redesigned actor cards.
-- No measurement of whether the `question` parameter actually reduces token
-  cost or latency in production — this is a design change based on the tool
-  description's own claim, not a measured gate.
+- No rigorous measurement of whether the `question` parameter reduces token
+  cost or latency in production — the timings above are informal,
+  single-sample observations, not a measured gate.
 - No re-litigation of the unrelated hybrid-search P1 findings from
   `todo/22-hybrid-independent-code-review-2026-09-23.md` — out of scope for
   this pass, flagged separately.

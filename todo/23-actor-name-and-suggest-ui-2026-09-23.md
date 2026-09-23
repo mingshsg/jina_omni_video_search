@@ -55,18 +55,43 @@ Requested directly by the user (not a review finding). Scope: PR-D
       surrounding prose updated to the new names shape and two-phase budget;
       allowlist section split into work-facts vs. name-only domains.
 
-### Explicitly not done (needs the user, no credentials in this session)
+### Live verification (2026-09-23, follow-up session — credentials were in `.env` all along)
 
-- [ ] **NOT RUN** — push the updated skill/agent to the live Kibana Agent
-      Builder. Run `yarn tsx scripts/ensure-suggest-agent.ts` yourself.
-- [ ] **NOT RUN** — confirm the live MCP `read_url` tool actually accepts a
-      `question` argument as documented (the tool description says it does,
-      but this session had no way to call it against a real Kibana). Run
-      `yarn tsx scripts/smoke-suggest-agent.ts` after the push and check the
-      agent is actually scoping reads with `question`.
-- [ ] **NOT RUN** — no before/after token-cost or latency measurement for the
-      `question`-scoped reads; this is a design change based on the tool's
-      own documented behavior, not a measured gate.
+- [x] **RUN** — pushed the updated skill/agent to the live Kibana Agent
+      Builder via `yarn tsx scripts/ensure-suggest-agent.ts`. Result:
+      `{ "ok": true, "status": 200, "method": "PUT", "agent_id":
+      "video_metadata_research", "skill_id": "grounded_title_lookup",
+      "tools": [{ "tool_ids": ["jina.search_web", "jina.read_url"] }] }`.
+      Both the skill body (two-phase budget, mandatory `question` param,
+      `en`/`zh`/`native` schema) and the agent instructions were PUT-updated
+      in one pass.
+- [x] **RUN** — `yarn tsx scripts/smoke-suggest-agent.ts` against the live
+      agent, two titles:
+      - `더 글로리` (Korean, 6 actors) — PASS in 23.03s. Actor names came
+        back as `{ en, native: { lang: "ko", name } }`, e.g.
+        `{ en: "Song Hye-kyo", native: { lang: "ko", name: "송혜교" } }` —
+        confirms the new schema shape end-to-end, not just `ko`/`ja` keys.
+      - `琅琊榜` (Chinese, 3 actors) — PASS in 29.74s, no timeout retry
+        needed this time. Actor names came back as `{ en, zh }` directly,
+        e.g. `{ en: "Hu Ge", zh: "胡歌" }`.
+      - Both runs were faster than the historical pre-change baseline in
+        `docs/agent-builder-jina-suggest.md` (38.9s / 43.1s-with-retry), which
+        is *consistent with* the two-phase, `question`-scoped read budget
+        doing less work per call, but this is anecdotal (n=1 per title, no
+        controlled A/B) — **not** a measured before/after gate.
+- [ ] **STILL NOT VERIFIABLE from this script** — whether `read_url` calls
+      actually carried a `question` argument. `smoke-suggest-agent.ts` only
+      prints the final converse response (candidates/fields/actors), not the
+      agent's intermediate tool-call trace, so no automated evidence either
+      way was captured here. The two fast, correct, single-candidate PASSes
+      above are consistent with the agent following the new two-phase/
+      `question`-scoped instructions, but that is inference from outcome and
+      timing, not direct observation of the tool call arguments. Confirming
+      this directly would need Kibana's Agent Builder conversation trace/
+      transcript UI (not exercised by this script).
+- [ ] **NOT RUN** — no rigorous before/after token-cost or latency
+      measurement for the `question`-scoped reads; the timings above are
+      informal, single-sample observations, not a measured gate.
 
 ## PR-F — Suggest UI detail
 
