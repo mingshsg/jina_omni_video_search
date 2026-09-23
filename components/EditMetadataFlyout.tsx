@@ -77,6 +77,7 @@ type SuggestField = {
   evidence: string;
   source_url?: string;
   retrieved_at?: string;
+  request_id?: string;
 };
 
 type SuggestActorCandidate = {
@@ -651,6 +652,16 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
         nextPending.tags = sug.tags;
       }
 
+      for (const key of Object.keys(nextPending) as ScalarSuggestKey[]) {
+        const draft = nextPending[key];
+        if (draft) {
+          nextPending[key] = {
+            ...draft,
+            retrieved_at: draft.retrieved_at ?? data.retrieved_at,
+            request_id: data.request_id,
+          };
+        }
+      }
       setPendingSuggestions(nextPending);
       const pendingCount = Object.keys(nextPending).length;
 
@@ -691,6 +702,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
     year,
     videoType,
     language,
+    country,
     description,
     abstract,
     tagsText,
@@ -781,6 +793,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
               : undefined,
           source_url: draft.source_url,
           retrieved_at: draft.retrieved_at,
+          request_id: draft.request_id,
         },
       }));
       setPendingSuggestions((previous) => {
@@ -870,6 +883,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
     const baseCountry = baseline.country ?? null;
     if (nextCountry !== baseCountry) {
       body.country = nextCountry;
+      takeSource('country');
     }
 
     if (!sameTags(tags, baselineTags)) {

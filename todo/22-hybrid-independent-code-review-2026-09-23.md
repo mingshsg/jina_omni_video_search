@@ -1,6 +1,7 @@
 # Independent hybrid code review follow-up — 2026-09-23
 
 Review: [`hybrid-metadata-search-independent-code-review-2026-09-23.md`](../reviews/hybrid-metadata-search-independent-code-review-2026-09-23.md).
+Current recheck: [`hybrid-code-recheck-2026-09-23.md`](../reviews/hybrid-code-recheck-2026-09-23.md). F1–F3 remain open at `d0b3403`; the local 398-test suite and build do not exercise the live floor request.
 Scope: current uncommitted worktree on `live-video-search`. Nothing was
 modified during the review. Prior phase findings remain open in `todo/05`,
 `todo/06`, `todo/11`, `todo/14`, and `todo/16`.

@@ -2,15 +2,20 @@
 
 ## Hybrid metadata search
 
+- [`hybrid-code-recheck-2026-09-23.md`](./hybrid-code-recheck-2026-09-23.md)
+  — current code recheck after the actor-name and Suggest UI changes: Suggest
+  contract is coherent, two provenance gaps were fixed, and three hybrid P1
+  blockers remain. Current test/build/runtime limits are recorded there.
 - [`hybrid-metadata-search-independent-code-review-2026-09-23.md`](./hybrid-metadata-search-independent-code-review-2026-09-23.md)
-  — **current worktree verdict**: gates are green but do not cover the
+  — historical independent pass: gates were green but did not cover the
   highest-risk path. The G5 guaranteed floor sends `retriever` in an
   `_msearch` body the installed client does not type (`as never` suppresses
   it), is reachable only through a silent `catch`, and has no test or
   live-cluster evidence. Three P1 items before commit.
   [Follow-up](../todo/22-hybrid-independent-code-review-2026-09-23.md).
 - [`hybrid-internet-suggest-code-review-2026-09-23.md`](./hybrid-internet-suggest-code-review-2026-09-23.md)
-  — **current Internet Suggest verdict**: dedicated agent/tools are live and local fallback is safe, but timeout mismatch, unvalidated agent output, shadowed grounded descriptions, and missing actor-candidate UI block Phase 4b sign-off. [Follow-up](../todo/16-hybrid-holistic-review-and-internet-suggest-2026-09-23.md).
+  — historical Internet Suggest findings; timeout, validation, description,
+  and actor-candidate UI repairs are tracked in the [follow-up](../todo/16-hybrid-holistic-review-and-internet-suggest-2026-09-23.md).
 - [`hybrid-metadata-search-holistic-review-2026-09-23.md`](./hybrid-metadata-search-holistic-review-2026-09-23.md)
   — current cross-phase verdict and exact local-only Suggest internet boundary; [internet-grounded plan](../plan/04-internet-grounded-metadata-suggest.md) and [follow-up](../todo/16-hybrid-holistic-review-and-internet-suggest-2026-09-23.md).
 - [`hybrid-metadata-search-phase4a-4b-post-rebuild-review-2026-09-22.md`](./hybrid-metadata-search-phase4a-4b-post-rebuild-review-2026-09-22.md)
