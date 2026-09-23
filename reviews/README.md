@@ -2,6 +2,9 @@
 
 ## Hybrid metadata search
 
+- [`hybrid-suggest-post-rebuild-smoke-2026-09-23.md`](./hybrid-suggest-post-rebuild-smoke-2026-09-23.md)
+  — one authorized application-path Suggest request on the rebuilt app passed;
+  records the observed tool calls and candidate evidence limits.
 - [`hybrid-code-recheck-2026-09-23.md`](./hybrid-code-recheck-2026-09-23.md)
   — current code recheck after the actor-name and Suggest UI changes: Suggest
   contract is coherent, two provenance gaps were fixed, and three hybrid P1
