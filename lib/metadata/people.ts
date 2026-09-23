@@ -76,11 +76,23 @@ export function loadPeopleCatalog(force = false): PeopleCatalog {
   const filePath = resolvePeopleCatalogPath();
   const raw = fs.readFileSync(filePath, 'utf8');
   const parsed = JSON.parse(raw) as PeopleCatalog;
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+  validatePeopleCatalog(parsed);
+  cachedCatalog = parsed;
+  cachedAliasIndex = null;
+  return parsed;
+}
+
+/**
+ * Structural + alias-uniqueness validation shared by the loader and the
+ * runtime catalog-growth write path (`addPersonToCatalog`). Throws on the
+ * first problem found; never mutates its input.
+ */
+export function validatePeopleCatalog(catalog: unknown): asserts catalog is PeopleCatalog {
+  if (!catalog || typeof catalog !== 'object' || Array.isArray(catalog)) {
     throw new Error('Invalid people catalog: expected object map');
   }
   const aliasOwners = new Map<string, string>();
-  for (const [id, entry] of Object.entries(parsed)) {
+  for (const [id, entry] of Object.entries(catalog as PeopleCatalog)) {
     if (!id.startsWith('person:')) {
       throw new Error(`Invalid person id (must start with person:): ${id}`);
     }
@@ -101,12 +113,9 @@ export function loadPeopleCatalog(force = false): PeopleCatalog {
       aliasOwners.set(key, id);
     }
   }
-  cachedCatalog = parsed;
-  cachedAliasIndex = null;
-  return parsed;
 }
 
-/** Reset caches — tests only. */
+/** Reset caches — used by `addPersonToCatalog` after a write, and by tests. */
 export function resetPeopleCatalogCache(): void {
   cachedCatalog = null;
   cachedAliasIndex = null;
@@ -305,4 +314,111 @@ export function expandActorIds(
     actor_aliases: [...aliasSet].sort((a, b) => a.localeCompare(b)),
     actor_keys: [...keySet].sort((a, b) => a.localeCompare(b)),
   };
+}
+
+const NEW_PERSON_NAME_MAX_LEN = 200;
+
+export class PersonCatalogError extends Error {
+  readonly code: 'invalid' | 'conflict';
+
+  constructor(code: PersonCatalogError['code'], message: string) {
+    super(message);
+    this.name = 'PersonCatalogError';
+    this.code = code;
+  }
+}
+
+export interface NewPersonInput {
+  en: string;
+  zh?: string | null;
+  native?: { lang: string; name: string } | null;
+}
+
+/** ASCII-kebab slug from an English display name, e.g. "Jun Kwang-ryul" -> "jun-kwang-ryul". */
+export function slugifyPersonId(en: string): string {
+  const base = en
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return base || 'person';
+}
+
+function writePeopleCatalogAtomic(catalog: PeopleCatalog): void {
+  const filePath = resolvePeopleCatalogPath();
+  const tmpPath = `${filePath}.tmp-${process.pid}-${Date.now()}`;
+  fs.writeFileSync(tmpPath, `${JSON.stringify(catalog, null, 2)}\n`, 'utf8');
+  fs.renameSync(tmpPath, filePath);
+}
+
+/**
+ * Grow the person catalog at runtime with one new entry, sourced from a
+ * Suggest actor candidate that didn't match anyone on file. Persists to
+ * `config/people.json` (atomic write: temp file + rename) and reloads the
+ * in-process cache so the new id is immediately selectable.
+ *
+ * Not safe against concurrent writers on separate processes/replicas — this
+ * app is single-instance in its current deployment shape (see AGENTS.md).
+ */
+export function addPersonToCatalog(input: NewPersonInput): {
+  id: string;
+  entry: PersonEntry;
+} {
+  const en = input.en.trim();
+  if (!en || en.length > NEW_PERSON_NAME_MAX_LEN) {
+    throw new PersonCatalogError(
+      'invalid',
+      `English name must be 1-${NEW_PERSON_NAME_MAX_LEN} characters`,
+    );
+  }
+  const zh = input.zh?.trim() || undefined;
+  const native =
+    input.native?.name?.trim() && input.native?.lang?.trim()
+      ? { lang: input.native.lang.trim(), name: input.native.name.trim() }
+      : undefined;
+  if (zh && zh.length > NEW_PERSON_NAME_MAX_LEN) {
+    throw new PersonCatalogError(
+      'invalid',
+      `Chinese name must be ≤${NEW_PERSON_NAME_MAX_LEN} characters`,
+    );
+  }
+  if (native && native.name.length > NEW_PERSON_NAME_MAX_LEN) {
+    throw new PersonCatalogError(
+      'invalid',
+      `Native name must be ≤${NEW_PERSON_NAME_MAX_LEN} characters`,
+    );
+  }
+
+  const current = loadPeopleCatalog(true);
+  const baseSlug = slugifyPersonId(en);
+  let id = `person:${baseSlug}`;
+  let suffix = 2;
+  while (current[id]) {
+    id = `person:${baseSlug}-${suffix}`;
+    suffix += 1;
+  }
+
+  const aliases = new Set<string>([en]);
+  if (zh) aliases.add(zh);
+  if (native) aliases.add(native.name);
+  const entry: PersonEntry = {
+    display: zh ? { en, zh } : { en },
+    ...(native ? { native } : {}),
+    aliases: [...aliases],
+  };
+
+  const next: PeopleCatalog = { ...current, [id]: entry };
+  try {
+    validatePeopleCatalog(next);
+  } catch (err) {
+    throw new PersonCatalogError(
+      'conflict',
+      err instanceof Error ? err.message : 'Catalog entry conflicts with an existing person',
+    );
+  }
+  writePeopleCatalogAtomic(next);
+  resetPeopleCatalogCache();
+  loadPeopleCatalog(true);
+  return { id, entry };
 }

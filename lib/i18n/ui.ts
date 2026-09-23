@@ -234,7 +234,9 @@ export type UiMessages = {
   metaActorCandidateAdd: string;
   metaActorCandidateAdded: string;
   metaActorCandidateUnresolved: string;
+  metaActorCandidateAddToCatalog: string;
   metaActorCandidateSource: string;
+  metaActorCatalogAddError: string;
   metaSuggestReviewBelow: string;
   metaSuggestPendingApply: string;
   metaSuggestPendingValue: string;
@@ -538,7 +540,8 @@ export const uiEn: UiMessages = {
   metaAbstract: 'Abstract',
   metaYear: 'Year',
   metaActors: 'Actors',
-  metaActorsHelp: 'Pick from the person catalog (IDs only — no free-text names).',
+  metaActorsHelp:
+    'Pick from the person catalog, or type a new name and press Enter (or click away) to add them.',
   metaVideoType: 'Video type',
   metaLanguage: 'Primary language',
   metaCountry: 'Production country/region',
@@ -569,7 +572,9 @@ export const uiEn: UiMessages = {
   metaActorCandidateAdd: 'Add matched person',
   metaActorCandidateAdded: 'Added',
   metaActorCandidateUnresolved: 'Not in the controlled person catalog',
+  metaActorCandidateAddToCatalog: 'Add to catalog',
   metaActorCandidateSource: 'source',
+  metaActorCatalogAddError: 'Could not add this person to the catalog. Try again.',
   metaSuggestReviewBelow:
     'Suggestions are ready for review below — click + to apply.',
   metaSuggestPendingApply: 'Apply suggestion',
@@ -878,7 +883,8 @@ export const uiZh: UiMessages = {
   metaAbstract: '摘要',
   metaYear: '年份',
   metaActors: '演员',
-  metaActorsHelp: '从人物目录选择（仅 ID，不接受自由文本姓名）。',
+  metaActorsHelp:
+    '从人物目录选择;也可以直接输入新姓名,回车或点击别处即可作为新条目加入目录。',
   metaVideoType: '视频类型',
   metaLanguage: '主要语言',
   metaCountry: '制作国家/地区',
@@ -908,7 +914,9 @@ export const uiZh: UiMessages = {
   metaActorCandidateAdd: '加入已匹配人物',
   metaActorCandidateAdded: '已加入',
   metaActorCandidateUnresolved: '尚未收录到受控人物目录',
+  metaActorCandidateAddToCatalog: '加入目录',
   metaActorCandidateSource: '来源',
+  metaActorCatalogAddError: '加入人物目录失败,请重试。',
   metaSuggestReviewBelow: '建议已准备好，请在下方查看并点击 + 采纳。',
   metaSuggestPendingApply: '采纳该建议',
   metaSuggestPendingValue: '建议值',

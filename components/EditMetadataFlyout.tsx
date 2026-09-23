@@ -759,6 +759,107 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
     [catalogs?.people],
   );
 
+  /**
+   * Grows the controlled person catalog with one new entry (POST
+   * /api/metadata/catalogs/people), then makes the new id immediately
+   * selectable by folding it into `actorOptions`. Actors stay catalog-IDs
+   * only server-side (lib/metadata/validate.ts) — this is how free-text
+   * names become valid ids instead of bypassing that invariant.
+   */
+  const createPerson = useCallback(
+    async (input: {
+      en: string;
+      zh?: string;
+      native?: { lang: string; name: string };
+    }): Promise<EuiComboBoxOptionOption | null> => {
+      try {
+        const res = await fetch('/api/metadata/catalogs/people', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept-Language': locale,
+          },
+          body: JSON.stringify(input),
+        });
+        const data = (await res.json()) as {
+          id?: string;
+          display?: string;
+          error?: { code?: string; message?: string };
+        };
+        if (!res.ok || !data.id) {
+          setError(data.error?.message ?? t.metaActorCatalogAddError);
+          return null;
+        }
+        const option: EuiComboBoxOptionOption = {
+          label: data.display ?? input.en,
+          value: data.id,
+        };
+        setActorOptions((previous) =>
+          previous.some((o) => o.value === option.value)
+            ? previous
+            : [...previous, option],
+        );
+        return option;
+      } catch {
+        setError(t.metaActorCatalogAddError);
+        return null;
+      }
+    },
+    [locale, t.metaActorCatalogAddError],
+  );
+
+  const createActorFromFreeText = useCallback(
+    (name: string) => {
+      clearSuggestionMark('actors');
+      void createPerson({ en: name }).then((option) => {
+        if (!option) return;
+        setSelectedActors((previous) =>
+          previous.some((o) => o.value === option.value)
+            ? previous
+            : [...previous, option],
+        );
+      });
+    },
+    [createPerson, clearSuggestionMark],
+  );
+
+  const addUnresolvedCandidate = useCallback(
+    (candidate: SuggestActorCandidate) => {
+      void createPerson({
+        en: candidate.names.en,
+        zh: candidate.names.zh ?? undefined,
+        native: candidate.names.native ?? undefined,
+      }).then((option) => {
+        if (!option) return;
+        setActorCandidates((previous) =>
+          previous.map((item) =>
+            item === candidate
+              ? { ...item, matched_person_id: option.value as string }
+              : item,
+          ),
+        );
+        setSelectedActors((previous) =>
+          previous.some((o) => o.value === option.value)
+            ? previous
+            : [...previous, option],
+        );
+        setFieldSources((previous) => ({ ...previous, actors: 'suggestion' }));
+        setFieldProvenance((previous) => ({
+          ...previous,
+          actors: {
+            confidence: 0.65,
+            evidence: candidate.evidence,
+            provider: 'external_web',
+            source_url: candidate.url,
+            retrieved_at: candidate.retrieved_at,
+            request_id: candidate.request_id,
+          },
+        }));
+      });
+    },
+    [createPerson],
+  );
+
   const applyPendingSuggestion = useCallback(
     (key: ScalarSuggestKey) => {
       const draft = pendingSuggestions[key];
@@ -1157,6 +1258,11 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
                   setSelectedActors(opts);
                 }}
                 onSearchChange={(q) => void onActorSearch(q)}
+                onCreateOption={(searchValue) => {
+                  const trimmed = searchValue.trim();
+                  if (!trimmed) return false;
+                  createActorFromFreeText(trimmed);
+                }}
                 isClearable
                 compressed
                 fullWidth
@@ -1217,7 +1323,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
                                 </p>
                               </EuiText>
                             </EuiFlexItem>
-                            {candidate.matched_person_id && (
+                            {candidate.matched_person_id ? (
                               <EuiFlexItem grow={false}>
                                 <EuiButtonEmpty
                                   size="s"
@@ -1227,6 +1333,15 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
                                   {alreadySelected
                                     ? t.metaActorCandidateAdded
                                     : t.metaActorCandidateAdd}
+                                </EuiButtonEmpty>
+                              </EuiFlexItem>
+                            ) : (
+                              <EuiFlexItem grow={false}>
+                                <EuiButtonEmpty
+                                  size="s"
+                                  onClick={() => addUnresolvedCandidate(candidate)}
+                                >
+                                  {t.metaActorCandidateAddToCatalog}
                                 </EuiButtonEmpty>
                               </EuiFlexItem>
                             )}

@@ -1,13 +1,21 @@
-import { describe, expect, it, beforeAll } from 'vitest';
+import { describe, expect, it, beforeAll, beforeEach, afterEach, vi } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
   actorKeysForAlias,
   actorKeysForQuery,
+  addPersonToCatalog,
   expandActorIds,
   findContainedAliases,
   loadPeopleCatalog,
   normalizeActorKeyToken,
+  PersonCatalogError,
+  resetPeopleCatalogCache,
   searchPeople,
+  slugifyPersonId,
   sortedTokenActorKey,
+  validatePeopleCatalog,
 } from './people';
 import { COUNTRY_OPTIONS, VIDEO_TYPES } from './catalogs';
 import { normalizeTagKey, parseMetaPatchBody, MetaValidationError } from './validate';
@@ -215,5 +223,125 @@ describe('meta patch validation', () => {
 
   it('normalizes tag keys', () => {
     expect(normalizeTagKey('  Fashion  Week ')).toBe('fashion week');
+  });
+});
+
+/**
+ * `addPersonToCatalog` writes `config/people.json` for real (atomic
+ * temp-file + rename). Every test in this block redirects `process.cwd()`
+ * to a throwaway temp directory seeded with its own `config/people.json`
+ * so the real catalog on disk is never touched — see AGENTS.md's note on
+ * this exact risk.
+ */
+describe('addPersonToCatalog (isolated fs)', () => {
+  let tmpDir: string;
+  let cwdSpy: ReturnType<typeof vi.spyOn>;
+
+  const seedCatalog = {
+    'person:existing-actor': {
+      display: { en: 'Existing Actor' },
+      aliases: ['Existing Actor'],
+    },
+  };
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'people-catalog-test-'));
+    fs.mkdirSync(path.join(tmpDir, 'config'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'config', 'people.json'),
+      JSON.stringify(seedCatalog, null, 2),
+      'utf8',
+    );
+    cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(tmpDir);
+    resetPeopleCatalogCache();
+  });
+
+  afterEach(() => {
+    cwdSpy.mockRestore();
+    resetPeopleCatalogCache();
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('adds a new person, persists it, and makes it immediately loadable', () => {
+    const { id, entry } = addPersonToCatalog({ en: 'Jun Kwang-ryul' });
+    expect(id).toBe('person:jun-kwang-ryul');
+    expect(entry.display.en).toBe('Jun Kwang-ryul');
+
+    const onDisk = JSON.parse(
+      fs.readFileSync(path.join(tmpDir, 'config', 'people.json'), 'utf8'),
+    );
+    expect(onDisk[id]).toBeDefined();
+
+    const reloaded = loadPeopleCatalog(true);
+    expect(reloaded[id]?.aliases).toEqual(['Jun Kwang-ryul']);
+  });
+
+  it('folds zh and native names into the alias set', () => {
+    const { entry } = addPersonToCatalog({
+      en: 'Test Person',
+      zh: '测试人物',
+      native: { lang: 'ko', name: '테스트' },
+    });
+    expect(entry.aliases).toEqual(
+      expect.arrayContaining(['Test Person', '测试人物', '테스트']),
+    );
+  });
+
+  it('dedupes id-slug collisions with a numeric suffix when aliases differ', () => {
+    const first = addPersonToCatalog({ en: 'Test Name' });
+    const second = addPersonToCatalog({ en: 'Tëst Namé' });
+    expect(first.id).toBe('person:test-name');
+    expect(second.id).toBe('person:test-name-2');
+  });
+
+  it('rejects an alias that already belongs to another person', () => {
+    try {
+      addPersonToCatalog({ en: 'Existing Actor' });
+      expect.unreachable();
+    } catch (err) {
+      expect(err).toBeInstanceOf(PersonCatalogError);
+      expect((err as PersonCatalogError).code).toBe('conflict');
+    }
+  });
+
+  it('rejects an empty or over-long English name', () => {
+    expect(() => addPersonToCatalog({ en: '' })).toThrow(PersonCatalogError);
+    expect(() => addPersonToCatalog({ en: '  ' })).toThrow(PersonCatalogError);
+    expect(() => addPersonToCatalog({ en: 'a'.repeat(201) })).toThrow(
+      PersonCatalogError,
+    );
+  });
+});
+
+describe('slugifyPersonId', () => {
+  it('strips diacritics and kebab-cases an English display name', () => {
+    expect(slugifyPersonId('Jun Kwang-ryul')).toBe('jun-kwang-ryul');
+    expect(slugifyPersonId('Zoë Bell')).toBe('zoe-bell');
+  });
+
+  it('falls back to a generic slug for input with no ASCII letters', () => {
+    expect(slugifyPersonId('宋康昊')).toBe('person');
+  });
+});
+
+describe('validatePeopleCatalog', () => {
+  it('throws on a duplicate alias owned by two different ids', () => {
+    expect(() =>
+      validatePeopleCatalog({
+        'person:a': { display: { en: 'A' }, aliases: ['Shared'] },
+        'person:b': { display: { en: 'B' }, aliases: ['shared'] },
+      }),
+    ).toThrow(/Ambiguous person alias/);
+  });
+
+  it('throws on an id missing the person: prefix', () => {
+    expect(() =>
+      validatePeopleCatalog({ bad: { display: { en: 'X' }, aliases: [] } }),
+    ).toThrow(/must start with person:/);
+  });
+
+  it('throws on a non-object catalog', () => {
+    expect(() => validatePeopleCatalog(null)).toThrow(/expected object map/);
+    expect(() => validatePeopleCatalog([])).toThrow(/expected object map/);
   });
 });
