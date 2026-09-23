@@ -136,6 +136,18 @@ describe('diffMappingProperties', () => {
           country: { type: 'keyword' },
           tags: { type: 'keyword' },
           tags_key: { type: 'keyword' },
+          work_title: {
+            properties: {
+              en: { type: 'text' },
+              zh: { type: 'text' },
+              native: {
+                properties: {
+                  lang: { type: 'keyword' },
+                  name: { type: 'text' },
+                },
+              },
+            },
+          },
           review: { properties: {} },
           revision: { type: 'long' },
           updated_at: { type: 'date' },

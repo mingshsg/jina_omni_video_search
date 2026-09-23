@@ -37,6 +37,20 @@ export function videoAssetsMetaMappingProperties(): Record<string, unknown> {
         country: { type: 'keyword' },
         tags: { type: 'keyword' },
         tags_key: { type: 'keyword' },
+        work_title: {
+          type: 'object',
+          properties: {
+            en: { type: 'text' },
+            zh: { type: 'text' },
+            native: {
+              type: 'object',
+              properties: {
+                lang: { type: 'keyword' },
+                name: { type: 'text' },
+              },
+            },
+          },
+        },
         review: {
           type: 'object',
           properties: {
@@ -48,6 +62,7 @@ export function videoAssetsMetaMappingProperties(): Record<string, unknown> {
             primary_language: reviewField,
             country: reviewField,
             tags: reviewField,
+            work_title: reviewField,
           },
         },
         revision: { type: 'long' },

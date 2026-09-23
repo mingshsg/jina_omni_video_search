@@ -59,6 +59,7 @@ const CLEARABLE_META_KEYS = [
   'country',
   'tags',
   'tags_key',
+  'work_title',
 ] as const;
 
 const REVIEW_FIELD_KEYS = [
@@ -70,6 +71,7 @@ const REVIEW_FIELD_KEYS = [
   'primary_language',
   'country',
   'tags',
+  'work_title',
 ] as const;
 
 /**

@@ -221,6 +221,64 @@ describe('meta patch validation', () => {
     expect(ok.review?.description?.source).toBe('manual');
   });
 
+  it('accepts a full work_title (en + zh + native) and records review', () => {
+    const ok = parseMetaPatchBody({
+      expected_revision: 0,
+      work_title: {
+        en: 'Nirvana in Fire',
+        zh: 'Lang Ya Bang',
+        native: { lang: 'zh', name: 'native-script title' },
+      },
+      field_sources: { work_title: 'suggestion' },
+    });
+    expect(ok.fields.work_title).toEqual({
+      en: 'Nirvana in Fire',
+      zh: 'Lang Ya Bang',
+      native: { lang: 'zh', name: 'native-script title' },
+    });
+    expect(ok.review?.work_title).toEqual({
+      source: 'suggestion',
+      confirmed: true,
+    });
+  });
+
+  it('accepts work_title with only en (zh/native optional)', () => {
+    const ok = parseMetaPatchBody({
+      expected_revision: 0,
+      work_title: { en: 'Crouching Tiger, Hidden Dragon' },
+    });
+    expect(ok.fields.work_title).toEqual({
+      en: 'Crouching Tiger, Hidden Dragon',
+    });
+  });
+
+  it('clears work_title with null and drops its review entry', () => {
+    const ok = parseMetaPatchBody({
+      expected_revision: 0,
+      work_title: null,
+    });
+    expect(ok.fields.work_title).toBeNull();
+    expect(ok.review?.work_title).toBeUndefined();
+  });
+
+  it('rejects work_title missing the required en name', () => {
+    expect(() =>
+      parseMetaPatchBody({
+        expected_revision: 0,
+        work_title: { zh: 'Lang Ya Bang' },
+      }),
+    ).toThrow();
+  });
+
+  it('rejects an overlong work_title name', () => {
+    expect(() =>
+      parseMetaPatchBody({
+        expected_revision: 0,
+        work_title: { en: 'x'.repeat(201) },
+      }),
+    ).toThrow();
+  });
+
   it('normalizes tag keys', () => {
     expect(normalizeTagKey('  Fashion  Week ')).toBe('fashion week');
   });

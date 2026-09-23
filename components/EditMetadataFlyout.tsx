@@ -51,6 +51,11 @@ type MetaDto = {
     primary_language?: string;
     country?: string;
     tags?: string[];
+    work_title?: {
+      en: string;
+      zh?: string;
+      native?: { lang: string; name: string };
+    };
     review?: {
       description?: MetaReviewEntry;
       abstract?: MetaReviewEntry;
@@ -60,6 +65,7 @@ type MetaDto = {
       primary_language?: MetaReviewEntry;
       country?: MetaReviewEntry;
       tags?: MetaReviewEntry;
+      work_title?: MetaReviewEntry;
     };
   };
 };
@@ -119,6 +125,13 @@ type SuggestResult = {
   web?: {
     status?: 'ok' | 'ambiguous' | 'empty' | 'unavailable' | 'skipped';
     reason?: string;
+    candidates?: Array<{
+      provider: 'jina' | 'agent_builder';
+      title: string;
+      url: string;
+      snippet: string;
+      allowlisted: boolean;
+    }>;
     actor_candidates?: SuggestActorCandidate[];
     tool_trace?: SuggestToolTraceEntry[];
   } | null;
@@ -149,6 +162,7 @@ type SuggestedSources = {
   description?: 'suggestion';
   abstract?: 'suggestion';
   tags?: 'suggestion';
+  work_title?: 'suggestion';
 };
 
 type FieldProvenance = {
@@ -160,6 +174,7 @@ type FieldProvenance = {
   description?: MetaReviewEntry;
   abstract?: MetaReviewEntry;
   tags?: MetaReviewEntry;
+  work_title?: MetaReviewEntry;
 };
 
 type ScalarSuggestKey =
@@ -169,7 +184,8 @@ type ScalarSuggestKey =
   | 'country'
   | 'description'
   | 'abstract'
-  | 'tags';
+  | 'tags'
+  | 'work_title';
 
 /**
  * Suggestions that were NOT auto-applied because the field already had
@@ -225,6 +241,10 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
   const [language, setLanguage] = useState('');
   const [country, setCountry] = useState('');
   const [tagsText, setTagsText] = useState('');
+  const [workTitleEn, setWorkTitleEn] = useState('');
+  const [workTitleZh, setWorkTitleZh] = useState('');
+  const [workTitleNativeLang, setWorkTitleNativeLang] = useState('');
+  const [workTitleNativeName, setWorkTitleNativeName] = useState('');
   const [selectedActors, setSelectedActors] = useState<
     EuiComboBoxOptionOption[]
   >([]);
@@ -247,6 +267,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
     language: '',
     country: '',
     tagsText: '',
+    workTitleEn: '',
   });
 
   useEffect(() => {
@@ -258,8 +279,9 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
       language,
       country,
       tagsText,
+      workTitleEn,
     };
-  }, [description, abstract, year, videoType, language, country, tagsText]);
+  }, [description, abstract, year, videoType, language, country, tagsText, workTitleEn]);
 
   const clearSuggestionMark = useCallback(
     (field: keyof SuggestedSources) => {
@@ -288,6 +310,10 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
     setLanguage(data.meta.primary_language ?? '');
     setCountry(data.meta.country ?? '');
     setTagsText((data.meta.tags ?? []).join(', '));
+    setWorkTitleEn(data.meta.work_title?.en ?? '');
+    setWorkTitleZh(data.meta.work_title?.zh ?? '');
+    setWorkTitleNativeLang(data.meta.work_title?.native?.lang ?? '');
+    setWorkTitleNativeName(data.meta.work_title?.native?.name ?? '');
     const review = data.meta.review ?? {};
     const sources: SuggestedSources = {};
     const provenance: FieldProvenance = {};
@@ -319,6 +345,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
     adopt('video_type', review.video_type);
     adopt('primary_language', review.primary_language);
     adopt('tags', review.tags);
+    adopt('work_title', review.work_title);
     setFieldSources(sources);
     setFieldProvenance(provenance);
     setInfo(null);
@@ -475,6 +502,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
       countryEmpty: country === '',
       descriptionEmpty: description.trim() === '',
       abstractEmpty: abstract.trim() === '',
+      workTitleEnEmpty: workTitleEn.trim() === '',
       tagsEmpty:
         tagsText
           .split(/[,，]/)
@@ -663,6 +691,27 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
         mark('tags', sug.tags);
       } else if (Array.isArray(sug.tags?.value) && sug.tags.value.length > 0) {
         nextPending.tags = sug.tags;
+      }
+
+      // Work-title candidate isn't part of `sug` (structured agent fields) —
+      // it comes from the work-identification web candidate list instead.
+      const topCandidateTitle = data.web?.candidates?.[0]?.title?.trim();
+      if (topCandidateTitle) {
+        const workTitleDraft: SuggestField = {
+          value: topCandidateTitle,
+          confidence: 0.7,
+          source: 'external_web',
+          evidence:
+            data.web?.candidates?.[0]?.snippet || t.metaWorkTitleSuggestEvidence,
+          source_url: data.web?.candidates?.[0]?.url,
+          retrieved_at: data.retrieved_at,
+        };
+        if (snapshot.workTitleEnEmpty && cur.workTitleEn.trim() === '') {
+          setWorkTitleEn(topCandidateTitle);
+          mark('work_title', workTitleDraft);
+        } else {
+          nextPending.work_title = workTitleDraft;
+        }
       }
 
       for (const key of Object.keys(nextPending) as ScalarSuggestKey[]) {
@@ -891,6 +940,8 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
         setDescription(String(draft.value));
       } else if (key === 'abstract') {
         setAbstract(String(draft.value));
+      } else if (key === 'work_title') {
+        setWorkTitleEn(String(draft.value));
       }
       setFieldSources((previous) => ({ ...previous, [key]: 'suggestion' }));
       setFieldProvenance((previous) => ({
@@ -1005,6 +1056,30 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
       takeSource('tags');
     }
 
+    const nextWorkTitleEn = workTitleEn.trim();
+    const nextWorkTitleZh = workTitleZh.trim();
+    const nextWorkTitleNativeLang = workTitleNativeLang.trim();
+    const nextWorkTitleNativeName = workTitleNativeName.trim();
+    const nextWorkTitle = nextWorkTitleEn
+      ? {
+          en: nextWorkTitleEn,
+          ...(nextWorkTitleZh ? { zh: nextWorkTitleZh } : {}),
+          ...(nextWorkTitleNativeLang && nextWorkTitleNativeName
+            ? {
+                native: {
+                  lang: nextWorkTitleNativeLang,
+                  name: nextWorkTitleNativeName,
+                },
+              }
+            : {}),
+        }
+      : null;
+    const baseWorkTitle = baseline.work_title ?? null;
+    if (JSON.stringify(nextWorkTitle) !== JSON.stringify(baseWorkTitle)) {
+      body.work_title = nextWorkTitle;
+      takeSource('work_title');
+    }
+
     const editableKeys = [
       'description',
       'abstract',
@@ -1014,6 +1089,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
       'primary_language',
       'country',
       'tags',
+      'work_title',
     ] as const;
     if (!editableKeys.some((k) => body[k] !== undefined)) {
       setError(t.metaSaveError);
@@ -1070,6 +1146,10 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
     videoType,
     language,
     country,
+    workTitleEn,
+    workTitleZh,
+    workTitleNativeLang,
+    workTitleNativeName,
     fieldSources,
     fieldProvenance,
     videoId,
@@ -1199,6 +1279,63 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
           <EuiText size="s">{t.metaLoading}</EuiText>
         ) : (
           <EuiForm component="form" onSubmit={(e) => e.preventDefault()} fullWidth>
+            <EuiFormRow
+              label={t.metaWorkTitle}
+              helpText={evidenceHelp('work_title') ?? t.metaWorkTitleHelp}
+              fullWidth
+            >
+              <EuiFlexGroup gutterSize="s" responsive={false} wrap>
+                <EuiFlexItem style={{ minWidth: 180 }}>
+                  <EuiFieldText
+                    placeholder={t.metaWorkTitleEn}
+                    value={workTitleEn}
+                    onChange={(e) => {
+                      clearSuggestionMark('work_title');
+                      setWorkTitleEn(e.target.value);
+                    }}
+                    compressed
+                    fullWidth
+                  />
+                </EuiFlexItem>
+                <EuiFlexItem style={{ minWidth: 140 }}>
+                  <EuiFieldText
+                    placeholder={t.metaWorkTitleZh}
+                    value={workTitleZh}
+                    onChange={(e) => {
+                      clearSuggestionMark('work_title');
+                      setWorkTitleZh(e.target.value);
+                    }}
+                    compressed
+                    fullWidth
+                  />
+                </EuiFlexItem>
+                <EuiFlexItem style={{ minWidth: 70 }} grow={false}>
+                  <EuiFieldText
+                    placeholder="ko / ja / th"
+                    value={workTitleNativeLang}
+                    onChange={(e) => {
+                      clearSuggestionMark('work_title');
+                      setWorkTitleNativeLang(e.target.value);
+                    }}
+                    compressed
+                    style={{ width: 90 }}
+                  />
+                </EuiFlexItem>
+                <EuiFlexItem style={{ minWidth: 140 }}>
+                  <EuiFieldText
+                    placeholder={t.metaWorkTitleNative}
+                    value={workTitleNativeName}
+                    onChange={(e) => {
+                      clearSuggestionMark('work_title');
+                      setWorkTitleNativeName(e.target.value);
+                    }}
+                    compressed
+                    fullWidth
+                  />
+                </EuiFlexItem>
+              </EuiFlexGroup>
+            </EuiFormRow>
+            {renderPendingSuggestion('work_title')}
             <EuiFormRow
               label={t.metaDescription}
               helpText={evidenceHelp('description')}

@@ -202,6 +202,12 @@ export type UiMessages = {
   metaConflict: string;
   metaReload: string;
   metaSave: string;
+  metaWorkTitle: string;
+  metaWorkTitleHelp: string;
+  metaWorkTitleEn: string;
+  metaWorkTitleZh: string;
+  metaWorkTitleNative: string;
+  metaWorkTitleSuggestEvidence: string;
   metaDescription: string;
   metaAbstract: string;
   metaYear: string;
@@ -536,6 +542,13 @@ export const uiEn: UiMessages = {
   metaConflict: 'Someone else saved first — reload and try again.',
   metaReload: 'Reload current metadata',
   metaSave: 'Save metadata',
+  metaWorkTitle: 'Work title',
+  metaWorkTitleHelp:
+    'The actual production title — not the filename shown above.',
+  metaWorkTitleEn: 'English title',
+  metaWorkTitleZh: 'Chinese title (optional)',
+  metaWorkTitleNative: 'Native-script title (optional)',
+  metaWorkTitleSuggestEvidence: 'Top web search match for this title',
   metaDescription: 'Description',
   metaAbstract: 'Abstract',
   metaYear: 'Year',
@@ -879,6 +892,12 @@ export const uiZh: UiMessages = {
   metaConflict: '他人已先保存 — 请重新加载后再试。',
   metaReload: '重新加载当前元数据',
   metaSave: '保存元数据',
+  metaWorkTitle: '作品名称',
+  metaWorkTitleHelp: '真正的作品/片名 —— 不是上方显示的文件名。',
+  metaWorkTitleEn: '英文片名',
+  metaWorkTitleZh: '中文片名（可选）',
+  metaWorkTitleNative: '原文片名（可选）',
+  metaWorkTitleSuggestEvidence: '网络搜索命中的首个片名',
   metaDescription: '简介',
   metaAbstract: '摘要',
   metaYear: '年份',

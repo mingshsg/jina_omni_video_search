@@ -288,6 +288,21 @@ export function buildBm25Should(query: string): Record<string, unknown>[] {
     },
     {
       match: {
+        'meta.work_title.en': { query, boost: 2 },
+      },
+    },
+    {
+      match: {
+        'meta.work_title.zh': { query, boost: 2 },
+      },
+    },
+    {
+      match: {
+        'meta.work_title.native.name': { query, boost: 2 },
+      },
+    },
+    {
+      match: {
         'meta.description': { query, boost: 1 },
       },
     },

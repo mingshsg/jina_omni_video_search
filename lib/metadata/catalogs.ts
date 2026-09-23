@@ -107,6 +107,9 @@ export const META_BOUNDS = {
   yearMin: 1800,
   yearMax: 2100,
   facetArrayMax: 20,
+  /** Mirrors NEW_PERSON_NAME_MAX_LEN in people.ts — same display-name class. */
+  workTitleNameMax: 200,
+  workTitleNativeLangMax: 16,
 } as const;
 
 export function countryLabel(

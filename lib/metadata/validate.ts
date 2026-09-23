@@ -35,7 +35,15 @@ export type MetaReviewMap = {
   primary_language?: MetaFieldReview;
   country?: MetaFieldReview;
   tags?: MetaFieldReview;
+  work_title?: MetaFieldReview;
 };
+
+/** The actual work/production title — distinct from `title` (filename-derived). */
+export interface WorkTitle {
+  en: string;
+  zh?: string;
+  native?: { lang: string; name: string };
+}
 
 /** Stored / returned editorial metadata (wire + index shape). */
 export interface AssetMeta {
@@ -53,6 +61,7 @@ export interface AssetMeta {
   country?: string;
   tags?: string[];
   tags_key?: string[];
+  work_title?: WorkTitle;
   review?: MetaReviewMap;
   revision: number;
   updated_at: string;
@@ -73,6 +82,7 @@ export interface AssetMetaEditorDto {
     primary_language?: string;
     country?: string;
     tags?: string[];
+    work_title?: WorkTitle;
     review?: MetaReviewMap;
   };
   meta_revision: number;
@@ -143,6 +153,20 @@ const reviewSchema = z
 
 const EVIDENCE_MAX = 500;
 
+const workTitleSchema = z
+  .object({
+    en: z.string().trim().min(1).max(META_BOUNDS.workTitleNameMax),
+    zh: z.string().trim().min(1).max(META_BOUNDS.workTitleNameMax).optional(),
+    native: z
+      .object({
+        lang: z.string().trim().min(1).max(META_BOUNDS.workTitleNativeLangMax),
+        name: z.string().trim().min(1).max(META_BOUNDS.workTitleNameMax),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+
 /**
  * PATCH body schema. Omitted = leave unchanged; null / empty = clear.
  * Client may send actor_ids only (not actors / aliases / keys / search_text).
@@ -196,6 +220,7 @@ export const metaPatchBodySchema = z
         z.null(),
       ])
       .optional(),
+    work_title: z.union([workTitleSchema, z.null()]).optional(),
     /** Optional per-field provenance when saving accepted suggestions. */
     field_sources: z
       .object({
@@ -207,6 +232,7 @@ export const metaPatchBodySchema = z
         primary_language: fieldSourceSchema.optional(),
         country: fieldSourceSchema.optional(),
         tags: fieldSourceSchema.optional(),
+        work_title: fieldSourceSchema.optional(),
       })
       .strict()
       .optional(),
@@ -221,6 +247,7 @@ export const metaPatchBodySchema = z
         primary_language: fieldProvenanceSchema.optional(),
         country: fieldProvenanceSchema.optional(),
         tags: fieldProvenanceSchema.optional(),
+        work_title: fieldProvenanceSchema.optional(),
       })
       .strict()
       .optional(),
@@ -246,6 +273,7 @@ const EDITABLE_KEYS = [
   'primary_language',
   'country',
   'tags',
+  'work_title',
 ] as const;
 
 export function parseMetaPatchBody(
@@ -311,6 +339,13 @@ export function parseMetaPatchBody(
     fields.year = body.year;
     if (body.year !== null) {
       review.year = reviewEntry('year');
+    }
+  }
+
+  if (body.work_title !== undefined) {
+    fields.work_title = body.work_title;
+    if (body.work_title !== null) {
+      review.work_title = reviewEntry('work_title');
     }
   }
 
@@ -444,6 +479,7 @@ export function toEditorDto(
       primary_language: meta?.primary_language,
       country: meta?.country,
       tags: meta?.tags,
+      work_title: meta?.work_title,
       review: meta?.review,
     },
   };
