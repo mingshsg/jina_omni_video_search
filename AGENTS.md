@@ -110,6 +110,10 @@ third-party documentation with source URLs in each file's frontmatter.
      the next free number. Link back to the review.
 
   Then add an entry at the top of `reviews/README.md` under the right heading.
+  Move a review to `reviews/archive/<date>-<scope>/` once its scope has shipped
+  or a later review supersedes it. **`reviews/archive/` is gitignored** — it is
+  a local record, not part of a clone. Open items always live in `todo/`, which
+  is tracked, so archiving a review body never loses work.
 - **Record what you checked and rejected**, not only what you found. A
   finding you investigated and dismissed is useful evidence; state why.
 - **Plans are corrected, not rewritten.** When a review finds a defect, fix

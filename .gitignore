@@ -60,3 +60,6 @@ coverage/
 
 # Local scratch (not part of the repo)
 tmp/
+
+# Review archive — kept on disk as local evidence, not tracked
+reviews/archive/
