@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getConfig } from '@/lib/config';
 import { embedTextQueryVector, searchChunks } from '@/lib/es/search';
+import { searchDescriptionAssets } from '@/lib/es/description-search';
 import {
   parseSearchFilters,
   searchFiltersSchema,
@@ -15,7 +16,9 @@ export const runtime = 'nodejs';
 
 const bodySchema = z.object({
   query: z.string().trim().min(1).max(2000),
-  modality: z.enum(['visual', 'audio', 'both']).default('visual'),
+  // 'both' kept as a deprecated alias of 'all' minus the description merge,
+  // for any external caller still sending the old wire value (docs/api-contract.md).
+  modality: z.enum(['visual', 'audio', 'both', 'all', 'description']).default('visual'),
   variant_id: z.string().trim().min(1).max(64),
   video_id: z
     .union([z.string().trim().min(1).max(128), z.null()])
@@ -47,6 +50,46 @@ function errorResponse(
   status: number,
 ) {
   return NextResponse.json({ error: { code, message } }, { status });
+}
+
+/**
+ * Item 4 (plan/11) asset-level semantic search branch. Fully separate from
+ * the chunk-level visual/audio/both path in POST() below; never calls
+ * searchChunks. Does not (yet) support hybrid.use_text / parse_query.
+ */
+async function handleDescriptionSearch(
+  body: z.infer<typeof bodySchema>,
+  filters: ReturnType<typeof parseSearchFilters>,
+) {
+  try {
+    const result = await searchDescriptionAssets({
+      query: body.query,
+      variantId: body.variant_id,
+      videoId: body.video_id,
+      size: body.size,
+      filters,
+    });
+    return NextResponse.json({
+      hits: result.hits,
+      meta: {
+        size: result.size,
+        modality: 'description',
+        variant_id: body.variant_id,
+        video_id: body.video_id,
+        took_ms: result.took_ms,
+        filters: filters ?? null,
+        eligible_assets: result.eligible_assets,
+      },
+    });
+  } catch (err) {
+    if (err instanceof SearchFilterError) {
+      return errorResponse(err.code as SearchErrorCode, err.message, err.status);
+    }
+    const message =
+      err instanceof Error ? err.message : 'Search failed unexpectedly';
+    const safe = message.replace(/ApiKey\s+\S+/gi, 'ApiKey [redacted]');
+    return errorResponse('SEARCH_FAILED', safe, 500);
+  }
 }
 
 export async function POST(request: Request) {
@@ -83,6 +126,18 @@ export async function POST(request: Request) {
     }
     throw err;
   }
+
+  if (body.modality === 'description') {
+    return handleDescriptionSearch(body, filters);
+  }
+
+  // 'all' reuses the existing chunk-level 'both' RRF fusion untouched, then
+  // merges in asset-level description-semantic matches as a separate,
+  // appended section (plan/11) rather than a blended re-ranked score.
+  const isAllMode = body.modality === 'all';
+  const chunkModality: 'visual' | 'audio' | 'both' = isAllMode
+    ? 'both'
+    : (body.modality as 'visual' | 'audio' | 'both');
 
   const useText = Boolean(body.hybrid?.use_text);
   const wantParse = Boolean(body.hybrid?.parse_query);
@@ -259,23 +314,42 @@ export async function POST(request: Request) {
   try {
     getConfig();
     const effectiveSort =
-      body.modality !== 'both' && sortBy === 'rrf' ? body.modality : sortBy;
-    const result = await searchChunks({
-      query: searchQuery,
-      modality: body.modality,
-      variantId: body.variant_id,
-      videoId: body.video_id,
-      size: body.size,
-      sortBy: effectiveSort,
-      filters,
-      hybrid: useText ? { use_text: true } : undefined,
-      vectorQuery: useText ? vectorQuery : undefined,
-      bm25Query: useText ? bm25Query : undefined,
-      sceneTermsPresent: useText ? sceneTermsPresent : undefined,
-      extractedBoosts: useText ? extractedBoosts : undefined,
-      speculativeEmbed: useText ? speculativeEmbed : undefined,
-      priorEmbedCalls: useText ? priorEmbedCalls : undefined,
-    });
+      chunkModality !== 'both' && sortBy === 'rrf' ? chunkModality : sortBy;
+    const descriptionPromise = isAllMode
+      ? searchDescriptionAssets({
+          query: body.query,
+          variantId: body.variant_id,
+          videoId: body.video_id,
+          size: body.size,
+          filters,
+        }).catch(() => null)
+      : Promise.resolve(null);
+    const [result, descResult] = await Promise.all([
+      searchChunks({
+        query: searchQuery,
+        modality: chunkModality,
+        variantId: body.variant_id,
+        videoId: body.video_id,
+        size: body.size,
+        sortBy: effectiveSort,
+        filters,
+        hybrid: useText ? { use_text: true } : undefined,
+        vectorQuery: useText ? vectorQuery : undefined,
+        bm25Query: useText ? bm25Query : undefined,
+        sceneTermsPresent: useText ? sceneTermsPresent : undefined,
+        extractedBoosts: useText ? extractedBoosts : undefined,
+        speculativeEmbed: useText ? speculativeEmbed : undefined,
+        priorEmbedCalls: useText ? priorEmbedCalls : undefined,
+      }),
+      descriptionPromise,
+    ]);
+
+    const descriptionHits: NonNullable<typeof descResult>['hits'] =
+      isAllMode && descResult
+        ? descResult.hits.filter(
+            (h) => !result.hits.some((ch) => ch.video_id === h.video_id),
+          )
+        : [];
 
     if (parseMeta && result.boost_effects) {
       parseMeta = {
@@ -310,10 +384,23 @@ export async function POST(request: Request) {
         asset_text_score: h.asset_text_score,
         metadata_match: h.metadata_match,
       })),
+      ...(isAllMode
+        ? {
+            description_hits: descriptionHits.map((h) => ({
+              video_id: h.video_id,
+              title: h.title,
+              work_title: h.work_title,
+              score: h.score,
+              thumb_url: h.thumb_url,
+              duration_ms: h.duration_ms,
+            })),
+          }
+        : {}),
       meta: {
         size: result.size,
         rank_window_size: result.rank_window_size,
-        modality: result.modality,
+        modality: isAllMode ? 'all' : result.modality,
+        description_status: isAllMode ? (descResult ? 'ok' : 'unavailable') : undefined,
         sort_by: result.sort_by,
         variant_id: result.variant_id,
         video_id: result.video_id,

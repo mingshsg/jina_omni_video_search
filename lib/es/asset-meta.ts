@@ -60,6 +60,9 @@ const CLEARABLE_META_KEYS = [
   'tags',
   'tags_key',
   'work_title',
+  'description_semantic',
+  'abstract_semantic',
+  'work_title_semantic',
 ] as const;
 
 const REVIEW_FIELD_KEYS = [
@@ -232,6 +235,23 @@ export interface PatchAssetMetaResult {
   meta: AssetMetaEditorDto['meta'];
 }
 
+export function deriveSemanticMirrorFields(
+  fields: Record<string, unknown>,
+): Record<string, unknown> {
+  const mirror: Record<string, unknown> = {};
+  if ('description' in fields) {
+    mirror.description_semantic = fields.description ?? null;
+  }
+  if ('abstract' in fields) {
+    mirror.abstract_semantic = fields.abstract ?? null;
+  }
+  if ('work_title' in fields) {
+    const wt = fields.work_title as { en?: string } | null;
+    mirror.work_title_semantic = wt?.en ?? null;
+  }
+  return mirror;
+}
+
 /**
  * Atomic metadata PATCH with expected_revision and refresh=wait_for.
  * retry_on_conflict handles transport version races only.
@@ -240,7 +260,11 @@ export interface PatchAssetMetaResult {
  * `meta.description_embedding(_meta)`, a first attempt may hit
  * strict_dynamic_mapping_exception. We soft-fail that channel and retry
  * the editorial write without marking semantic stale so Save still works.
- * Operators should run `yarn setup-indices` to put the mapping.
+ * The same soft-fail covers the item 4 (plan/11) `*_semantic` mirror
+ * fields -- if the live index hasn't had `yarn setup-indices` run since
+ * those fields were added, the retry drops the mirror and keeps the
+ * editorial write. Operators should run `yarn setup-indices` to put the
+ * mapping.
  */
 export async function patchAssetMeta(
   videoId: string,
@@ -260,7 +284,10 @@ export async function patchAssetMeta(
     ...(apply.fields.actor_ids === null ? (['actors'] as const) : []),
   ];
 
-  const runUpdate = async (markSemanticStale: boolean) => {
+  const runUpdate = async (
+    markSemanticStale: boolean,
+    fields: Record<string, unknown>,
+  ) => {
     await client.update({
       index: cfg.ES_INDEX_ASSETS,
       id: videoId,
@@ -272,7 +299,7 @@ export async function patchAssetMeta(
         params: {
           expected_revision: apply.expected_revision,
           now: new Date().toISOString(),
-          fields: apply.fields,
+          fields,
           review: apply.review ?? null,
           clear_review_keys,
           clearable: CLEARABLE_META_KEYS,
@@ -286,13 +313,24 @@ export async function patchAssetMeta(
     cfg.ASSET_SEMANTIC_ENABLED &&
     ('description' in apply.fields || 'abstract' in apply.fields);
 
+  const semanticMirror = cfg.EMBED_INFERENCE_ID
+    ? deriveSemanticMirrorFields(apply.fields)
+    : {};
+  const fieldsWithMirror =
+    Object.keys(semanticMirror).length > 0
+      ? { ...apply.fields, ...semanticMirror }
+      : apply.fields;
+
   try {
-    await runUpdate(wantSemanticStale);
+    await runUpdate(wantSemanticStale, fieldsWithMirror);
   } catch (err: unknown) {
     // Mapping drift: semantic fields not on live index yet — keep editorial save.
-    if (wantSemanticStale && isStrictDynamicMappingException(err)) {
+    if (
+      (wantSemanticStale || fieldsWithMirror !== apply.fields) &&
+      isStrictDynamicMappingException(err)
+    ) {
       try {
-        await runUpdate(false);
+        await runUpdate(false, apply.fields);
       } catch (retryErr: unknown) {
         await classifyPatchError(retryErr, videoId, apply.expected_revision);
       }

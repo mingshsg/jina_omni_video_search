@@ -19,8 +19,10 @@ export type UiMessages = {
   searchButton: string;
   modalityLabel: string;
   modalityBoth: string;
+  modalityAll: string;
   modalityVisual: string;
   modalityAudio: string;
+  modalityDescription: string;
   variantLabel: string;
   variantAllHint: string;
   topKLabel: string;
@@ -350,8 +352,10 @@ export const uiEn: UiMessages = {
   searchButton: 'Search',
   modalityLabel: 'Modality',
   modalityBoth: 'Both',
+  modalityAll: 'All',
   modalityVisual: 'Visual',
   modalityAudio: 'Audio',
+  modalityDescription: 'Description',
   variantLabel: 'Variant',
   variantAllHint: 'Select an indexed variant',
   topKLabel: 'Top-k',
@@ -702,8 +706,10 @@ export const uiZh: UiMessages = {
   searchButton: '检索',
   modalityLabel: '模态',
   modalityBoth: '视觉+音频',
+  modalityAll: '全部',
   modalityVisual: '仅视觉',
   modalityAudio: '仅音频',
+  modalityDescription: '简介语义',
   variantLabel: '变体',
   variantAllHint: '选择已索引的变体',
   topKLabel: 'Top-k',

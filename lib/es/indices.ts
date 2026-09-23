@@ -25,6 +25,7 @@ const DENSE_VECTOR_1024 = {
 
 /** Full create body for `video-assets` — mirrors docs/data-model.md */
 export function videoAssetsMapping(): IndexCreateBody {
+  const cfg = getConfig();
   return {
     mappings: {
       dynamic: 'strict',
@@ -94,7 +95,7 @@ export function videoAssetsMapping(): IndexCreateBody {
         error: { type: 'text', index: false },
         created_at: { type: 'date' },
         updated_at: { type: 'date' },
-        ...videoAssetsMetaMappingProperties(),
+        ...videoAssetsMetaMappingProperties(cfg.EMBED_INFERENCE_ID || undefined),
       },
     },
   };
@@ -214,7 +215,9 @@ export async function upgradeVideoAssetsMapping(): Promise<{
       | Record<string, unknown>
       | undefined) ?? {};
 
-  const desired = videoAssetsMetaMappingProperties();
+  const desired = videoAssetsMetaMappingProperties(
+    cfg.EMBED_INFERENCE_ID || undefined,
+  );
   const diff = diffMappingProperties(desired, props);
 
   if (diff.conflicts.length > 0) {
@@ -266,7 +269,9 @@ export async function ensureIndices(): Promise<EnsureIndicesResult> {
     }
   } else {
     assetsMapping = {
-      addedProperties: Object.keys(videoAssetsMetaMappingProperties()),
+      addedProperties: Object.keys(
+        videoAssetsMetaMappingProperties(cfg.EMBED_INFERENCE_ID || undefined),
+      ),
       alreadyPresent: [],
     };
   }

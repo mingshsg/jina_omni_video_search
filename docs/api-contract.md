@@ -345,7 +345,7 @@ returns after accept).
 | Field | Required | Values / rules |
 | --- | --- | --- |
 | `query` | yes | non-empty string (max 2000) |
-| `modality` | no (default `visual`) | `visual` \| `audio` \| `both` |
+| `modality` | no (default `visual`) | `visual` \| `audio` \| `both` \| `all` \| `description`. `both` is a deprecated alias for the chunk-only RRF behavior below; prefer `all`, which runs the same chunk RRF **and** additionally merges in asset-level description-semantic matches (see "All mode" below). `description` is a separate asset-level-only branch (see "Description mode" below) |
 | `variant_id` | **yes** | kNN **pre-filter** on every child retriever |
 | `video_id` | no | optional single-video filter (`null` / omit = all videos in variant) |
 | `size` | no (default 20) | top-k; server clamps to **1..100** |
@@ -501,6 +501,32 @@ is that modality.
 Do **not** silently pick the higher-scoring modality when both hit — use
 `both` so the UI can show dual attribution. Smoke:
 `scripts/smoke-phase8-search.ts` (needs Phase 7 chunks).
+
+### Description mode and All mode (plan/11, Phase item 4)
+
+`modality: "description"` is a **separate, asset-level-only** branch
+(`lib/es/description-search.ts`). It does not call `searchChunks` at all —
+no chunk knn, no RRF, no `hybrid`/`sort_by`. It runs a `semantic_text` query
+(`meta.description_semantic` / `meta.abstract_semantic` /
+`meta.work_title_semantic`) over the variant's eligible assets and returns
+one hit per matching **asset** (whole video, `start_ms=0`), not per chunk.
+Requires `EMBED_INFERENCE_ID` to be configured (the mapping only gets the
+`semantic_text` fields when it is); on a cluster where it isn't, results are
+empty rather than erroring.
+
+`modality: "all"` runs the **same chunk-level `modality=both` RRF search**
+unchanged, plus the description-semantic query above concurrently, and
+merges them as a **separate, appended section** — not a blended re-ranked
+score (chunk RRF hits and asset-level semantic scores are not on comparable
+scales). The response adds a `description_hits` array (same shape as
+`description` mode's `hits`) containing only description matches whose
+`video_id` did not already appear among the chunk hits; `meta.modality`
+echoes back `"all"` and `meta.description_status` is `"ok"` or
+`"unavailable"` (soft-fails to empty `description_hits` rather than 500 if
+the semantic query errors, e.g. mapping not upgraded yet).
+
+`both` remains accepted as a deprecated alias: identical to today's
+chunk-only RRF behavior, without the `description_hits` merge.
 
 ### Search error shape
 

@@ -1,8 +1,18 @@
 /**
  * Mapping fragment for `video-assets.meta` (plan §A).
  * Used on create and on idempotent mapping upgrade.
+ *
+ * `inferenceId` wires the three semantic_text mirror fields (item 4,
+ * plan/11) to the app's existing embedding inference endpoint
+ * (`cfg.EMBED_INFERENCE_ID`) — no new inference endpoint is created.
+ * Omit / pass '' when no inference endpoint is configured (e.g.
+ * EMBED_PROVIDER is 'jina'/'local' with no ES-side inference endpoint):
+ * the semantic_text properties are left out of the mapping entirely rather
+ * than referencing an endpoint that queries would fail against at runtime.
  */
-export function videoAssetsMetaMappingProperties(): Record<string, unknown> {
+export function videoAssetsMetaMappingProperties(
+  inferenceId?: string,
+): Record<string, unknown> {
   const reviewField = {
     type: 'object' as const,
     properties: {
@@ -16,6 +26,26 @@ export function videoAssetsMetaMappingProperties(): Record<string, unknown> {
       request_id: { type: 'keyword' },
     },
   };
+
+  const semanticMirrorFields = inferenceId
+    ? {
+        // Item 4 (plan/11) — sibling semantic_text fields, additive only.
+        // Never replaces the lexical text/`description`/`abstract`/`work_title`
+        // fields above; populated with the same text at write time.
+        description_semantic: {
+          type: 'semantic_text',
+          inference_id: inferenceId,
+        },
+        abstract_semantic: {
+          type: 'semantic_text',
+          inference_id: inferenceId,
+        },
+        work_title_semantic: {
+          type: 'semantic_text',
+          inference_id: inferenceId,
+        },
+      }
+    : {};
 
   return {
     meta: {
@@ -76,6 +106,9 @@ export function videoAssetsMetaMappingProperties(): Record<string, unknown> {
           },
         },
         // Phase 3.5 — asset-level semantic channel (never on chunks).
+        // Superseded by the semantic_text mirror fields below (item 4,
+        // plan/11); kept in the mapping for now — removal is a deliberate
+        // separate follow-up (todo/28), not bundled with this addition.
         description_embedding: {
           type: 'dense_vector',
           dims: 1024,
@@ -94,6 +127,7 @@ export function videoAssetsMetaMappingProperties(): Record<string, unknown> {
             dims: { type: 'integer' },
           },
         },
+        ...semanticMirrorFields,
       },
     },
   };

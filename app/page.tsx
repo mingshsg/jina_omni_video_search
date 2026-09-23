@@ -58,8 +58,11 @@ import {
   type RejectedEntry,
 } from '@/lib/metadata/parse-chips';
 
-type Modality = 'visual' | 'audio' | 'both';
-type ModalityBadge = 'visual' | 'audio' | 'both';
+type Modality = 'visual' | 'audio' | 'all' | 'description';
+// Per-hit provenance badge — distinct from the top-level Modality selector.
+// A chunk hit found under 'all' mode is still badged 'both' (visual+audio
+// RRF fusion); only synthetic description-only hits get 'description'.
+type ModalityBadge = 'visual' | 'audio' | 'both' | 'description';
 type SortBy = 'rrf' | 'visual' | 'audio' | 'hybrid';
 
 type SearchHit = {
@@ -102,8 +105,41 @@ function formatScore(value: number | null | undefined): string {
 }
 
 function formatRrfScore(score: number, modality: Modality): string {
-  if (modality !== 'both' || score === 0) return '—';
+  if (modality !== 'all' || score === 0) return '—';
   return score.toFixed(3);
+}
+
+/**
+ * Item 4 (plan/11) — map the description-mode API response (asset-level,
+ * no time window) into synthetic full-span SearchHit objects so the
+ * existing card/grouping/timeline UI can render them unchanged.
+ */
+function mapDescriptionHitsToSynthetic(
+  hits: Array<Record<string, unknown>>,
+  variantId: string,
+): SearchHit[] {
+  return hits.map((h) => {
+    const durationMsHit = Number(h.duration_ms ?? 0);
+    const workTitle = h.work_title as { en?: string } | null | undefined;
+    const videoIdHit = String(h.video_id ?? '');
+    return {
+      chunk_id: 'description:' + videoIdHit,
+      video_id: videoIdHit,
+      variant_id: variantId,
+      title: workTitle?.en || String(h.title ?? ''),
+      start_ms: 0,
+      end_ms: durationMsHit,
+      start_label: '0:00',
+      end_label: '',
+      score: typeof h.score === 'number' ? h.score : 0,
+      score_visual: null,
+      score_audio: null,
+      rank_visual: null,
+      rank_audio: null,
+      modality_badge: 'description' as ModalityBadge,
+      thumb_url: String(h.thumb_url ?? ''),
+    };
+  });
 }
 
 function formatPrimaryScore(
@@ -119,7 +155,12 @@ function formatPrimaryScore(
 
 function badgeLabel(
   badge: ModalityBadge,
-  t: { modalityVisual: string; modalityAudio: string; modalityBoth: string },
+  t: {
+    modalityVisual: string;
+    modalityAudio: string;
+    modalityBoth: string;
+    modalityDescription: string;
+  },
 ): string {
   switch (badge) {
     case 'visual':
@@ -128,6 +169,8 @@ function badgeLabel(
       return t.modalityAudio;
     case 'both':
       return t.modalityBoth;
+    case 'description':
+      return t.modalityDescription;
     default: {
       const _exhaustive: never = badge;
       return _exhaustive;
@@ -135,7 +178,9 @@ function badgeLabel(
   }
 }
 
-function badgeColor(badge: ModalityBadge): 'primary' | 'accent' | 'success' {
+function badgeColor(
+  badge: ModalityBadge,
+): 'primary' | 'accent' | 'success' | 'warning' {
   switch (badge) {
     case 'visual':
       return 'primary';
@@ -143,6 +188,8 @@ function badgeColor(badge: ModalityBadge): 'primary' | 'accent' | 'success' {
       return 'accent';
     case 'both':
       return 'success';
+    case 'description':
+      return 'warning';
     default: {
       const _exhaustive: never = badge;
       return _exhaustive;
@@ -389,7 +436,8 @@ export default function SearchPage() {
         body: JSON.stringify(requestBody),
       });
       const data = (await res.json()) as {
-        hits?: SearchHit[];
+        hits?: Array<Record<string, unknown>>;
+        description_hits?: Array<Record<string, unknown>>;
         meta?: Record<string, unknown> & {
           modality?: Modality;
           sort_by?: SortBy;
@@ -400,7 +448,16 @@ export default function SearchPage() {
       };
       if (seq !== requestSeqRef.current) return; // superseded by a newer search
       if (!res.ok) throw new Error(data.error?.message ?? t.searchError);
-      setHits(data.hits ?? []);
+      if (modality === 'description') {
+        setHits(mapDescriptionHitsToSynthetic(data.hits ?? [], variantId));
+      } else {
+        const chunkHits = (data.hits as SearchHit[] | undefined) ?? [];
+        const extraDescriptionHits =
+          modality === 'all'
+            ? mapDescriptionHitsToSynthetic(data.description_hits ?? [], variantId)
+            : [];
+        setHits([...chunkHits, ...extraDescriptionHits]);
+      }
       setResultModality(data.meta?.modality ?? modality);
       setResultHybrid(
         Boolean(data.meta?.hybrid?.use_text) || data.meta?.sort_by === 'hybrid',
@@ -438,7 +495,8 @@ export default function SearchPage() {
   const modalityOptions = [
     { id: 'visual', label: t.modalityVisual },
     { id: 'audio', label: t.modalityAudio },
-    { id: 'both', label: t.modalityBoth },
+    { id: 'all', label: t.modalityAll },
+    { id: 'description', label: t.modalityDescription },
   ];
 
   const sortOptions = useHybridText
@@ -447,7 +505,7 @@ export default function SearchPage() {
         {
           value: 'rrf',
           text: t.sortByRrf,
-          disabled: modality !== 'both',
+          disabled: modality !== 'all',
         },
         { value: 'visual', text: t.sortByVisual },
         { value: 'audio', text: t.sortByAudio },
@@ -456,11 +514,16 @@ export default function SearchPage() {
   const onModalityChange = (id: string) => {
     const next = id as Modality;
     setModality(next);
+    if (next === 'description') {
+      setUseHybridText(false);
+      setParseQuery(false);
+      return;
+    }
     if (useHybridText) {
       setSortBy('hybrid');
       return;
     }
-    if (next !== 'both' && sortBy === 'rrf') {
+    if (next !== 'all' && sortBy === 'rrf') {
       // RRF needs both modalities; fall back to the active single modality.
       setSortBy(next);
     }
@@ -471,7 +534,7 @@ export default function SearchPage() {
     if (checked) {
       setSortBy('hybrid');
     } else if (sortBy === 'hybrid') {
-      setSortBy(modality === 'both' ? 'rrf' : modality);
+      setSortBy(modality === 'all' || modality === 'description' ? 'rrf' : modality);
     }
   };
 
@@ -668,6 +731,7 @@ export default function SearchPage() {
               label={t.parseQueryLabel}
               showLabel={false}
               checked={parseQuery}
+              disabled={modality === 'description'}
               onChange={(e) => {
                 const on = e.target.checked;
                 setParseQuery(on);
@@ -786,7 +850,7 @@ export default function SearchPage() {
             <EuiSelect
               options={sortOptions}
               value={useHybridText ? 'hybrid' : sortBy}
-              disabled={useHybridText}
+              disabled={useHybridText || modality === 'description'}
               onChange={(e) => {
                 const next = e.target.value as SortBy;
                 setSortBy(next);
@@ -814,7 +878,7 @@ export default function SearchPage() {
               label={t.hybridTextLabel}
               showLabel={false}
               checked={useHybridText}
-              disabled={parseQuery}
+              disabled={parseQuery || modality === 'description'}
               onChange={(e) => onHybridTextChange(e.target.checked)}
               compressed
             />
