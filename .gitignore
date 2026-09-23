@@ -13,6 +13,7 @@ data/**
 # Dependencies and build
 node_modules/
 .next/
+.next.failed*/
 out/
 build/
 dist/
@@ -46,6 +47,7 @@ Thumbs.db
 *~
 .idea/
 .vscode/
+.cursor/
 *.iml
 
 # Test / coverage

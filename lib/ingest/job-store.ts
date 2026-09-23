@@ -3,7 +3,7 @@ import type { VideoProbeResult } from '../video/probe';
 import {
   findAssetByJobId,
   getAsset,
-  upsertAsset,
+  persistIngestAsset,
   type AssetVariantDoc,
   type VideoAssetDocument,
 } from '../es/index-assets';
@@ -282,10 +282,13 @@ function jobToAssetDoc(job: IngestJob): VideoAssetDocument {
   };
 }
 
-/** Persist current job state to video-assets (durable). */
+/**
+ * Persist current job state to video-assets (durable).
+ * Uses create-or-partial-update so editorial `meta` is never replaced.
+ */
 export async function persistJob(job: IngestJob): Promise<void> {
   job.updatedAt = nowIso();
-  await upsertAsset(jobToAssetDoc(job));
+  await persistIngestAsset(jobToAssetDoc(job));
 }
 
 export function createIngestJob(input: {

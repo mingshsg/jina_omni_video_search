@@ -1,5 +1,10 @@
 import { getConfig } from '../config';
 import { getEsClient } from './client';
+import { videoAssetsMetaMappingProperties } from './asset-meta-mapping';
+import {
+  diffMappingProperties,
+  MappingUpgradeConflictError,
+} from './mapping-diff';
 
 /** Body passed to `indices.create` (index name supplied by caller). */
 type IndexCreateBody = {
@@ -89,6 +94,7 @@ export function videoAssetsMapping(): IndexCreateBody {
         error: { type: 'text', index: false },
         created_at: { type: 'date' },
         updated_at: { type: 'date' },
+        ...videoAssetsMetaMappingProperties(),
       },
     },
   };
@@ -149,13 +155,19 @@ export function videoChunksMapping(): IndexCreateBody {
   };
 }
 
-export type IndexEnsureAction = 'created' | 'skipped';
+export type IndexEnsureAction = 'created' | 'skipped' | 'upgraded';
 
 export interface EnsureIndicesResult {
   assets: IndexEnsureAction;
   chunks: IndexEnsureAction;
   indexAssets: string;
   indexChunks: string;
+  /** Present when assets mapping was compared / upgraded. */
+  assetsMapping?: {
+    addedProperties: string[];
+    alreadyPresent: string[];
+    conflicts?: string[];
+  };
 }
 
 async function ensureIndex(
@@ -171,15 +183,99 @@ async function ensureIndex(
   return 'created';
 }
 
-/** Idempotent create for both project indices (NFR-6 / Phase 3 acceptance). */
+/**
+ * Idempotently add *missing* properties under an existing strict mapping.
+ * Recursively compares desired `meta.*` children. Incompatible types,
+ * analyzers, or copy_to targets fail with MappingUpgradeConflictError.
+ */
+export async function upgradeVideoAssetsMapping(): Promise<{
+  action: 'upgraded' | 'skipped';
+  addedProperties: string[];
+  alreadyPresent: string[];
+  conflicts: string[];
+}> {
+  const client = getEsClient();
+  const cfg = getConfig();
+  const indexName = cfg.ES_INDEX_ASSETS;
+  const exists = await client.indices.exists({ index: indexName });
+  if (!exists) {
+    return {
+      action: 'skipped',
+      addedProperties: [],
+      alreadyPresent: [],
+      conflicts: [],
+    };
+  }
+
+  const current = await client.indices.getMapping({ index: indexName });
+  const indexKey = Object.keys(current)[0];
+  const props =
+    (current[indexKey]?.mappings?.properties as
+      | Record<string, unknown>
+      | undefined) ?? {};
+
+  const desired = videoAssetsMetaMappingProperties();
+  const diff = diffMappingProperties(desired, props);
+
+  if (diff.conflicts.length > 0) {
+    throw new MappingUpgradeConflictError(diff.conflicts);
+  }
+
+  if (diff.addedPaths.length === 0) {
+    return {
+      action: 'skipped',
+      addedProperties: [],
+      alreadyPresent: diff.alreadyPresent,
+      conflicts: [],
+    };
+  }
+
+  await client.indices.putMapping({
+    index: indexName,
+    // Mapping fragment is validated against the create body; ES client typings
+    // for MappingProperty are a large closed union we do not reconstruct here.
+    properties: diff.toPut as never,
+  });
+  return {
+    action: 'upgraded',
+    addedProperties: diff.addedPaths,
+    alreadyPresent: diff.alreadyPresent,
+    conflicts: [],
+  };
+}
+
+/**
+ * Idempotent create + mapping upgrade for both project indices (NFR-6).
+ * Existing video-assets indices receive new `meta.*` properties when missing.
+ */
 export async function ensureIndices(): Promise<EnsureIndicesResult> {
   const cfg = getConfig();
-  const assets = await ensureIndex(cfg.ES_INDEX_ASSETS, videoAssetsMapping());
+  let assets = await ensureIndex(cfg.ES_INDEX_ASSETS, videoAssetsMapping());
   const chunks = await ensureIndex(cfg.ES_INDEX_CHUNKS, videoChunksMapping());
+
+  let assetsMapping: EnsureIndicesResult['assetsMapping'];
+  if (assets === 'skipped') {
+    const upgrade = await upgradeVideoAssetsMapping();
+    assetsMapping = {
+      addedProperties: upgrade.addedProperties,
+      alreadyPresent: upgrade.alreadyPresent,
+      conflicts: upgrade.conflicts,
+    };
+    if (upgrade.action === 'upgraded') {
+      assets = 'upgraded';
+    }
+  } else {
+    assetsMapping = {
+      addedProperties: Object.keys(videoAssetsMetaMappingProperties()),
+      alreadyPresent: [],
+    };
+  }
+
   return {
     assets,
     chunks,
     indexAssets: cfg.ES_INDEX_ASSETS,
     indexChunks: cfg.ES_INDEX_CHUNKS,
+    assetsMapping,
   };
 }

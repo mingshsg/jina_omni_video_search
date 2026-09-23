@@ -17,6 +17,7 @@ import {
 } from '@elastic/eui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppShell, formatDurationMs } from '@/components/AppShell';
+import { EditMetadataFlyout } from '@/components/EditMetadataFlyout';
 import { formatChunkPresetLabel } from '@/lib/ingest/chunk-presets';
 import { useLocale } from '@/lib/i18n/locale-context';
 
@@ -89,6 +90,7 @@ export default function LibraryPage() {
   const [selected, setSelected] = useState<LibraryAsset[]>([]);
   const [removeTarget, setRemoveTarget] = useState<LibraryAsset | null>(null);
   const [batchMode, setBatchMode] = useState<BatchMode | null>(null);
+  const [editTarget, setEditTarget] = useState<LibraryAsset | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -214,8 +216,8 @@ export default function LibraryPage() {
     [selected, batchBusy, busyId],
   );
 
-  const columns: EuiBasicTableColumn<LibraryAsset>[] = useMemo(
-    () => [
+  const columns = useMemo(
+    (): EuiBasicTableColumn<LibraryAsset>[] => [
       {
         field: 'title',
         name: t.colTitle,
@@ -278,8 +280,17 @@ export default function LibraryPage() {
       },
       {
         name: t.colActions,
-        width: '220px',
+        width: '260px',
         actions: [
+          {
+            name: t.actionEditMeta,
+            description: t.actionEditMeta,
+            type: 'icon',
+            icon: 'pencil',
+            enabled: (item: LibraryAsset) =>
+              !batchBusy && busyId !== item.video_id,
+            onClick: (item: LibraryAsset) => setEditTarget(item),
+          },
           {
             name: t.actionSearch,
             description: t.actionSearch,
@@ -441,6 +452,17 @@ export default function LibraryPage() {
         >
           <p>{fillTemplate(t.batchRemoveConfirm, { count: batchCount })}</p>
         </EuiConfirmModal>
+      )}
+
+      {editTarget && (
+        <EditMetadataFlyout
+          videoId={editTarget.video_id}
+          onClose={() => setEditTarget(null)}
+          onSaved={() => {
+            setToast(t.metaSaved);
+            void load();
+          }}
+        />
       )}
     </AppShell>
   );

@@ -16,9 +16,12 @@ Two delivery tracks already shipped:
 - **File video** — upload / URL / local import, `video-assets` + `video-chunks`.
 - **Live video** — RTSP capture in a dedicated worker, `live-video-*` indices.
 
-One track is planned and not yet implemented:
+One track is implemented in the working tree but still has open acceptance
+gates:
 
-- **Hybrid metadata search** — see `plan/03-hybrid-metadata-search-plan.md`.
+- **Hybrid metadata search and edit-time Suggest** — see
+  `plan/03-hybrid-metadata-search-plan.md`,
+  `plan/04-internet-grounded-metadata-suggest.md`, and `todo/16-*`.
 
 ## Commands
 
@@ -26,7 +29,7 @@ One track is planned and not yet implemented:
 yarn install
 yarn dev            # local dev
 yarn build          # production build (~60s) — must pass before you claim done
-yarn test           # vitest run — 47 files / 243 tests as of 2043ada
+yarn test           # full Vitest suite; use the current output for counts
 yarn setup-indices  # idempotent index creation
 ```
 
@@ -113,9 +116,10 @@ third-party documentation with source URLs in each file's frontmatter.
 
 ## Current state
 
-`live-video-search` is the integration branch; `main` trails it. The hybrid
-metadata feature is **planned only** — no `lib/metadata/`, no
-`config/people.json`, no `meta.*` mapping exists yet. Phase 1 is ready to
-start, and its first task is probing the target project for core analysis
-plugins, because that answer determines the mapping and the mapping cannot
-change later without a reindex.
+`live-video-search` is the integration branch; `main` trails it. The current
+working tree contains Phases 1–4: metadata schema/editor, hybrid retrieval,
+facets, parser/semantic paths, local Suggest, and an asynchronous dedicated
+Agent Builder Suggest path. This is **not a release-complete claim**: live
+schema/search regression, labeled relevance and ambiguity tests, browser actor
+selection, representative p95/cost, and multi-replica durable job storage
+remain tracked in `todo/05`, `todo/06`, `todo/11`, `todo/14`, and `todo/16`.

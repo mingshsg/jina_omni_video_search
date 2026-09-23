@@ -349,7 +349,51 @@ returns after accept).
 | `variant_id` | **yes** | kNN **pre-filter** on every child retriever |
 | `video_id` | no | optional single-video filter (`null` / omit = all videos in variant) |
 | `size` | no (default 20) | top-k; server clamps to **1..100** |
-| `sort_by` | no (default `visual`) | `rrf` \| `visual` \| `audio` — `rrf` only when `modality=both` (otherwise coerced to the active modality) |
+| `sort_by` | no (default depends on hybrid) | `rrf` \| `visual` \| `audio` \| `hybrid`. Default is `visual` when `hybrid.use_text` is false/omitted; default is `hybrid` when `hybrid.use_text=true`. `rrf` only when `modality=both` (otherwise coerced to the active modality). `sort_by=hybrid` requires `hybrid.use_text=true`; other sorts are rejected while text hybrid is on |
+| `filters` | no | optional facets (see below). When present, a single-request ready-variant asset-ID allow-list is applied to chunk knn. Pure vector search with `filters` omitted is unchanged |
+| `hybrid` | no | `{ use_text?: boolean, text_mode?: "bm25" }`. Omitted / `use_text=false` keeps today's pure-vector path. `use_text=true` enables Phase 3 BM25 + app-side fusion and always applies the ready-ID allow-list |
+
+### Facet filters (`filters`)
+
+AND across fields; **ANY** within each array. Cap 20 values per array. Missing metadata fails a selected facet.
+
+| Field | Semantics |
+| --- | --- |
+| `year_from` / `year_to` | Inclusive integer range on `meta.year` (`year_from <= year_to`) |
+| `actor_ids` | Catalog person IDs (`meta.actor_ids`) |
+| `video_type` | Controlled vocab |
+| `primary_language` | Pinned BCP-47 tags (case-insensitive; stored canonical) |
+| `country` | ISO alpha-2 from the 20-option catalog |
+| `tags` | Normalized to `meta.tags_key` |
+
+Overflow (>10,000 matching assets): **422** `FILTER_SCOPE_TOO_LARGE`. Empty eligibility returns zero hits before embedding.
+
+Response `meta.filters` echoes the normalized filters; `meta.filter` reports `{ eligible_assets, enumeration_ms, filters_applied }` when facets ran.
+
+Same `filters` object is accepted on `POST /api/search/image` (JSON body or multipart field `filters` as a JSON string). Image search never accepts `hybrid.use_text`.
+
+### Hybrid text channel (`hybrid.use_text`, Phase 3)
+
+Opt-in. When enabled:
+
+1. Enumerate all ready assets (intersected with facets / explicit `video_id`).
+2. Run BM25 over eligible assets (`meta.actor_keys`, `meta.search_text` / `.cjk`, title/description/abstract).
+3. Retrieve a global per-modality knn window plus two-stage lexical chunk expansion.
+4. Fuse ranks in the app: `score = Σ w_m/(60+rank_m) + 0.4/(60+rank_text)`.
+
+Hits may include `score_kind: "hybrid_rrf"`, `rank_text`, `asset_text_score`, and `metadata_match` (true when the parent asset ranked in BM25). Labels never claim a person/event occurs at the shown timestamp — only that **video metadata matched**.
+
+Response `meta` adds `hybrid`, `text_channel_status` (`ok`\|`empty`\|`failed`\|`disabled`), `ranking_strategy`, optional `branch` timings/counts, and optional `query_dsl` (truncated asset BM25 body + knn filter summary; allow-lists capped with `count`/`sample`/`truncated`; never includes `query_vector` values or secrets). Live search rejects `sort_by=hybrid`.
+
+Optional `hybrid.parse_query` (default `false`, Phase 3.5): when `true` and `QUERY_PARSER_PROVIDER=dictionary`, response `meta.parse` carries dictionary extracted fields and the hybrid path may use `vector_query` / `free_text` channel inputs. Extracted facets apply as boosts (`w_facet=0.2`) **only when** `hybrid.use_text=true`; with `parse_query=true` and `use_text=false`, `meta.parse.rejected` uses `hybrid_text_required` and `meta.query_dsl.status` is `not_applied`. Omitted/`false` keeps Phase 3 behavior. Image search never accepts `parse_query`. The search UI turns on Include text when Smart parse is enabled.
+
+`meta.parse.applied` is the set of extracted facets that were actually scored this request: hybrid on, `QUERY_PARSER_FACET_MODE=boost`, not suppressed, not duplicated by a hand-selected facet on the same field, **and** matching at least one fusion candidate. `meta.parse.rejected[]` lists every extracted value that was not scored with a `reason`: `not in catalog` / `out of range` / `not in candidate set` (validation), `hybrid_text_required` (parse on, hybrid off), `no_effect` (matched zero fusion candidates — a hard filter on the same value may still return results, because filters re-enumerate the catalog), `snapshot_unavailable`. `meta.parse.extracted` is the pre-effect extraction and is the source the UI renders chips from. `hybrid.suppress_extracted` (optional, ≤ 20 strings of ≤ 32 chars; recognised: `actor_ids` \| `year` (also `year_from` / `year_to`) \| `country` \| `video_type`; other strings are accepted and ignored) drops those extracted boosts for this request only.
+
+**Planned (not shipped — see `plan/05-parse-chip-state-model.md`, PR-C):** additive only. `rejected[].reason` gains `hard_filter` for boosts dropped because the same field is hand-filtered. `suppress_extracted` items may be `field:value` (e.g. `country:KR`, `actor_ids:person:audrey-hepburn`), item length limit raised to 128; bare field names remain accepted. `applied` / `rejected` shapes do not change.
+
+`ASSET_SEMANTIC_ENABLED` (default off): on metadata save, marks `description_embedding_meta.state=stale` and may publish a 1024-d `meta.description_embedding` when revision still matches. Hybrid search queries only `state: current` vectors as an asset-level RRF term (`w_semantic=0.3`). Name-/facet-only parses down-weight vector channels (`×0.25`).
+
+When `QUERY_PARSER_PROVIDER=eis` and `hybrid.parse_query=true`, the server may call an EIS **completion** endpoint (`QUERY_PARSER_INFERENCE_ID`, timeout `QUERY_PARSER_TIMEOUT_MS`). Failures degrade to dictionary parse. Response `meta.parse` may include `parser: "eis"`, `eis_skipped`, `inference_id` (endpoint name only — never API keys).
 
 ### RRF / knn parameters (from config)
 
@@ -431,6 +475,7 @@ Server-side. Variant / `video_id` filters still apply.
 | `rrf` | RRF retriever (`modality=both` only) | fused RRF order |
 | `visual` | Visual knn window, then top-`size` | `score_visual` descending |
 | `audio` | Audio knn window, then top-`size` | `score_audio` descending |
+| `hybrid` | App fusion of vector ranks + BM25 asset ranks (`hybrid.use_text=true`) | `score_hybrid` descending |
 
 When `modality=both`, all three searches still run so each hit can carry RRF + both knn scores. Single-modality requests do not run the other branch (`score_*` stays `null`; asking to sort by the missing modality leaves knn order unchanged).
 
@@ -617,6 +662,213 @@ under `data/` (NFR-5).
 
 Per-id failures do not abort the rest of the batch.
 
+### `GET /api/library/{videoId}`
+
+Safe editor DTO — **no** internal media paths.
+
+**200:**
+
+```json
+{
+  "video_id": "uuid",
+  "title": "…",
+  "meta_revision": 0,
+  "meta": {
+    "description": "…",
+    "abstract": "…",
+    "year": 1961,
+    "actors": ["Audrey Hepburn"],
+    "actor_ids": ["person:audrey-hepburn"],
+    "video_type": "trailer",
+    "primary_language": "en",
+    "country": "US",
+    "tags": ["fashion"],
+    "review": { "actors": { "source": "manual", "confirmed": true } }
+  }
+}
+```
+
+| Code | HTTP | When |
+| --- | --- | --- |
+| `LIBRARY_INVALID` | 400 | Bad id |
+| `LIBRARY_NOT_FOUND` | 404 | Unknown video |
+| `LIBRARY_FAILED` | 500 | ES failure |
+
+### `PATCH /api/library/{videoId}/meta`
+
+Atomic editorial update. Client sends **`actor_ids` only** (catalog IDs);
+server derives `actors` / `actor_aliases` / `actor_keys` / `search_text`.
+Omitted field = unchanged; `null` or empty array clears. Requires
+`expected_revision` (`0` bootstraps assets with no `meta`).
+
+**Body (example):**
+
+```json
+{
+  "expected_revision": 0,
+  "description": "…",
+  "year": 1961,
+  "actor_ids": ["person:audrey-hepburn"],
+  "country": "US",
+  "video_type": "trailer",
+  "primary_language": "en",
+  "tags": ["fashion"]
+}
+```
+
+| Code | HTTP | When |
+| --- | --- | --- |
+| `LIBRARY_INVALID` | 400 | Bad id |
+| `META_INVALID` / `META_UNKNOWN_ACTOR_ID` / `META_INVALID_*` | 400 | Validation |
+| `LIBRARY_NOT_FOUND` | 404 | Unknown video |
+| `META_CONFLICT` | 409 | Stale `expected_revision` (`current_revision` returned) |
+| `META_TRANSPORT_CONFLICT` | 409 | Update-version retries exhausted while `meta.revision` unchanged (`retryable: true`) |
+| `META_FAILED` | 500 | ES failure |
+
+**200:** `{ "video_id", "meta_revision", "meta" }` (same shape as GET `meta`).
+
+Ingest progress uses partial `_update` of ingest-owned fields with
+`retry_on_conflict` and **never** replaces `meta`.
+
+Optional `field_sources` on PATCH (`manual` | `suggestion` per field) records
+provenance when the editor accepts a Suggest draft; omitted fields default to
+`manual`. Optional `field_provenance` may retain bounded `confidence`,
+`evidence`, `provider`, HTTPS `source_url`, `retrieved_at`, and `request_id` for
+an accepted suggestion.
+
+### `POST /api/library/{videoId}/meta/suggest`
+
+Phase 4a/4b asynchronous draft suggestions. **Never writes** the asset. POST
+creates a bounded background job and returns immediately; the editor polls GET
+for `queued`, `preparing`, `researching`, `validating`, and terminal status.
+DELETE cancels queued/running work. Save remains available while research runs.
+Jobs are held in the single app process for ten minutes, with two active jobs,
+six starts per client/video per minute, and a 64-job bound. A restart expires
+their request IDs; a multi-replica deployment requires a shared job store.
+
+The job always runs local title clues. Default enrichment:
+`SUGGEST_WEB_PROVIDER=agent_builder` calls Kibana Agent Builder `converse`
+(agent `SUGGEST_AGENT_ID`, tools `jina.search_web` / `jina.read_url`; Jina key
+stays in the Kibana connector). The converse request sets `connector_id` from
+`SUGGEST_AGENT_CONNECTOR_ID` (default `.google-gemini-3.5-flash-lite-chat_completion`
+→ EIS `google-gemini-3.5-flash-lite`). Empty connector id uses the Kibana
+project default model. Optional `jina` uses app REST Search+Reader.
+Failures safely fall back to local drafts.
+
+**Body (optional):**
+
+```json
+{
+  "draft": {
+    "year": null,
+    "video_type": null,
+    "primary_language": null,
+    "country": null,
+    "description": null,
+    "abstract": null,
+    "tags": null
+  },
+  "media_language": "en"
+}
+```
+
+**202** (or **200** on a cache hit):
+
+```json
+{
+  "request_id": "uuid",
+  "video_id": "uuid",
+  "meta_revision": 3,
+  "status": "pending",
+  "stage": "queued",
+  "created_at": "2026-09-23T00:00:00.000Z",
+  "updated_at": "2026-09-23T00:00:00.000Z"
+}
+```
+
+### `GET /api/library/{videoId}/meta/suggest?request_id={uuid}`
+
+Returns the same job envelope. While running, `status` is `pending`. On
+completion, `status` is `complete` and `result` contains:
+
+```json
+{
+  "request_id": "uuid",
+  "video_id": "uuid",
+  "meta_revision": 3,
+  "retrieved_at": "2026-09-23T00:00:42.000Z",
+  "title": "Official Trailer Unique Work 2020.mp4",
+  "status": "ok",
+  "provider": "local",
+  "title_clues": {
+    "normalized": "Official Trailer Unique Work 2020",
+    "work_title": "Official Unique Work",
+    "abstained": false,
+    "abstain_reason": null
+  },
+  "suggestions": {
+    "year": {
+      "value": 2020,
+      "confidence": 0.55,
+      "source": "local_title",
+      "evidence": "Unambiguous year 2020 in title"
+    },
+    "video_type": {
+      "value": "trailer",
+      "confidence": 0.5,
+      "source": "local_title",
+      "evidence": "Title token matched video_type=trailer"
+    },
+    "description": {
+      "value": "Title indicates: “Official Unique Work”. This draft restates…",
+      "confidence": 0.35,
+      "source": "local_title",
+      "evidence": "Title-clue prose from work_title=\"Official Unique Work\""
+    },
+    "tags": {
+      "value": ["trailer", "2020"],
+      "confidence": 0.45,
+      "source": "local_title",
+      "evidence": "Explicit title tokens → tags [trailer, 2020]"
+    }
+  }
+}
+```
+
+Result `provider` is `local`, `local+agent`, or `local+jina`. The optional
+`web` object includes status, allowlisted candidates/reads, elapsed time,
+`agent_id`, and actor candidates. Each actor candidate has a required English
+name, optional `zh`/`ko`/`ja` names, HTTPS evidence URL, and optional exact
+`matched_person_id`. Only resolved IDs can be added to the controlled actor
+field. External drafts use `source: external_web` plus structured `source_url`
+and `retrieved_at`.
+
+### `DELETE /api/library/{videoId}/meta/suggest?request_id={uuid}`
+
+Cancels queued/running work and returns the terminal job envelope.
+
+`status: empty` when nothing can be suggested. Generic titles (`untitled`,
+`video`, …) abstain from description/abstract. Language is returned only when
+an explicit `media_language` maps onto the pinned catalog.
+
+| Code | HTTP | When |
+| --- | --- | --- |
+| `LIBRARY_INVALID` | 400 | Bad id |
+| `META_INVALID` | 400 | Bad JSON / body |
+| `META_SUGGEST_RATE_LIMITED` | 429 | More than six starts per video/client per minute |
+| `LIBRARY_NOT_FOUND` | 404 | Unknown video |
+| `META_SUGGEST_NOT_FOUND` | 404 | Unknown/expired request ID |
+| `META_SUGGEST_BUSY` | 503 | Bounded in-memory queue is full |
+| `META_SUGGEST_FAILED` | 500 | Unexpected failure |
+
+### `GET /api/metadata/catalogs`
+
+Pinned catalogs for the Library editor (and later search facets).
+
+Query: `?locale=en|zh&q=` (optional people autocomplete).
+
+**200:** `{ "video_types", "primary_languages", "countries":[{code,label}], "people":[{id,display,aliases}] }`.
+
 ---
 
 ## Media APIs (Phase 9)
@@ -643,4 +895,7 @@ Serves the chunk JPEG (from chunk `thumb_path` or conventional path under
 | 2026-08-26 | Phase 11: library + media/thumb routes; status marked verified vs code |
 | 2026-09-03 | Search hits: `score_visual` / `score_audio` (knn similarity) + `rank_*`; `sort_by` `rrf`\|`visual`\|`audio`. `score` remains RRF when modality=both. |
 | 2026-09-22 | Library batch delete: `POST /api/library/batch-delete` + multi-select UI |
-| 2026-09-22 | Library batch delete: `POST /api/library/batch-delete` + multi-select UI |
+| 2026-09-22 | Hybrid Phase 1: `GET /api/library/{id}`, `PATCH …/meta`, catalogs; ingest partial updates preserve `meta` |
+| 2026-09-22 | Hybrid Phase 2: optional `filters` on text/image search; ready-ID allow-list; `FILTER_SCOPE_TOO_LARGE` |
+| 2026-09-22 | Hybrid Phase 3.6: EIS completion parser (`QUERY_PARSER_*`), parse cache, speculative embed |
+| 2026-09-22 | Hybrid Phase 3: opt-in `hybrid.use_text`, `sort_by=hybrid`, app-side BM25+RRF fusion; live rejects hybrid sort |

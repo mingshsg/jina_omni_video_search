@@ -495,17 +495,20 @@ what makes an LLM a convenience here rather than a dependency.
 bounded additive term to the asset-level prior, never a multiplier and never a
 filter:
 
-`score_hybrid += w_facet × Σ_f matched(f) / n_selected`
+`score_hybrid += (w_facet / (60 + 1)) × Σ_f matched(f) / n_selected`
 
 where `matched(f)` is 1 when the candidate's asset satisfies extracted facet
-`f`, `n_selected` is the number of extracted facets, and `w_facet` is
-provisional at **0.2** — deliberately below `w_text` (0.4) because an inferred
-facet carries less evidence than a lexical match the operator can see. A
+`f`, `n_selected` is the number of **pool-effective** extracted facets (those
+that match at least one fusion candidate), and `w_facet` is provisional at
+**0.2** — deliberately below `w_text` (0.4). Facets that match no candidate
+are reported under `rejected` with reason `no_effect` and are **excluded
+from `n_selected`** so they do not dilute the numeric boost of facets that
+do match. The facet term uses the same RRF denominator as modality/text ranks
+so a full facet match cannot outrank rank-1 visual or text evidence. A
 hand-selected facet is a hard filter and contributes no boost. When the same
 facet is both extracted and hand-selected, the hard filter wins and the boost
 is dropped, so a value can never be counted twice. The response's `applied`
-structure lists only facets that actually affected scoring; values that
-matched nothing are reported under `rejected` with reason `no_effect`.
+structure lists only facets that actually affected scoring.
 
 **Rule 1 — extracted facets are boosts; only user-selected facets filter.**
 A facet the operator clicked is a hard filter, unchanged. A facet *inferred*
@@ -643,9 +646,12 @@ mitigations, all required:
 
 1. **Cache the parse.** Mirror `lib/live/query-cache.ts`, which is already a
    `globalThis`-anchored TTL+LRU built for exactly this shape.
-2. **Skip the model when there is nothing to disambiguate.** No catalog hit at
-   all, or a single unambiguous full-string alias match, goes straight to the
-   vector path. The LLM should be off the critical path for most queries.
+2. **Skip the model when there is nothing to disambiguate.** A single
+   unambiguous full-string alias match goes straight to the vector path.
+   ASCII-only queries with no catalog hit also skip. Queries with CJK/Hangul
+   (generalization cases such as `南朝鲜的片子`) still call the model even
+   without a dictionary hit. The LLM should be off the critical path for most
+   Latin scene queries.
 3. **Speculative parallel embed.** Issue `embed(full_query)` and
    `parse(query)` concurrently. When the residual equals the full query — the
    common case — the vector is already warm; otherwise re-embed. This trades
@@ -751,22 +757,44 @@ design, evaluate Option B for cheap facets; keep descriptions on assets.
 
 ## Auto-enrichment (what can be automatic)
 
+Internet-grounded title matching and an optional narrow Elastic Agent Builder/Jina MCP research step are specified separately in [`04-internet-grounded-metadata-suggest.md`](./04-internet-grounded-metadata-suggest.md). They are not implemented in the current local Suggest path.
+
 | Field | Automatic? | Approach | Confidence |
 | --- | --- | --- | --- |
-| `description` / `abstract` | Later opt-in | A separately configured caption/ASR provider, with sample-based provenance | Unknown until provider/evaluation are chosen |
+| `description` / `abstract` | Later opt-in | Draft from the asset title/filename clues and, if enabled, a uniquely matched external catalog record. Describe the identified work or title clue, never unseen video scenes; distinguish a sourced work synopsis from a description of this file | Unknown until title-match and grounding evaluation |
 | `primary_language` | Limited local suggestion | Prefer explicit media language tags, if present; never infer language from an absent track | Tag is a clue, not a verified transcript |
 | `year` | Limited local suggestion | Unambiguous filename/title year pattern only; do not guess from visuals | Low |
-| `video_type` | Later opt-in | A separately configured classifier over title/description/frames | Unknown until provider/evaluation are chosen |
-| `actors` / `country` | Manual for MVP | Do not infer cast or production country from faces/scenery | N/A |
-| `tags` | Later opt-in | Extract from confirmed description or provider output | Unknown until provider/evaluation are chosen |
+| `video_type` | Limited local or later opt-in | Recognize explicit title tokens such as `trailer` or `interview`; optionally use a verified catalog match. Do not equate the work's type with the uploaded file's type | Low until confirmed |
+| `actors` / `country` | Manual for MVP | Do not infer from a title alone; an external catalog match may be shown as sourced candidate information, never auto-confirmed metadata | N/A |
+| `tags` | Later opt-in | Extract only from explicit title tokens, confirmed description, or verified catalog fields; no imagined scene tags | Unknown until evaluation |
 
 **Product rule:** Suggest is available only inside **Library → Edit metadata**;
 it returns an unsaved draft. It never runs during ingest/import. Phase 4a can
-use local deterministic year/language clues without a new service. A caption,
-LLM, or ASR provider is **not** part of the current embedding interface; Phase
-4b needs a separate provider decision, configuration, sample/frame budget,
-timeout, cost ceiling, and evaluated output quality before enabling it.
-Credentials belong in ignored `.env` files.
+use local deterministic year/language clues without a new service. Phase 4b
+is **title-first, text-only**: normalize the saved asset title (which is often,
+but not always, derived from a filename), optionally look up candidate works
+in an approved catalog, and optionally use a separately configured text LLM
+to turn *verified input facts* into draft wording. Do not send the whole video,
+sampled frames, audio, internal media paths, or internal source URLs to that
+provider.
+The current asset does not guarantee a separately retained original filename;
+do not derive one from an internal path or silently add it to the editor DTO.
+If the original basename is needed later, design a separate safe field and
+migration. The existing embedding and query-parser interfaces do not imply a
+Phase 4b suggestion endpoint. Decide catalog/provider, attribution and reuse
+terms, lookup/input limits, timeout, cost ceiling, and quality gates before
+enabling network lookup or generation. Credentials belong in ignored `.env`
+files.
+
+For external lookup, search by normalized title and aliases, then compare
+year and work type when known. Return a small candidate list when multiple
+works fit; do not pick a result from title similarity alone. A unique match
+must retain source name, record ID/URL, matched title, and corroborating fields.
+No match or conflicting evidence yields no sourced facts. A work-level synopsis
+is not evidence of what this particular video shows; filename-only prose must
+say what the title indicates, not assert scenes, dialogue, cast appearances, or
+events. An LLM may format or summarize supplied facts but may not invent new
+ones. Any sourced summary must follow the provider's text reuse rules.
 
 The suggestion response includes field value, source, confidence, and a short
 evidence note. It never writes the asset. Merge into only untouched,
@@ -776,8 +804,8 @@ confirmed and protected until the operator explicitly chooses Replace. On
 Save, persist the reviewed value and per-field provenance with the same
 metadata revision increment. A cancelled/failed suggestion changes nothing.
 Unknown year/country/actors stay empty; guessed facts are not presented as
-confirmed catalog truth. Optional transcript/caption storage and time-coded
-evidence are separate future features.
+confirmed catalog truth. Optional video understanding, transcript/caption
+storage, and time-coded evidence are separate future features.
 
 ---
 
@@ -1059,7 +1087,7 @@ If denormalization (v2) is added later: bulk update-by-query on chunks when
 | **3.5 — Semantic assets + deterministic parser** | `meta.description_embedding` behind `ASSET_SEMANTIC_ENABLED`; catalog/regex query matcher with removable chips | Paraphrase and cross-language queries measurably improve or the flag stays off; extracted facets apply as boosts and are removable; no chunk re-embedding |
 | **3.6 — Optional EIS query parser** | EIS `completion` task endpoint (default model `google-gemini-3.5-flash-lite`) called via `_inference`; validated, boosts-only, cached, dictionary fallback | Runs correctly with `QUERY_PARSER_PROVIDER=none`; over-trigger rate measured against the parse set; timeout falls back without failing the search |
 | **4a — Local Suggest (optional to core search)** | Deterministic year/language clues in editor only | Draft only; no overwrite; save carries per-field provenance |
-| **4b — Generative Suggest (separate decision)** | Caption/classifier/ASR provider after configuration and evaluation | Provider, budget, and quality gates recorded before enablement |
+| **4b — Title-grounded Suggest (separate decision)** | Filename/title-clue drafts; optional bounded catalog lookup and text-only generation from verified facts | No video upload; ambiguous matches abstain; source, reuse terms, budget, and quality gates recorded before enablement |
 | **5 — Optional scale** | Asset text embeddings or denormalized cheap facets | Explicit model/vector lifecycle, migration, and measured latency/quality benefit |
 
 ---
@@ -1088,6 +1116,7 @@ If denormalization (v2) is added later: bulk update-by-query on chunks when
 | `semantic_text` on assets | Optional later; BM25 first (simpler, no new inference id) |
 | Country UX | **ISO-3166-1 alpha-2 stored**; 20-option country/region catalog including selected EU, CN/HK/TW/KR/JP, selected ASEAN, and existing `US` example |
 | Auto-suggest when | **Edit metadata only** (not ingest) |
+| Phase 4b input | Saved title/filename clues and optional verified catalog facts; no video, frames, audio, or internal paths sent to the provider |
 | Result grain | **Moments only**; asset text identifies videos, vector evidence proposes windows; no scene-presence claim from metadata |
 | Import metadata | Deferred; edits happen in Library for MVP |
 | Ranking knobs | `W=50–100`, lexical window `A=min(20,max(5,ceil(0.2×eligible)))`, 5 windows/asset/channel, rank constant 60, weights visual 1 / audio 1 / **text 0.4**, conditional 2-groups/video are provisional until measured |
@@ -1221,8 +1250,10 @@ The numerical candidate budgets, text weight, diversity policy, and acceptable
 latency/recall thresholds are **provisional**. Tune them only against labeled
 queries and a measured catalog; do not treat the illustrative values above as
 proven. BM25 handling of multilingual names/descriptions also needs evaluation
-before promising cross-language recall. No caption/LLM/ASR provider, model,
-cost budget, or evidence threshold has been selected; generative suggestions
-remain Phase 4b until that separate choice is made. Metadata can identify a
+before promising cross-language recall. Phase 4b still needs a decision on
+external catalog, optional text model, title-match evidence threshold,
+attribution/reuse terms, timeout, and cost budget. Measure how often saved
+titles uniquely identify a work before enabling lookup; original filenames
+are not guaranteed to be stored separately. Metadata can identify a
 video, while reliable person/event localization requires time-coded evidence
 that this MVP does not have.

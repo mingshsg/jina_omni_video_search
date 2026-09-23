@@ -3,6 +3,7 @@
 import {
   EuiBadge,
   EuiButton,
+  EuiAccordion,
   EuiCallOut,
   EuiEmptyPrompt,
   EuiFieldNumber,
@@ -27,6 +28,12 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from 'react';
 import { AppShell } from '@/components/AppShell';
+import {
+  EMPTY_FACETS,
+  facetsToApiFilters,
+  SearchFacets,
+  type SearchFacetState,
+} from '@/components/SearchFacets';
 import {
   groupSearchHitsTopK,
   oversampleForGroupedTopK,
@@ -94,6 +101,7 @@ export default function ImageSearchPage() {
   const [variantId, setVariantId] = useState('');
   const [videoId, setVideoId] = useState('');
   const [size, setSize] = useState(5);
+  const [facets, setFacets] = useState<SearchFacetState>(EMPTY_FACETS);
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [assets, setAssets] = useState<LibraryAsset[]>([]);
   const [variantIds, setVariantIds] = useState<string[]>([]);
@@ -177,6 +185,18 @@ export default function ImageSearchPage() {
     [assets, t.videoFilterAll],
   );
 
+  const facetsActiveCount = useMemo(() => {
+    let n = 0;
+    if (facets.year_from.trim()) n += 1;
+    if (facets.year_to.trim()) n += 1;
+    if (facets.country) n += 1;
+    if (facets.video_type) n += 1;
+    if (facets.primary_language) n += 1;
+    if (facets.actor_ids.length) n += 1;
+    if (facets.tags.trim()) n += 1;
+    return n;
+  }, [facets]);
+
   const variantOptions = useMemo(
     () =>
       variantIds.map((id) => {
@@ -255,11 +275,23 @@ export default function ImageSearchPage() {
 
     setSearching(true);
     try {
+      const parsedFacets = facetsToApiFilters(facets, {
+        yearInvalid: t.facetYearInvalid,
+        yearReversed: t.facetYearReversed,
+      });
+      if (!parsedFacets.ok) {
+        setError(parsedFacets.error);
+        setSearching(false);
+        return;
+      }
       const form = new FormData();
       form.append('file', imageFile);
       form.append('variant_id', variantId);
       if (videoId) form.append('video_id', videoId);
       form.append('size', String(oversampleForGroupedTopK(size)));
+      if (parsedFacets.filters) {
+        form.append('filters', JSON.stringify(parsedFacets.filters));
+      }
 
       const res = await fetch('/api/search/image', {
         method: 'POST',
@@ -278,7 +310,7 @@ export default function ImageSearchPage() {
     } finally {
       setSearching(false);
     }
-  }, [imageFile, variantId, videoId, size, t]);
+  }, [imageFile, variantId, videoId, size, facets, t]);
 
   return (
     <AppShell
@@ -348,6 +380,21 @@ export default function ImageSearchPage() {
           </EuiButton>
         </EuiFlexItem>
       </EuiFlexGroup>
+
+      <EuiSpacer size="m" />
+
+      <EuiAccordion
+        id="image-search-facets"
+        buttonContent={
+          facetsActiveCount > 0
+            ? `${t.facetsLabel} (${facetsActiveCount})`
+            : t.facetsLabel
+        }
+        paddingSize="m"
+        initialIsOpen={false}
+      >
+        <SearchFacets value={facets} onChange={setFacets} />
+      </EuiAccordion>
 
       <EuiSpacer size="m" />
 

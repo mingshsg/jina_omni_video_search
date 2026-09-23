@@ -1,0 +1,36 @@
+[
+  {
+    "id": "jina.read_url",
+    "type": "mcp",
+    "description": "Fetch a URL (page or PDF) as clean markdown. Pass `question` to get only the passages answering it instead of the whole page - far cheaper than reading the full body into context.",
+    "tags": [
+      "jina"
+    ],
+    "configuration": {
+      "connector_id": "jina-mcp",
+      "tool_name": "read_url"
+    },
+    "readonly": false,
+    "experimental": false,
+    "confirmation": {
+      "askUser": "never"
+    }
+  },
+  {
+    "id": "jina.search_web",
+    "type": "mcp",
+    "description": "Search the web. Returns titles, URLs and search-engine snippets.",
+    "tags": [
+      "jina"
+    ],
+    "configuration": {
+      "connector_id": "jina-mcp",
+      "tool_name": "search_web"
+    },
+    "readonly": false,
+    "experimental": false,
+    "confirmation": {
+      "askUser": "never"
+    }
+  }
+]

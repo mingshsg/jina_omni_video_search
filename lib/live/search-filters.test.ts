@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { LiveApiError } from './errors';
 import { durationTokenToMs } from './duration';
-import { buildLiveSearchFilters } from './search-filters';
+import {
+  buildLiveSearchFilters,
+  parseLiveSearchSortBy,
+} from './search-filters';
 import type { LiveConfig } from './config';
 
 const cfg = {
@@ -15,6 +18,17 @@ describe('durationTokenToMs', () => {
     expect(durationTokenToMs('3m')).toBe(180_000);
     expect(durationTokenToMs('24h')).toBe(86_400_000);
     expect(durationTokenToMs('1d')).toBe(86_400_000);
+  });
+});
+
+describe('parseLiveSearchSortBy', () => {
+  it('accepts rrf|visual|audio and rejects hybrid', () => {
+    expect(parseLiveSearchSortBy('rrf', 'both')).toBe('rrf');
+    expect(parseLiveSearchSortBy('visual', 'visual')).toBe('visual');
+    expect(parseLiveSearchSortBy(undefined, 'audio')).toBe('audio');
+    expect(() => parseLiveSearchSortBy('hybrid', 'visual')).toThrow(
+      LiveApiError,
+    );
   });
 });
 

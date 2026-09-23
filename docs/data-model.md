@@ -1,12 +1,13 @@
 # Data model — Elasticsearch indices
 
-**Status:** Phase 11 close-out (2026-08-26) — mappings still match
-`lib/es/indices.ts` (verified vs code).  
+**Status:** Hybrid Phase 1 (2026-09-22) — `meta.*` on `video-assets`; mappings
+match `lib/es/indices.ts` + `lib/es/asset-meta-mapping.ts`.
 **Target cluster:** Elastic Cloud Serverless (observed ES **9.6.0** in Phase 2 probe).  
 **Index names:** from `.env` — defaults `video-assets`, `video-chunks`.
 
 This document is the contract for `yarn setup-indices`. The script creates both
-indices idempotently; a second run must report no changes.
+indices idempotently and upgrades an existing `video-assets` mapping with new
+`meta` properties when missing; a second run must report no changes.
 
 ---
 
@@ -133,11 +134,124 @@ Apply via `PUT video-assets` (index name from `ES_INDEX_ASSETS`).
       },
       "error": { "type": "text", "index": false },
       "created_at": { "type": "date" },
-      "updated_at": { "type": "date" }
+      "updated_at": { "type": "date" },
+      "meta": {
+        "type": "object",
+        "properties": {
+          "description": { "type": "text" },
+          "abstract": { "type": "text" },
+          "year": { "type": "integer" },
+          "actors": { "type": "keyword" },
+          "actor_ids": { "type": "keyword" },
+          "actor_aliases": {
+            "type": "keyword",
+            "copy_to": "meta.search_text"
+          },
+          "actor_keys": { "type": "keyword" },
+          "video_type": { "type": "keyword" },
+          "primary_language": { "type": "keyword" },
+          "country": { "type": "keyword" },
+          "tags": { "type": "keyword" },
+          "tags_key": { "type": "keyword" },
+          "review": {
+            "type": "object",
+            "properties": {
+              "description": {
+                "type": "object",
+                "properties": {
+                  "source": { "type": "keyword" },
+                  "confirmed": { "type": "boolean" },
+                  "confidence": { "type": "float" }
+                }
+              },
+              "abstract": {
+                "type": "object",
+                "properties": {
+                  "source": { "type": "keyword" },
+                  "confirmed": { "type": "boolean" },
+                  "confidence": { "type": "float" }
+                }
+              },
+              "year": {
+                "type": "object",
+                "properties": {
+                  "source": { "type": "keyword" },
+                  "confirmed": { "type": "boolean" },
+                  "confidence": { "type": "float" }
+                }
+              },
+              "actors": {
+                "type": "object",
+                "properties": {
+                  "source": { "type": "keyword" },
+                  "confirmed": { "type": "boolean" },
+                  "confidence": { "type": "float" }
+                }
+              },
+              "video_type": {
+                "type": "object",
+                "properties": {
+                  "source": { "type": "keyword" },
+                  "confirmed": { "type": "boolean" },
+                  "confidence": { "type": "float" }
+                }
+              },
+              "primary_language": {
+                "type": "object",
+                "properties": {
+                  "source": { "type": "keyword" },
+                  "confirmed": { "type": "boolean" },
+                  "confidence": { "type": "float" }
+                }
+              },
+              "country": {
+                "type": "object",
+                "properties": {
+                  "source": { "type": "keyword" },
+                  "confirmed": { "type": "boolean" },
+                  "confidence": { "type": "float" }
+                }
+              },
+              "tags": {
+                "type": "object",
+                "properties": {
+                  "source": { "type": "keyword" },
+                  "confirmed": { "type": "boolean" },
+                  "confidence": { "type": "float" }
+                }
+              }
+            }
+          },
+          "revision": { "type": "long" },
+          "updated_at": { "type": "date" },
+          "search_text": {
+            "type": "text",
+            "fields": {
+              "cjk": { "type": "text", "analyzer": "cjk" }
+            }
+          }
+        }
+      }
     }
   }
 }
 ```
+
+### Editorial metadata (`meta`)
+
+Optional video-level fields owned by `PATCH /api/library/{videoId}/meta`.
+Ingest writes never replace `meta` (partial `_update` of ingest-owned fields
+only). Person IDs come from `config/people.json`; the client sends `actor_ids`
+only — display names, aliases, and keys are server-derived. See
+[plan/03-hybrid-metadata-search-plan.md](../plan/03-hybrid-metadata-search-plan.md).
+
+`yarn setup-indices` creates missing indices **and** idempotently adds new
+`meta` properties to an existing strict mapping.
+
+Every `meta.review.<field>` object has the same bounded properties:
+`source`, `confirmed`, `confidence`, `evidence`, `provider`, `source_url`,
+`retrieved_at`, and `request_id`. The abbreviated mapping above shows the first
+three; `lib/es/asset-meta-mapping.ts` is the executable source of truth.
 
 ### Status values (asset)
 

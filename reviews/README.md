@@ -2,6 +2,27 @@
 
 ## Hybrid metadata search
 
+- [`hybrid-internet-suggest-code-review-2026-09-23.md`](./hybrid-internet-suggest-code-review-2026-09-23.md)
+  — **current Internet Suggest verdict**: dedicated agent/tools are live and local fallback is safe, but timeout mismatch, unvalidated agent output, shadowed grounded descriptions, and missing actor-candidate UI block Phase 4b sign-off. [Follow-up](../todo/16-hybrid-holistic-review-and-internet-suggest-2026-09-23.md).
+- [`hybrid-metadata-search-holistic-review-2026-09-23.md`](./hybrid-metadata-search-holistic-review-2026-09-23.md)
+  — current cross-phase verdict and exact local-only Suggest internet boundary; [internet-grounded plan](../plan/04-internet-grounded-metadata-suggest.md) and [follow-up](../todo/16-hybrid-holistic-review-and-internet-suggest-2026-09-23.md).
+- [`hybrid-metadata-search-phase4a-4b-post-rebuild-review-2026-09-22.md`](./hybrid-metadata-search-phase4a-4b-post-rebuild-review-2026-09-22.md)
+  — **post-rebuild verdict**: app image and read-only Suggest route pass; 26-asset title probe confirms disclaimer-heavy drafts and no year/type/tag coverage; prior 4a/4b findings stay open. [Follow-up](../todo/14-hybrid-phase4a-4b-review-2026-09-22.md).
+- [`hybrid-metadata-search-phase4a-4b-review-2026-09-22.md`](./hybrid-metadata-search-phase4a-4b-review-2026-09-22.md)
+  — **current Phase 4a/4b verdict**: local Suggest is implemented, but search contamination, provenance loss, stalled-request handling, and unmeasured Phase 4b quality gates prevent sign-off. [Follow-up](../todo/14-hybrid-phase4a-4b-review-2026-09-22.md).
+- [`hybrid-metadata-search-phase3-3.5-3.6-review-2026-09-22.md`](./hybrid-metadata-search-phase3-3.5-3.6-review-2026-09-22.md)
+  — **current combined implementation verdict**: prior Phase 3 actor retrieval is repaired, but facet score scale, semantic candidate recall, EIS disambiguation, partial-search failures, and acceptance gates block Phase 3/3.5/3.6 sign-off. [Follow-up](../todo/11-hybrid-phase3-3.5-3.6-review-2026-09-22.md).
+- [`hybrid-metadata-search-phase3-implementation-review-2026-09-22.md`](./hybrid-metadata-search-phase3-implementation-review-2026-09-22.md)
+  — earlier Phase 3 findings; code fixes are recorded in [`hybrid-metadata-search-phase3-fixes-2026-09-22.md`](./hybrid-metadata-search-phase3-fixes-2026-09-22.md). Remaining acceptance work is tracked in the [Phase 3 follow-up](../todo/08-hybrid-phase3-implementation-review-2026-09-22.md).
+- [`hybrid-metadata-search-phase2-implementation-review-2026-09-22.md`](./hybrid-metadata-search-phase2-implementation-review-2026-09-22.md)
+  — **current Phase 2 implementation verdict**: live facet query shape works
+  on the small fixture, but exact-threshold overflow and UI year handling
+  violate filter completeness. [Follow-up](../todo/06-hybrid-phase2-implementation-review-2026-09-22.md).
+- [`hybrid-metadata-search-phase1-implementation-review-2026-09-22.md`](./hybrid-metadata-search-phase1-implementation-review-2026-09-22.md)
+  — **current Phase 1 implementation verdict**: live mapping and one indexed
+  metadata example verified; language validation and mapping-upgrade defects
+  plus missing integration/container gates prevent completion sign-off.
+  [Follow-up](../todo/05-hybrid-phase1-implementation-review-2026-09-22.md).
 - [`hybrid-metadata-search-readiness-review-r3-2026-09-22.md`](./hybrid-metadata-search-readiness-review-r3-2026-09-22.md)
   — **current verdict** for the expanded round-3 plan: not ready end to end;
   catalog deployment, actor API, metadata-write races, ready-only retrieval,

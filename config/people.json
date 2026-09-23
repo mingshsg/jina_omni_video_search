@@ -1,0 +1,61 @@
+{
+  "person:lee-jung-jae": {
+    "display": {
+      "en": "Lee Jung-jae",
+      "zh": "李政宰",
+      "ko": "이정재"
+    },
+    "aliases": [
+      "Lee Jung-jae",
+      "Lee Jungjae",
+      "Lee Jeong-jae",
+      "Jung-jae Lee",
+      "이정재",
+      "李政宰"
+    ]
+  },
+  "person:audrey-hepburn": {
+    "display": {
+      "en": "Audrey Hepburn",
+      "zh": "奥黛丽·赫本",
+      "ko": "오드리 헵번"
+    },
+    "aliases": [
+      "Audrey Hepburn",
+      "Hepburn",
+      "奥黛丽·赫本",
+      "奥黛丽赫本",
+      "오드리 헵번"
+    ]
+  },
+  "person:song-kang-ho": {
+    "display": {
+      "en": "Song Kang-ho",
+      "zh": "宋康昊",
+      "ko": "송강호"
+    },
+    "aliases": [
+      "Song Kang-ho",
+      "Song Kangho",
+      "Kang-ho Song",
+      "송강호",
+      "宋康昊"
+    ]
+  },
+  "person:gong-yoo": {
+    "display": {
+      "en": "Gong Yoo",
+      "zh": "孔刘",
+      "ko": "공유"
+    },
+    "aliases": ["Gong Yoo", "Gong Yu", "공유", "孔刘", "孔劉"]
+  },
+  "person:zhang-ziyi": {
+    "display": {
+      "en": "Zhang Ziyi",
+      "zh": "章子怡",
+      "ko": "장쯔이"
+    },
+    "aliases": ["Zhang Ziyi", "Ziyi Zhang", "章子怡", "장쯔이"]
+  }
+}

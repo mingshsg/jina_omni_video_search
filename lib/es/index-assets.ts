@@ -1,4 +1,5 @@
 import { getConfig } from '../config';
+import type { AssetMeta } from '../metadata/validate';
 import { getEsClient } from './client';
 
 /** Nested variant record stored on a video-assets document. */
@@ -60,15 +61,159 @@ export interface VideoAssetDocument {
   error?: string;
   created_at: string;
   updated_at: string;
+  /** Editorial metadata — owned by PATCH /meta, never by ingest. */
+  meta?: AssetMeta;
+}
+
+/** Ingest-owned fields only (partial update; arrays replaced wholesale). */
+export type IngestOwnedAssetFields = Omit<
+  Pick<
+    VideoAssetDocument,
+    | 'title'
+    | 'source_mode'
+    | 'source_origin_path'
+    | 'source_fingerprint'
+    | 'media_path'
+    | 'duration_ms'
+    | 'width'
+    | 'height'
+    | 'fps'
+    | 'has_audio'
+    | 'size_bytes'
+    | 'container'
+    | 'video_codec'
+    | 'playback_path'
+    | 'variants'
+    | 'status'
+    | 'job'
+    | 'updated_at'
+  >,
+  never
+> & {
+  /** Explicit null clears a previous error on partial update. */
+  error?: string | null;
+};
+
+export function ingestOwnedFieldsFromDoc(
+  doc: VideoAssetDocument,
+): IngestOwnedAssetFields {
+  return {
+    title: doc.title,
+    source_mode: doc.source_mode,
+    source_origin_path: doc.source_origin_path,
+    source_fingerprint: doc.source_fingerprint,
+    media_path: doc.media_path,
+    duration_ms: doc.duration_ms,
+    width: doc.width,
+    height: doc.height,
+    fps: doc.fps,
+    has_audio: doc.has_audio,
+    size_bytes: doc.size_bytes,
+    container: doc.container,
+    video_codec: doc.video_codec,
+    playback_path: doc.playback_path,
+    variants: doc.variants,
+    status: doc.status,
+    job: doc.job,
+    error: doc.error ?? null,
+    updated_at: doc.updated_at,
+  };
+}
+
+function esStatusCode(err: unknown): number | undefined {
+  if (
+    typeof err === 'object' &&
+    err !== null &&
+    'meta' in err &&
+    typeof (err as { meta?: { statusCode?: number } }).meta?.statusCode ===
+      'number'
+  ) {
+    return (err as { meta: { statusCode: number } }).meta.statusCode;
+  }
+  return undefined;
+}
+
+function esErrorType(err: unknown): string | undefined {
+  if (typeof err !== 'object' || err === null || !('meta' in err)) {
+    return undefined;
+  }
+  return (err as { meta?: { body?: { error?: { type?: string } } } }).meta?.body
+    ?.error?.type;
+}
+
+/**
+ * Create asset document only if absent. Does not replace existing docs
+ * (preserves editorial `meta`).
+ */
+export async function createAssetIfAbsent(
+  doc: VideoAssetDocument,
+): Promise<'created' | 'exists'> {
+  const client = getEsClient();
+  const cfg = getConfig();
+  try {
+    await client.create({
+      index: cfg.ES_INDEX_ASSETS,
+      id: doc.video_id,
+      document: doc,
+      refresh: 'wait_for',
+    });
+    return 'created';
+  } catch (err: unknown) {
+    const status = esStatusCode(err);
+    const type = esErrorType(err);
+    if (
+      status === 409 ||
+      type === 'version_conflict_engine_exception' ||
+      type === 'resource_already_exists_exception'
+    ) {
+      return 'exists';
+    }
+    throw err;
+  }
+}
+
+/**
+ * Partial update of ingest-owned fields. Never touches `meta`.
+ * Arrays (e.g. variants) are replaced wholesale. Bounded retry_on_conflict
+ * for transport version races with the metadata editor.
+ */
+export async function patchIngestOwnedFields(
+  videoId: string,
+  fields: IngestOwnedAssetFields,
+): Promise<void> {
+  const client = getEsClient();
+  const cfg = getConfig();
+  await client.update({
+    index: cfg.ES_INDEX_ASSETS,
+    id: videoId,
+    refresh: 'wait_for',
+    retry_on_conflict: 3,
+    doc: fields,
+  });
+}
+
+/**
+ * Persist ingest state without clobbering editorial metadata.
+ * First write creates the document; later writes are partial updates.
+ */
+export async function persistIngestAsset(
+  doc: VideoAssetDocument,
+): Promise<void> {
+  const created = await createAssetIfAbsent(doc);
+  if (created === 'exists') {
+    await patchIngestOwnedFields(
+      doc.video_id,
+      ingestOwnedFieldsFromDoc(doc),
+    );
+  }
 }
 
 /**
  * Upsert a video-assets document by `_id = video_id`.
- * Replaces the whole document (callers merge variants in memory first).
+ * Replaces the whole document — prefer {@link persistIngestAsset} for ingest.
+ * Kept for scripts/tests that intentionally rewrite the full doc.
  */
-export async function upsertAsset(
-  doc: VideoAssetDocument,
-): Promise<void> {
+export async function upsertAsset(doc: VideoAssetDocument): Promise<void> {
   const client = getEsClient();
   const cfg = getConfig();
   await client.index({
@@ -91,15 +236,7 @@ export async function getAsset(
     });
     return res._source ?? null;
   } catch (err: unknown) {
-    const status =
-      typeof err === 'object' &&
-      err !== null &&
-      'meta' in err &&
-      typeof (err as { meta?: { statusCode?: number } }).meta?.statusCode ===
-        'number'
-        ? (err as { meta: { statusCode: number } }).meta.statusCode
-        : undefined;
-    if (status === 404) return null;
+    if (esStatusCode(err) === 404) return null;
     throw err;
   }
 }

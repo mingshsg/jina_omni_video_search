@@ -41,13 +41,52 @@ export type UiMessages = {
   sortByRrf: string;
   sortByVisual: string;
   sortByAudio: string;
+  sortByHybrid: string;
   sortByHelp: string;
+  hybridTextLabel: string;
+  hybridTextHelp: string;
+  parseQueryLabel: string;
+  parseQueryHelp: string;
+  parseDetailTitle: string;
+  parseChipPromote: string;
+  parseChipDismissAria: string;
+  parseChipRestore: string;
+  parseChipIgnoredCount: string;
+  parseChipStatusBoosting: string;
+  parseChipStatusNoEffect: string;
+  parseChipStatusHybridOff: string;
+  parseChipStatusSnapshotUnavailable: string;
+  parseChipStatusHardFilter: string;
+  parseChipStatusFilterMode: string;
+  parseChipHintNoEffect: string;
+  parseChipHintHybridOff: string;
+  parseChipHintSnapshotUnavailable: string;
+  parseChipFilterModeNote: string;
+  parseImpliesHybridHint: string;
+  facetsReset: string;
+  facetsActiveHint: string;
+  hybridDslTitle: string;
+  hybridDslNotApplied: string;
+  queryExplainButton: string;
+  queryExplainTitle: string;
+  queryExplainHelp: string;
+  queryExplainRaw: string;
+  queryExplainHybridOn: string;
+  queryExplainHybridOff: string;
+  queryExplainFiltersNone: string;
+  scoreHybridLabel: string;
+  metadataMatchBadge: string;
   selectVariantFirst: string;
   loadingVariants: string;
   noVariants: string;
   seekingTo: string;
   groupedMoments: string;
   groupedMomentsOne: string;
+  facetsLabel: string;
+  facetYearFrom: string;
+  facetYearTo: string;
+  facetYearInvalid: string;
+  facetYearReversed: string;
 
   // Image search
   imageSearchTitle: string;
@@ -144,6 +183,7 @@ export type UiMessages = {
   actionRetry: string;
   actionRemove: string;
   actionSearch: string;
+  actionEditMeta: string;
   removeConfirm: string;
   removeNote: string;
   chunksLabel: string;
@@ -156,6 +196,45 @@ export type UiMessages = {
   batchRemoveConfirm: string;
   batchRemoveDone: string;
   selectedCount: string;
+  metaLoading: string;
+  metaLoadError: string;
+  metaSaveError: string;
+  metaConflict: string;
+  metaReload: string;
+  metaSave: string;
+  metaDescription: string;
+  metaAbstract: string;
+  metaYear: string;
+  metaActors: string;
+  metaActorsHelp: string;
+  metaVideoType: string;
+  metaLanguage: string;
+  metaCountry: string;
+  metaTags: string;
+  metaTagsHelp: string;
+  metaRevision: string;
+  metaEmptyOption: string;
+  metaSaved: string;
+  metaSuggest: string;
+  metaSuggesting: string;
+  metaSuggestCancel: string;
+  metaSuggestEmpty: string;
+  metaSuggestApplied: string;
+  metaSuggestActorCandidatesFound: string;
+  metaSuggestError: string;
+  metaSuggestTimeout: string;
+  metaSuggestHelp: string;
+  metaFieldSuggested: string;
+  metaSuggestStageQueued: string;
+  metaSuggestStagePreparing: string;
+  metaSuggestStageResearching: string;
+  metaSuggestStageValidating: string;
+  metaSuggestStageHelp: string;
+  metaActorCandidates: string;
+  metaActorCandidateAdd: string;
+  metaActorCandidateAdded: string;
+  metaActorCandidateUnresolved: string;
+  metaActorCandidateSource: string;
 
   // Live video
   liveTitle: string;
@@ -259,8 +338,7 @@ export const uiEn: UiMessages = {
   variantLabel: 'Variant',
   variantAllHint: 'Select an indexed variant',
   topKLabel: 'Top-k',
-  topKHelp:
-    'Number of result groups. Nearby windows from the same video (within 2× chunk length) count as one.',
+  topKHelp: 'Result groups',
   videoFilterLabel: 'Video',
   videoFilterAll: 'All videos',
   resultsTitle: 'Results',
@@ -277,14 +355,62 @@ export const uiEn: UiMessages = {
   sortByRrf: 'RRF (fused)',
   sortByVisual: 'Visual',
   sortByAudio: 'Audio',
-  sortByHelp:
-    'RRF fuses visual+audio and is only available when modality is Both. Visual/audio are knn similarity scores.',
+  sortByHybrid: 'Hybrid (text+vector)',
+  sortByHelp: '',
+  hybridTextLabel: 'Include text (hybrid)',
+  hybridTextHelp:
+    'Opt-in: BM25 over video metadata fused with vector ranks. Facet filters are optional — hybrid works with no filters. Default off = pure vector search.',
+  parseQueryLabel: 'Smart parse',
+  parseQueryHelp: '',
+  parseDetailTitle: 'Parse detail',
+  parseChipPromote: 'Use as filter',
+  parseChipDismissAria: 'Ignore this parse',
+  parseChipRestore: 'Restore',
+  parseChipIgnoredCount: '{count} ignored',
+  parseChipStatusBoosting: 'Boosting',
+  parseChipStatusNoEffect: 'Not in current results',
+  parseChipStatusHybridOff: 'Hybrid text is off',
+  parseChipStatusSnapshotUnavailable: 'Could not verify',
+  parseChipStatusHardFilter: 'Already filtered',
+  parseChipStatusFilterMode: 'Always filtered (eval mode)',
+  parseChipHintNoEffect:
+    'No result in this batch matched — a boost can only re-rank what is already found. Use as filter re-scans the whole catalog and can still find matches.',
+  parseChipHintHybridOff:
+    'Smart parse ran without hybrid text on, so this was not scored. Use as filter does not need hybrid text — it filters directly.',
+  parseChipHintSnapshotUnavailable:
+    'Could not check this against the current results this time. Use as filter still applies it directly.',
+  parseChipFilterModeNote:
+    'QUERY_PARSER_FACET_MODE=filter — extracted facets are always applied as hard filters, not scored as boosts.',
+  parseImpliesHybridHint:
+    'Smart parse turns on Include text so extracted facets can boost hybrid ranking. Without hybrid, parses are reported only (hybrid_text_required). Detected chips: promote to a hard filter, or dismiss to ignore this parse.',
+  hybridDslTitle: 'Hybrid / query DSL',
+  hybridDslNotApplied:
+    'Parse ran but hybrid text is off — BM25 and facet boosts were not sent to Elasticsearch.',
+  queryExplainButton: 'Executed query',
+  queryExplainTitle: 'Executed query',
+  queryExplainHelp:
+    'What this search actually sent and how it ranked. Hybrid does not require facet filters — only the “Include text” switch.',
+  queryExplainRaw: 'Raw request + response meta',
+  queryExplainHybridOn:
+    'Hybrid text+vector (BM25 metadata fused with knn; filters optional)',
+  queryExplainHybridOff: 'Pure vector (no BM25 text channel)',
+  queryExplainFiltersNone: 'none (all eligible videos for this variant)',
+  scoreHybridLabel: 'Hybrid',
+  metadataMatchBadge: 'Video metadata matched',
   selectVariantFirst: 'Choose a variant before searching.',
   loadingVariants: 'Loading variants…',
   noVariants: 'No ready variants yet. Import a video first.',
   seekingTo: 'Seek to',
   groupedMoments: '{count} moments',
   groupedMomentsOne: '1 moment',
+
+  facetsLabel: 'Filters',
+  facetsReset: 'Reset filters',
+  facetsActiveHint: 'Hard filters narrow eligible videos before ranking.',
+  facetYearFrom: 'Year from',
+  facetYearTo: 'Year to',
+  facetYearInvalid: 'Year must be a whole number (e.g. 1960)',
+  facetYearReversed: 'Year from must be ≤ year to',
 
   imageSearchTitle: 'Image search',
   imageSearchSubtitle: 'Upload a picture · find matching video moments',
@@ -379,6 +505,7 @@ export const uiEn: UiMessages = {
   actionRetry: 'Re-index',
   actionRemove: 'Remove',
   actionSearch: 'Search',
+  actionEditMeta: 'Edit metadata',
   removeConfirm: 'Remove this video from the search index? Media files on disk are kept.',
   removeNote: 'Removes Elasticsearch docs only; files stay on disk.',
   chunksLabel: 'chunks',
@@ -392,6 +519,48 @@ export const uiEn: UiMessages = {
     'Remove {count} video(s) from the search index? Media files on disk are kept.',
   batchRemoveDone: 'Removed {removed} of {requested} from index',
   selectedCount: '{count} selected',
+  metaLoading: 'Loading metadata…',
+  metaLoadError: 'Could not load metadata',
+  metaSaveError: 'Could not save metadata',
+  metaConflict: 'Someone else saved first — reload and try again.',
+  metaReload: 'Reload current metadata',
+  metaSave: 'Save metadata',
+  metaDescription: 'Description',
+  metaAbstract: 'Abstract',
+  metaYear: 'Year',
+  metaActors: 'Actors',
+  metaActorsHelp: 'Pick from the person catalog (IDs only — no free-text names).',
+  metaVideoType: 'Video type',
+  metaLanguage: 'Primary language',
+  metaCountry: 'Production country/region',
+  metaTags: 'Tags',
+  metaTagsHelp: 'Comma-separated',
+  metaRevision: 'Revision',
+  metaEmptyOption: '—',
+  metaSaved: 'Metadata saved',
+  metaSuggest: 'Suggest',
+  metaSuggesting: 'Suggesting…',
+  metaSuggestCancel: 'Cancel suggest',
+  metaSuggestEmpty: 'No local clues in the title (year / type / work name).',
+  metaSuggestApplied: 'Filled empty fields from available title and sourced work evidence. Review before Save.',
+  metaSuggestActorCandidatesFound:
+    'Actor candidates are ready for review; unresolved identities remain read-only.',
+  metaSuggestError: 'Could not suggest metadata',
+  metaSuggestTimeout: 'Suggest was stopped — you can still Save your draft.',
+  metaSuggestHelp:
+    'Suggest starts a background research request and keeps Save available. External work facts include source evidence and never overwrite fields you already filled.',
+  metaFieldSuggested: 'Suggested',
+  metaSuggestStageQueued: 'Suggest queued',
+  metaSuggestStagePreparing: 'Preparing title clues',
+  metaSuggestStageResearching: 'Agent is searching and reading public sources',
+  metaSuggestStageValidating: 'Validating sources and structured fields',
+  metaSuggestStageHelp:
+    'This may take about a minute. You can keep editing or save the current draft while it runs.',
+  metaActorCandidates: 'Sourced cast candidates for review',
+  metaActorCandidateAdd: 'Add matched person',
+  metaActorCandidateAdded: 'Added',
+  metaActorCandidateUnresolved: 'Not in the controlled person catalog',
+  metaActorCandidateSource: 'source',
 
   liveTitle: 'Live video',
   liveDescription:
@@ -501,8 +670,7 @@ export const uiZh: UiMessages = {
   variantLabel: '变体',
   variantAllHint: '选择已索引的变体',
   topKLabel: 'Top-k',
-  topKHelp:
-    '结果组数量。同一视频中时间接近的窗口（跨度 ≤ 2×分块长度）计为 1 条。',
+  topKHelp: '结果组数',
   videoFilterLabel: '视频',
   videoFilterAll: '全部视频',
   resultsTitle: '结果',
@@ -519,14 +687,61 @@ export const uiZh: UiMessages = {
   sortByRrf: 'RRF 融合',
   sortByVisual: '视觉',
   sortByAudio: '音频',
-  sortByHelp:
-    'RRF 融合视觉与音频，仅在模态为「视觉+音频」时可选。视觉/音频为 knn 相似度分。',
+  sortByHybrid: '混合（文本+向量）',
+  sortByHelp: '',
+  hybridTextLabel: '纳入文本（混合检索）',
+  hybridTextHelp:
+    '可选开启：对视频元数据做 BM25，再与向量排序融合。筛选器是可选的——无筛选也可混合检索。默认关闭即为纯向量检索。',
+  parseQueryLabel: '智能解析',
+  parseQueryHelp: '',
+  parseDetailTitle: '解析详情',
+  parseChipPromote: '用作筛选',
+  parseChipDismissAria: '忽略本次解析',
+  parseChipRestore: '恢复',
+  parseChipIgnoredCount: '已忽略 {count} 项',
+  parseChipStatusBoosting: '正在 boost',
+  parseChipStatusNoEffect: '当前结果中未命中',
+  parseChipStatusHybridOff: '未开启纳入文本',
+  parseChipStatusSnapshotUnavailable: '本次无法校验',
+  parseChipStatusHardFilter: '已被硬筛选覆盖',
+  parseChipStatusFilterMode: '始终硬筛选（评估模式）',
+  parseChipHintNoEffect:
+    '本轮候选结果里没有命中——boost 只能给已在候选池中的结果加权。用作筛选会重新扫描整个片库，仍可能找到匹配。',
+  parseChipHintHybridOff:
+    '智能解析在未开启纳入文本的情况下运行，因此未参与排序。用作筛选不依赖纳入文本，会直接生效。',
+  parseChipHintSnapshotUnavailable:
+    '本次未能校验该值与当前结果的匹配情况。用作筛选仍会直接生效。',
+  parseChipFilterModeNote:
+    'QUERY_PARSER_FACET_MODE=filter —— 抽取的 facet 始终作为硬筛选生效，不参与排序 boost。',
+  parseImpliesHybridHint:
+    '开启智能解析会同时打开「纳入文本」，以便抽取的 facet 参与混合排序 boost。未开 hybrid 时解析仅作报告（hybrid_text_required）。识别出的 chip：可升为硬筛选，或忽略本次解析。',
+  hybridDslTitle: '混合检索 / 查询 DSL',
+  hybridDslNotApplied:
+    '已解析但未开启混合文本通道 — BM25 与 facet boost 未发送到 Elasticsearch。',
+  queryExplainButton: '已执行查询',
+  queryExplainTitle: '已执行查询',
+  queryExplainHelp:
+    '本次搜索实际发送的请求与排序方式。混合检索不依赖筛选器，只需打开「纳入文本」。',
+  queryExplainRaw: '原始请求 + 响应 meta',
+  queryExplainHybridOn: '混合文本+向量（BM25 元数据与 knn 融合；筛选可选）',
+  queryExplainHybridOff: '纯向量（无 BM25 文本通道）',
+  queryExplainFiltersNone: '无（该变体下全部就绪视频）',
+  scoreHybridLabel: '混合',
+  metadataMatchBadge: '视频元数据匹配',
   selectVariantFirst: '请先选择变体再检索。',
   loadingVariants: '正在加载变体…',
   noVariants: '尚无可用变体，请先导入视频。',
   seekingTo: '跳转到',
   groupedMoments: '{count} 个瞬间',
   groupedMomentsOne: '1 个瞬间',
+
+  facetsLabel: '筛选',
+  facetsReset: '重置筛选',
+  facetsActiveHint: '硬筛选会在排序前缩小候选视频范围。',
+  facetYearFrom: '起始年份',
+  facetYearTo: '结束年份',
+  facetYearInvalid: '年份须为整数（例如 1960）',
+  facetYearReversed: '起始年份须 ≤ 结束年份',
 
   imageSearchTitle: '以图搜片',
   imageSearchSubtitle: '上传图片 · 匹配视频画面瞬间',
@@ -621,6 +836,7 @@ export const uiZh: UiMessages = {
   actionRetry: '重新索引',
   actionRemove: '移除',
   actionSearch: '检索',
+  actionEditMeta: '编辑元数据',
   removeConfirm: '从检索索引中移除此视频？磁盘上的媒体文件会保留。',
   removeNote: '仅删除 Elasticsearch 文档；磁盘文件保留。',
   chunksLabel: '片段',
@@ -633,6 +849,47 @@ export const uiZh: UiMessages = {
   batchRemoveConfirm: '从检索索引中移除 {count} 个视频？磁盘上的媒体文件会保留。',
   batchRemoveDone: '已从索引移除 {removed}/{requested} 个',
   selectedCount: '已选 {count} 个',
+  metaLoading: '正在加载元数据…',
+  metaLoadError: '无法加载元数据',
+  metaSaveError: '无法保存元数据',
+  metaConflict: '他人已先保存 — 请重新加载后再试。',
+  metaReload: '重新加载当前元数据',
+  metaSave: '保存元数据',
+  metaDescription: '简介',
+  metaAbstract: '摘要',
+  metaYear: '年份',
+  metaActors: '演员',
+  metaActorsHelp: '从人物目录选择（仅 ID，不接受自由文本姓名）。',
+  metaVideoType: '视频类型',
+  metaLanguage: '主要语言',
+  metaCountry: '制作国家/地区',
+  metaTags: '标签',
+  metaTagsHelp: '逗号分隔',
+  metaRevision: '修订号',
+  metaEmptyOption: '—',
+  metaSaved: '元数据已保存',
+  metaSuggest: '建议填写',
+  metaSuggesting: '正在建议…',
+  metaSuggestCancel: '取消建议',
+  metaSuggestEmpty: '标题中没有可用的本地线索（年份/类型/作品名）。',
+  metaSuggestApplied: '已根据标题线索和有来源的作品资料填入空字段，请审核后再保存。',
+  metaSuggestActorCandidatesFound:
+    '已找到演员候选，请人工检查；未匹配到人物目录的候选只供参考。',
+  metaSuggestError: '无法生成元数据建议',
+  metaSuggestTimeout: '建议任务已停止——你仍可保存当前草稿。',
+  metaSuggestHelp:
+    '建议功能会启动后台资料查询，期间仍可继续编辑或保存。外部作品资料会附带来源，也不会覆盖已填写字段。',
+  metaFieldSuggested: '建议',
+  metaSuggestStageQueued: '建议任务已排队',
+  metaSuggestStagePreparing: '正在整理标题线索',
+  metaSuggestStageResearching: 'Agent 正在搜索并阅读公开资料',
+  metaSuggestStageValidating: '正在校验来源和结构化字段',
+  metaSuggestStageHelp: '此过程可能需要约一分钟；等待期间可以继续编辑或保存当前草稿。',
+  metaActorCandidates: '待审核的有来源演员候选',
+  metaActorCandidateAdd: '加入已匹配人物',
+  metaActorCandidateAdded: '已加入',
+  metaActorCandidateUnresolved: '尚未收录到受控人物目录',
+  metaActorCandidateSource: '来源',
 
   liveTitle: '直播视频',
   liveDescription:

@@ -8,24 +8,39 @@ import {
   QueryImageError,
   QUERY_IMAGE_UPLOAD_MAX_BYTES,
 } from '@/lib/media/prepare-query-image';
+import {
+  parseSearchFilters,
+  searchFiltersSchema,
+  SearchFilterError,
+  type NormalizedSearchFilters,
+} from '@/lib/metadata/search-filters';
 
 export const runtime = 'nodejs';
 
-const jsonBodySchema = z.object({
-  image_base64: z.string().min(1),
-  mime: z.string().trim().optional(),
+/** Shared with JSON and multipart — same bounds for both transports. */
+const commonImageSearchFields = {
   variant_id: z.string().trim().min(1).max(64),
   video_id: z
     .union([z.string().trim().min(1).max(128), z.null()])
     .optional()
     .default(null),
   size: z.number().int().min(1).max(100).optional().default(20),
+  filters: searchFiltersSchema,
+};
+
+const jsonBodySchema = z.object({
+  image_base64: z.string().min(1),
+  mime: z.string().trim().optional(),
+  ...commonImageSearchFields,
 });
+
+const multipartMetaSchema = z.object(commonImageSearchFields);
 
 type SearchErrorCode =
   | 'SEARCH_INVALID_REQUEST'
   | 'SEARCH_IMAGE_INVALID'
   | 'SEARCH_IMAGE_TOO_LARGE'
+  | 'FILTER_SCOPE_TOO_LARGE'
   | 'SEARCH_FAILED';
 
 function errorResponse(
@@ -51,11 +66,22 @@ function mapImageError(err: QueryImageError) {
   }
 }
 
-function parseSize(raw: FormDataEntryValue | null): number | undefined {
-  if (typeof raw !== 'string' || !raw.trim()) return undefined;
-  const n = Number(raw);
-  if (!Number.isFinite(n)) return undefined;
-  return Math.trunc(n);
+function parseFiltersField(raw: FormDataEntryValue | null): unknown {
+  if (raw == null || raw === '') return null;
+  if (typeof raw !== 'string') {
+    throw new SearchFilterError(
+      'SEARCH_INVALID_REQUEST',
+      'filters must be a JSON string in multipart',
+    );
+  }
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch {
+    throw new SearchFilterError(
+      'SEARCH_INVALID_REQUEST',
+      'filters must be valid JSON',
+    );
+  }
 }
 
 async function readMultipart(request: Request): Promise<{
@@ -64,6 +90,7 @@ async function readMultipart(request: Request): Promise<{
   variantId: string;
   videoId: string | null;
   size: number;
+  filters: NormalizedSearchFilters | null;
 }> {
   const form = await request.formData();
   const file = form.get('file') ?? form.get('image');
@@ -79,21 +106,42 @@ async function readMultipart(request: Request): Promise<{
       `Image upload exceeds ${QUERY_IMAGE_UPLOAD_MAX_BYTES} bytes before compression`,
     );
   }
-  const variantRaw = form.get('variant_id');
-  if (typeof variantRaw !== 'string' || !variantRaw.trim()) {
-    throw new Error('variant_id is required');
+
+  const sizeRaw = form.get('size');
+  let sizeValue: unknown = undefined;
+  if (typeof sizeRaw === 'string' && sizeRaw.trim()) {
+    const n = Number(sizeRaw);
+    sizeValue = Number.isFinite(n) ? n : sizeRaw;
   }
+
   const videoRaw = form.get('video_id');
-  const videoId =
-    typeof videoRaw === 'string' && videoRaw.trim() ? videoRaw.trim() : null;
-  const size = parseSize(form.get('size')) ?? 20;
+  const metaParsed = multipartMetaSchema.safeParse({
+    variant_id: form.get('variant_id'),
+    video_id:
+      typeof videoRaw === 'string' && videoRaw.trim()
+        ? videoRaw.trim()
+        : null,
+    size: sizeValue,
+    filters: parseFiltersField(form.get('filters')),
+  });
+  if (!metaParsed.success) {
+    throw new SearchFilterError(
+      'SEARCH_INVALID_REQUEST',
+      metaParsed.error.issues
+        .map((i) => `${i.path.join('.')}: ${i.message}`)
+        .join('; '),
+    );
+  }
+
+  const filters = parseSearchFilters(metaParsed.data.filters ?? null);
   const ab = await file.arrayBuffer();
   return {
     buffer: Buffer.from(ab),
     mime: file.type || undefined,
-    variantId: variantRaw.trim(),
-    videoId,
-    size,
+    variantId: metaParsed.data.variant_id,
+    videoId: metaParsed.data.video_id,
+    size: metaParsed.data.size,
+    filters,
   };
 }
 
@@ -104,6 +152,7 @@ export async function POST(request: Request) {
   let variantId: string;
   let videoId: string | null;
   let size: number;
+  let filters: NormalizedSearchFilters | null = null;
 
   try {
     if (contentType.includes('multipart/form-data')) {
@@ -113,6 +162,7 @@ export async function POST(request: Request) {
       variantId = parsed.variantId;
       videoId = parsed.videoId;
       size = parsed.size;
+      filters = parsed.filters;
     } else if (contentType.includes('application/json')) {
       const json: unknown = await request.json();
       const parsed = jsonBodySchema.safeParse(json);
@@ -131,6 +181,7 @@ export async function POST(request: Request) {
       variantId = parsed.data.variant_id;
       videoId = parsed.data.video_id;
       size = parsed.data.size;
+      filters = parseSearchFilters(parsed.data.filters ?? null);
     } else {
       return errorResponse(
         'SEARCH_INVALID_REQUEST',
@@ -140,6 +191,13 @@ export async function POST(request: Request) {
     }
   } catch (err) {
     if (err instanceof QueryImageError) return mapImageError(err);
+    if (err instanceof SearchFilterError) {
+      return errorResponse(
+        err.code as SearchErrorCode,
+        err.message,
+        err.status,
+      );
+    }
     const message = err instanceof Error ? err.message : 'Invalid request';
     return errorResponse('SEARCH_INVALID_REQUEST', message, 400);
   }
@@ -152,6 +210,7 @@ export async function POST(request: Request) {
       variantId,
       videoId,
       size,
+      filters,
     });
 
     return NextResponse.json({
@@ -183,10 +242,19 @@ export async function POST(request: Request) {
         took_ms: result.took_ms,
         image_bytes: result.image_bytes,
         query_mime: prepared.mime,
+        filters: filters ?? null,
+        filter: result.filter_meta ?? null,
       },
     });
   } catch (err) {
     if (err instanceof QueryImageError) return mapImageError(err);
+    if (err instanceof SearchFilterError) {
+      return errorResponse(
+        err.code as SearchErrorCode,
+        err.message,
+        err.status,
+      );
+    }
     const message =
       err instanceof Error ? err.message : 'Image search failed unexpectedly';
     const safe = message.replace(/ApiKey\s+\S+/gi, 'ApiKey [redacted]');

@@ -3,7 +3,7 @@ import type { AppConfig } from '../config';
 export type SearchModality = 'visual' | 'audio' | 'both';
 export type ModalityBadge = 'visual' | 'audio' | 'both';
 /** Hit ordering. `rrf` is fused rank; `visual` / `audio` use knn similarity. */
-export type SearchSortBy = 'rrf' | 'visual' | 'audio';
+export type SearchSortBy = 'rrf' | 'visual' | 'audio' | 'hybrid';
 
 export interface SearchHit {
   chunk_id: string;
@@ -29,6 +29,11 @@ export interface SearchHit {
   rank_audio: number | null;
   modality_badge: ModalityBadge;
   thumb_url: string;
+  /** Present on hybrid hits. */
+  score_kind?: 'hybrid_rrf' | 'knn' | 'rrf';
+  rank_text?: number | null;
+  asset_text_score?: number | null;
+  metadata_match?: boolean;
 }
 
 export type QueryVectorMode =
@@ -249,6 +254,9 @@ export function pickPrimaryHits(
       return visualHits;
     case 'audio':
       return audioHits;
+    case 'hybrid':
+      // Hybrid fusion uses searchChunksHybrid; vector executeChunkSearch must not.
+      throw new Error('pickPrimaryHits does not support sort_by=hybrid');
     default: {
       const _exhaustive: never = sortBy;
       return _exhaustive;

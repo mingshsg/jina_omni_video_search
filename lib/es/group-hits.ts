@@ -163,12 +163,59 @@ export function groupSearchHits<T extends GroupableHit>(
   return groups;
 }
 
-/** Group then keep at most `groupTopK` groups (by ranked order). */
+/** Default max temporal groups kept per video when filling top-k. */
+export const MAX_GROUPS_PER_VIDEO = 2;
+
+/**
+ * Group then keep at most `groupTopK` groups (by ranked order).
+ * Prefer at most `maxPerVideo` groups per video while other videos can fill
+ * the page; relax the cap when too few distinct videos qualify.
+ */
 export function groupSearchHitsTopK<T extends GroupableHit>(
   hits: T[],
   chunkWindowMs: number,
   groupTopK: number,
+  options?: { maxPerVideo?: number },
 ): SearchHitGroup<T>[] {
   const k = Math.max(1, Math.floor(groupTopK));
-  return groupSearchHits(hits, chunkWindowMs).slice(0, k);
+  const maxPerVideo = Math.max(
+    1,
+    Math.floor(options?.maxPerVideo ?? MAX_GROUPS_PER_VIDEO),
+  );
+  const groups = groupSearchHits(hits, chunkWindowMs);
+  if (groups.length <= k) return groups;
+
+  const distinctVideos = new Set(groups.map((g) => g.video_id)).size;
+  // Relax when every available video would still leave the page under-filled
+  // even if we take the per-video max from each.
+  const relax = distinctVideos * maxPerVideo < k;
+
+  const selected: SearchHitGroup<T>[] = [];
+  const perVideo = new Map<string, number>();
+
+  for (const group of groups) {
+    if (selected.length >= k) break;
+    const n = perVideo.get(group.video_id) ?? 0;
+    if (!relax && n >= maxPerVideo) continue;
+    perVideo.set(group.video_id, n + 1);
+    selected.push(group);
+  }
+
+  // If the preference skipped too many, backfill in original order.
+  if (selected.length < k) {
+    const taken = new Set(selected.map((g) => g.key));
+    for (const group of groups) {
+      if (selected.length >= k) break;
+      if (taken.has(group.key)) continue;
+      selected.push(group);
+    }
+    // Preserve ranked order after backfill.
+    selected.sort(
+      (a, b) =>
+        groups.findIndex((g) => g.key === a.key) -
+        groups.findIndex((g) => g.key === b.key),
+    );
+  }
+
+  return selected.slice(0, k);
 }

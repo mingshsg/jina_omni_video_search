@@ -44,8 +44,24 @@ function minimalConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     PLAYBACK_MAX_HEIGHT: 720,
     DEFAULT_LOCALE: 'zh',
     SCHEMA_VERSION: '1',
+    ASSET_SEMANTIC_ENABLED: false,
+    QUERY_PARSER_PROVIDER: 'dictionary',
+    QUERY_PARSER_INFERENCE_ID: '',
+    QUERY_PARSER_TIMEOUT_MS: 800,
+    QUERY_PARSER_MAX_TOKENS: 256,
+    QUERY_PARSER_FACET_MODE: 'boost',
+    QUERY_PARSER_CACHE_TTL_MS: 300_000,
+    QUERY_PARSER_CACHE_MAX: 128,
+    QUERY_PARSER_CONCURRENCY: 2,
+    SUGGEST_WEB_PROVIDER: 'none',
+    SUGGEST_WEB_TIMEOUT_MS: 6_000,
+    SUGGEST_WEB_MAX_READS: 2,
+    KIBANA_URL: '',
+    KIBANA_API_KEY: '',
+    SUGGEST_AGENT_ID: '',
+    SUGGEST_AGENT_CONNECTOR_ID: '',
     ...overrides,
-  };
+  } as AppConfig;
 }
 
 describe('chunk presets', () => {

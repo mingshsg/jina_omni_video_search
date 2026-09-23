@@ -1,0 +1,206 @@
+[
+  {
+    "id": "jina.deduplicate_strings",
+    "type": "mcp",
+    "description": "Select the top-k semantically distinct strings from a list, dropping near-duplicates.",
+    "tags": [
+      "jina"
+    ],
+    "configuration": {
+      "connector_id": "jina-mcp",
+      "tool_name": "deduplicate_strings"
+    },
+    "readonly": false,
+    "experimental": false,
+    "confirmation": {
+      "askUser": "never"
+    }
+  },
+  {
+    "id": "jina.extract_pdf",
+    "type": "mcp",
+    "description": "Extract figures, tables and equations from a PDF as images, by arXiv id or URL.",
+    "tags": [
+      "jina"
+    ],
+    "configuration": {
+      "connector_id": "jina-mcp",
+      "tool_name": "extract_pdf"
+    },
+    "readonly": false,
+    "experimental": false,
+    "confirmation": {
+      "askUser": "never"
+    }
+  },
+  {
+    "id": "jina.read_url",
+    "type": "mcp",
+    "description": "Fetch a URL (page or PDF) as clean markdown. Pass `question` to get only the passages answering it instead of the whole page - far cheaper than reading the full body into context.",
+    "tags": [
+      "jina"
+    ],
+    "configuration": {
+      "connector_id": "jina-mcp",
+      "tool_name": "read_url"
+    },
+    "readonly": false,
+    "experimental": false,
+    "confirmation": {
+      "askUser": "never"
+    }
+  },
+  {
+    "id": "jina.guess_datetime_url",
+    "type": "mcp",
+    "description": "Guess when a page was published or last updated, with a confidence score. Checks HTTP headers, metadata, Schema.org, visible dates, feeds and sitemaps.",
+    "tags": [
+      "jina"
+    ],
+    "configuration": {
+      "connector_id": "jina-mcp",
+      "tool_name": "guess_datetime_url"
+    },
+    "readonly": false,
+    "experimental": false,
+    "confirmation": {
+      "askUser": "never"
+    }
+  },
+  {
+    "id": "jina.search_jina_blog",
+    "type": "mcp",
+    "description": "Search Jina AI's news and blog at jina.ai/news: product announcements, model releases, technical write-ups.",
+    "tags": [
+      "jina"
+    ],
+    "configuration": {
+      "connector_id": "jina-mcp",
+      "tool_name": "search_jina_blog"
+    },
+    "readonly": false,
+    "experimental": false,
+    "confirmation": {
+      "askUser": "never"
+    }
+  },
+  {
+    "id": "jina.search_images",
+    "type": "mcp",
+    "description": "Search the web for images. Returns base64 JPEGs by default.",
+    "tags": [
+      "jina"
+    ],
+    "configuration": {
+      "connector_id": "jina-mcp",
+      "tool_name": "search_images"
+    },
+    "readonly": false,
+    "experimental": false,
+    "confirmation": {
+      "askUser": "never"
+    }
+  },
+  {
+    "id": "jina.primer",
+    "type": "mcp",
+    "description": "Current time, user location and network environment for the session. Use before answering anything time- or location-dependent.",
+    "tags": [
+      "jina"
+    ],
+    "configuration": {
+      "connector_id": "jina-mcp",
+      "tool_name": "primer"
+    },
+    "readonly": false,
+    "experimental": false,
+    "confirmation": {
+      "askUser": "never"
+    }
+  },
+  {
+    "id": "jina.capture_screenshot_url",
+    "type": "mcp",
+    "description": "Screenshot a page as base64 JPEG. Use when the page must be seen rather than read.",
+    "tags": [
+      "jina"
+    ],
+    "configuration": {
+      "connector_id": "jina-mcp",
+      "tool_name": "capture_screenshot_url"
+    },
+    "readonly": false,
+    "experimental": false,
+    "confirmation": {
+      "askUser": "never"
+    }
+  },
+  {
+    "id": "jina.search_arxiv",
+    "type": "mcp",
+    "description": "Search arXiv preprints (physics, maths, CS, quantitative biology and finance).",
+    "tags": [
+      "jina"
+    ],
+    "configuration": {
+      "connector_id": "jina-mcp",
+      "tool_name": "search_arxiv"
+    },
+    "readonly": false,
+    "experimental": false,
+    "confirmation": {
+      "askUser": "never"
+    }
+  },
+  {
+    "id": "jina.sort_by_relevance",
+    "type": "mcp",
+    "description": "Rerank documents by relevance to a query, using Jina Reranker.",
+    "tags": [
+      "jina"
+    ],
+    "configuration": {
+      "connector_id": "jina-mcp",
+      "tool_name": "sort_by_relevance"
+    },
+    "readonly": false,
+    "experimental": false,
+    "confirmation": {
+      "askUser": "never"
+    }
+  },
+  {
+    "id": "jina.search_ssrn",
+    "type": "mcp",
+    "description": "Search SSRN working papers (social science, economics, law, finance, management).",
+    "tags": [
+      "jina"
+    ],
+    "configuration": {
+      "connector_id": "jina-mcp",
+      "tool_name": "search_ssrn"
+    },
+    "readonly": false,
+    "experimental": false,
+    "confirmation": {
+      "askUser": "never"
+    }
+  },
+  {
+    "id": "jina.search_web",
+    "type": "mcp",
+    "description": "Search the web. Returns titles, URLs and search-engine snippets.",
+    "tags": [
+      "jina"
+    ],
+    "configuration": {
+      "connector_id": "jina-mcp",
+      "tool_name": "search_web"
+    },
+    "readonly": false,
+    "experimental": false,
+    "confirmation": {
+      "askUser": "never"
+    }
+  }
+]

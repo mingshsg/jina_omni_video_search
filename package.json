@@ -22,7 +22,11 @@
     "test": "vitest run",
     "test-video-pipeline": "tsx scripts/test-video-pipeline.ts",
     "smoke-phase8-search": "tsx scripts/smoke-phase8-search.ts",
-    "phase10-e2e": "tsx scripts/phase10-e2e.ts"
+    "phase10-e2e": "tsx scripts/phase10-e2e.ts",
+    "probe-query-parser": "tsx scripts/probe-query-parser.ts",
+    "probe-jina-suggest": "tsx scripts/probe-jina-suggest.ts",
+    "download-agent-builder-artefacts": "tsx scripts/download-agent-builder-artefacts.ts",
+    "ensure-suggest-agent": "tsx scripts/ensure-suggest-agent.ts"
   },
   "dependencies": {
     "@elastic/datemath": "^5.0.3",

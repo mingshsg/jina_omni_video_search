@@ -60,3 +60,22 @@ export function resetEmbedConcurrencyGate(): void {
   cachedGate = null;
   cachedLimit = null;
 }
+
+let parserGate: ConcurrencyGate | null = null;
+let parserGateLimit: number | null = null;
+
+/** Parser-only gate — never share EMBED_CONCURRENCY (Phase 3.6). */
+export function getParserConcurrencyGate(cfg?: AppConfig): ConcurrencyGate {
+  const config = cfg ?? getConfig();
+  const limit = config.QUERY_PARSER_CONCURRENCY;
+  if (!parserGate || parserGateLimit !== limit) {
+    parserGate = new ConcurrencyGate(limit);
+    parserGateLimit = limit;
+  }
+  return parserGate;
+}
+
+export function resetParserConcurrencyGate(): void {
+  parserGate = null;
+  parserGateLimit = null;
+}

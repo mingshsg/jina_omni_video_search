@@ -174,12 +174,62 @@ yarn phase10-e2e
 
 ---
 
+## Hybrid Phase 1 — analysis plugin probe (2026-09-22)
+
+**Measured** against the project Elasticsearch (Serverless; root API reports
+target **9.6.0**). `GET /_nodes/plugins` is unavailable on Serverless; capability
+was probed via the Analyze API.
+
+| Analyzer / filter | Result |
+| --- | --- |
+| `cjk` | **available** (bigrams: `李政宰` → `李政`, `政宰`) |
+| `standard` | available (Han per character — unsafe alone for CJK names) |
+| `nori` | **available** |
+| `smartcn` | **available** |
+| `icu_analyzer` / `icu_folding` | **available** |
+| phonetic `double_metaphone` | **available** |
+
+**Frozen mapping choice:** `meta.search_text` uses `standard` plus sub-field
+`cjk` (`analyzer: cjk`). Preferring `nori` / `smartcn` / phonetic on the
+mapping requires a reindex; defer until measured need.
+
+Person catalog: `config/people.json` (not under `data/`). `Dockerfile` copies
+`config/` into the standalone runner.
+
+---
+
+## Hybrid Phase 3.5 — asset semantic mapping upgrade
+
+Repo mapping (`lib/es/asset-meta-mapping.ts`) includes under `meta`:
+
+- `description_embedding` — `dense_vector` dims 1024, cosine
+- `description_embedding_meta` — object (`state`, provider/model/task/dims, digests)
+
+Existing clusters created before Phase 3.5 will **not** have these fields until
+you upgrade. With `dynamic: strict`, writing them fails with
+`strict_dynamic_mapping_exception`. Editorial Save soft-fails that channel and
+still commits metadata; semantic search stays off until mapping is applied.
+
+**Operator command** (idempotent; puts only *missing* properties):
+
+```bash
+yarn setup-indices
+```
+
+Expect `assets: "upgraded"` and `assetsMapping.addedProperties` listing paths
+such as `meta.properties.description_embedding` when the fields were missing.
+If already present: `assets: "skipped"` / empty `addedProperties`.
+
+Then set `ASSET_SEMANTIC_ENABLED=true` only after the upgrade succeeds.
+
+---
+
 ## Useful scripts
 
 | Script | Purpose |
 | --- | --- |
 | `yarn probe` | Capability / budget probe |
-| `yarn setup-indices` | Idempotent index create |
+| `yarn setup-indices` | Idempotent index create **+** `meta` mapping upgrade (incl. Phase 3.5 `description_embedding*`) |
 | `yarn test` | Vitest unit tests |
 | `yarn test-embed-compat` | Provider modality fixtures |
 | `yarn test-video-pipeline` | Proxy budget smoke |

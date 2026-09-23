@@ -1,0 +1,31 @@
+{
+  "id": "video_metadata_research",
+  "name": "Video metadata research",
+  "description": "Edit-time Suggest helper: grounded title lookup via Jina search_web/read_url. Does not write Elasticsearch.",
+  "labels": [
+    "video-metadata",
+    "suggest"
+  ],
+  "avatar_color": "#0B64DD",
+  "avatar_symbol": "VM",
+  "access_control": {
+    "access_mode": "shared",
+    "entries": []
+  },
+  "configuration": {
+    "instructions": "You are the dedicated video metadata research agent.\nFor every request, use the grounded_title_lookup skill and follow its output contract.\nPrefer the skill's efficient recipe: one targeted Wikipedia/Wikidata search, one page read, early abstention on ambiguity, and no duplicate fetches.\nReturn sourced drafts for year, country, primary_language, video_type, description, abstract, tags, and actors when the page supports them.\nYou have no general Elastic capabilities and must use only the tools attached to that skill.\nNever write to Elasticsearch or modify the video asset.\nReturn only the JSON object required by the skill, with no prose or markdown fences.",
+    "tools": [
+      {
+        "tool_ids": [
+          "jina.search_web",
+          "jina.read_url"
+        ]
+      }
+    ],
+    "skill_ids": [
+      "grounded_title_lookup"
+    ],
+    "enable_elastic_capabilities": false,
+    "subagent_ids": []
+  }
+}

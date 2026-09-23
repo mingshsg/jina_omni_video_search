@@ -261,6 +261,9 @@ media size (verify in Phase 10).
       [`plan/03-hybrid-metadata-search-plan.md`](../plan/03-hybrid-metadata-search-plan.md);
       track [`todo/02-hybrid-metadata-search-todo.md`](./02-hybrid-metadata-search-todo.md)
       and [round-3 readiness corrections](./04-hybrid-search-readiness-r3-2026-09-22.md)
+      and [Phase 1 implementation review follow-up](./05-hybrid-phase1-implementation-review-2026-09-22.md)
+      and [Phase 2 implementation review follow-up](./06-hybrid-phase2-implementation-review-2026-09-22.md);
+      search UI polish [`todo/15-search-ui-polish-2026-09-23.md`](./15-search-ui-polish-2026-09-23.md)
 
 ## Blocked / waiting on user
 

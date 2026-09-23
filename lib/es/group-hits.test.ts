@@ -89,6 +89,72 @@ describe('groupSearchHits', () => {
     );
     expect(groups).toHaveLength(2);
   });
+
+  it('prefers at most two groups per video when others can fill', () => {
+    const groups = groupSearchHitsTopK(
+      [
+        hit({
+          chunk_id: 'a1',
+          video_id: 'va',
+          start_ms: 0,
+          score: 1,
+        }),
+        hit({
+          chunk_id: 'a2',
+          video_id: 'va',
+          start_ms: 100_000,
+          score: 0.95,
+        }),
+        hit({
+          chunk_id: 'a3',
+          video_id: 'va',
+          start_ms: 200_000,
+          score: 0.9,
+        }),
+        hit({
+          chunk_id: 'b1',
+          video_id: 'vb',
+          start_ms: 0,
+          score: 0.8,
+        }),
+      ],
+      10_000,
+      3,
+    );
+    expect(groups.map((g) => g.representative.chunk_id)).toEqual([
+      'a1',
+      'a2',
+      'b1',
+    ]);
+  });
+
+  it('relaxes the per-video cap when too few videos can fill top-k', () => {
+    const groups = groupSearchHitsTopK(
+      [
+        hit({
+          chunk_id: 'a1',
+          video_id: 'va',
+          start_ms: 0,
+          score: 1,
+        }),
+        hit({
+          chunk_id: 'a2',
+          video_id: 'va',
+          start_ms: 100_000,
+          score: 0.95,
+        }),
+        hit({
+          chunk_id: 'a3',
+          video_id: 'va',
+          start_ms: 200_000,
+          score: 0.9,
+        }),
+      ],
+      10_000,
+      3,
+    );
+    expect(groups).toHaveLength(3);
+  });
 });
 
 describe('oversampleForGroupedTopK', () => {

@@ -1,7 +1,14 @@
 import type { AppConfig } from '../config';
 import { getConfig } from '../config';
 import { createEmbeddingProvider } from '../embed/provider';
+import {
+  buildChunkFilters,
+  enumerateEligibleAssetIds,
+  hasActiveFilters,
+  type NormalizedSearchFilters,
+} from '../metadata/search-filters';
 import { getEsClient } from './client';
+import type { HybridQueryDslExplain } from './hybrid-search';
 import {
   assembleHits,
   clampSearchSize,
@@ -53,6 +60,25 @@ export interface SearchParams {
   videoId?: string | null;
   size?: number;
   sortBy?: SearchSortBy;
+  /** Facet filters — when present, ready-ID allow-list is applied. */
+  filters?: NormalizedSearchFilters | null;
+  /**
+   * When true (Phase 3 hybrid), always apply the ready-ID allow-list even
+   * without facets. Phase 2 only sets this false / omits it.
+   */
+  requireReadyAllowList?: boolean;
+  /** Opt-in hybrid text+vector ranking (Phase 3). Default off. */
+  hybrid?: { use_text?: boolean };
+  /** Parsed residual for query embedding (Phase 3.5). */
+  vectorQuery?: string;
+  /** Parsed free_text for BM25 (Phase 3.5). */
+  bm25Query?: string;
+  sceneTermsPresent?: boolean;
+  extractedBoosts?: import('./hybrid-fusion').ExtractedFacetBoosts | null;
+  /** Speculative / precomputed query vector (Phase 3.6). */
+  queryVector?: number[];
+  speculativeEmbed?: Promise<{ vector: number[]; took_ms: number } | null>;
+  priorEmbedCalls?: number;
 }
 
 export interface ImageSearchParams {
@@ -60,6 +86,7 @@ export interface ImageSearchParams {
   variantId: string;
   videoId?: string | null;
   size?: number;
+  filters?: NormalizedSearchFilters | null;
 }
 
 export interface SearchResult {
@@ -70,8 +97,25 @@ export interface SearchResult {
   sort_by: SearchSortBy;
   variant_id: string;
   video_id: string | null;
-  badge_strategy: 'rrf_plus_parallel_knn' | 'single_knn';
+  badge_strategy:
+    | 'rrf_plus_parallel_knn'
+    | 'single_knn'
+    | 'hybrid_app_rrf';
   took_ms: number;
+  filter_meta?: {
+    eligible_assets: number;
+    enumeration_ms: number;
+    filters_applied: boolean;
+  };
+  text_channel_status?: 'ok' | 'empty' | 'failed' | 'disabled';
+  ranking_strategy?: string;
+  branch?: Record<string, unknown>;
+  parse?: Record<string, unknown> | null;
+  boost_effects?: {
+    applied: import('./hybrid-fusion').ExtractedFacetBoosts;
+    rejected: Array<{ field: string; value: string; reason: string }>;
+  };
+  query_dsl?: HybridQueryDslExplain | null;
 }
 
 export interface ImageSearchResult {
@@ -85,6 +129,7 @@ export interface ImageSearchResult {
   badge_strategy: 'single_knn';
   took_ms: number;
   image_bytes: number;
+  filter_meta?: SearchResult['filter_meta'];
 }
 
 /**
@@ -122,14 +167,41 @@ export interface ExecuteChunkSearchResult {
 function buildFileFilters(
   variantId: string,
   videoId?: string | null,
+  eligibleVideoIds?: string[] | null,
 ): Record<string, unknown>[] {
-  const filters: Record<string, unknown>[] = [
-    { term: { variant_id: variantId } },
-  ];
-  if (videoId) {
-    filters.push({ term: { video_id: videoId } });
+  return buildChunkFilters({ variantId, videoId, eligibleVideoIds });
+}
+
+/**
+ * Resolve ready-ID allow-list when facets (or hybrid) require it.
+ * Returns null when the legacy unfiltered path should be kept.
+ * Returns [] when eligibility is empty (caller must short-circuit).
+ */
+async function resolveEligibleIds(params: {
+  variantId: string;
+  videoId?: string | null;
+  filters?: NormalizedSearchFilters | null;
+  requireReadyAllowList?: boolean;
+}): Promise<{
+  ids: string[] | null;
+  enumeration_ms: number;
+  filters_applied: boolean;
+} | null> {
+  const needAllowList =
+    Boolean(params.requireReadyAllowList) || hasActiveFilters(params.filters);
+  if (!needAllowList) {
+    return null;
   }
-  return filters;
+  const enumerated = await enumerateEligibleAssetIds({
+    variantId: params.variantId,
+    filters: params.filters ?? null,
+    videoId: params.videoId,
+  });
+  return {
+    ids: enumerated.videoIds,
+    enumeration_ms: enumerated.took_ms,
+    filters_applied: true,
+  };
 }
 
 export async function resolveQueryVectorMode(
@@ -332,6 +404,88 @@ export async function searchChunks(
   cfg?: AppConfig,
 ): Promise<SearchResult> {
   const config = cfg ?? getConfig();
+  const useHybrid = Boolean(params.hybrid?.use_text);
+
+  if (useHybrid) {
+    if (params.sortBy && params.sortBy !== 'hybrid') {
+      throw new Error(
+        'sort_by must be hybrid (or omitted) when hybrid.use_text=true',
+      );
+    }
+    const { searchChunksHybrid } = await import('./hybrid-search');
+    const hybrid = await searchChunksHybrid(
+      {
+        query: params.query,
+        modality: params.modality,
+        variantId: params.variantId,
+        videoId: params.videoId,
+        size: params.size,
+        filters: params.filters,
+        vectorQuery: params.vectorQuery,
+        bm25Query: params.bm25Query,
+        sceneTermsPresent: params.sceneTermsPresent,
+        extractedBoosts: params.extractedBoosts,
+        queryVector: params.queryVector,
+        speculativeEmbed: params.speculativeEmbed,
+        priorEmbedCalls: params.priorEmbedCalls,
+      },
+      config,
+    );
+    return {
+      hits: hybrid.hits,
+      rank_window_size: hybrid.rank_window_size,
+      size: hybrid.size,
+      modality: hybrid.modality,
+      sort_by: 'hybrid',
+      variant_id: hybrid.variant_id,
+      video_id: hybrid.video_id,
+      badge_strategy: hybrid.badge_strategy,
+      took_ms: hybrid.took_ms,
+      filter_meta: hybrid.filter_meta,
+      text_channel_status: hybrid.text_channel_status,
+      ranking_strategy: hybrid.ranking_strategy,
+      branch: hybrid.branch as Record<string, unknown> | undefined,
+      boost_effects: hybrid.boost_effects,
+      query_dsl: hybrid.query_dsl,
+    };
+  }
+
+  if (params.sortBy === 'hybrid') {
+    throw new Error('sort_by=hybrid requires hybrid.use_text=true');
+  }
+
+  const eligibility = await resolveEligibleIds({
+    variantId: params.variantId,
+    videoId: params.videoId,
+    filters: params.filters,
+    requireReadyAllowList: params.requireReadyAllowList,
+  });
+
+  if (eligibility && eligibility.ids !== null && eligibility.ids.length === 0) {
+    return {
+      hits: [],
+      rank_window_size: effectiveRankWindowSize(
+        config,
+        clampSearchSize(params.size),
+      ),
+      size: clampSearchSize(params.size),
+      modality: params.modality,
+      sort_by:
+        params.sortBy ??
+        (params.modality === 'both' ? 'rrf' : params.modality),
+      variant_id: params.variantId,
+      video_id: params.videoId ?? null,
+      badge_strategy:
+        params.modality === 'both' ? 'rrf_plus_parallel_knn' : 'single_knn',
+      took_ms: eligibility.enumeration_ms,
+      filter_meta: {
+        eligible_assets: 0,
+        enumeration_ms: eligibility.enumeration_ms,
+        filters_applied: true,
+      },
+    };
+  }
+
   const mode = await resolveQueryVectorMode(config, params.query);
   const result = await executeChunkSearch(
     {
@@ -339,7 +493,11 @@ export async function searchChunks(
       modality: params.modality,
       sortBy: params.sortBy,
       size: params.size,
-      filters: buildFileFilters(params.variantId, params.videoId),
+      filters: buildFileFilters(
+        params.variantId,
+        params.videoId,
+        eligibility?.ids ?? null,
+      ),
       sourceFields: FILE_SOURCE_FIELDS,
       queryVectorMode: mode,
     },
@@ -349,6 +507,14 @@ export async function searchChunks(
     ...result,
     variant_id: params.variantId,
     video_id: params.videoId ?? null,
+    took_ms: result.took_ms + (eligibility?.enumeration_ms ?? 0),
+    filter_meta: eligibility
+      ? {
+          eligible_assets: eligibility.ids?.length ?? 0,
+          enumeration_ms: eligibility.enumeration_ms,
+          filters_applied: eligibility.filters_applied,
+        }
+      : undefined,
   };
 }
 
@@ -357,6 +523,35 @@ export async function searchChunksByImage(
   cfg?: AppConfig,
 ): Promise<ImageSearchResult> {
   const config = cfg ?? getConfig();
+  const eligibility = await resolveEligibleIds({
+    variantId: params.variantId,
+    videoId: params.videoId,
+    filters: params.filters,
+  });
+
+  if (eligibility && eligibility.ids !== null && eligibility.ids.length === 0) {
+    return {
+      hits: [],
+      rank_window_size: effectiveRankWindowSize(
+        config,
+        clampSearchSize(params.size),
+      ),
+      size: clampSearchSize(params.size),
+      modality: 'visual',
+      sort_by: 'visual',
+      variant_id: params.variantId,
+      video_id: params.videoId ?? null,
+      badge_strategy: 'single_knn',
+      took_ms: eligibility.enumeration_ms,
+      image_bytes: params.image.length,
+      filter_meta: {
+        eligible_assets: 0,
+        enumeration_ms: eligibility.enumeration_ms,
+        filters_applied: true,
+      },
+    };
+  }
+
   const provider = createEmbeddingProvider(config);
   const embedded = await provider.embedImage(params.image, 'query');
   const mode: QueryVectorMode = {
@@ -369,7 +564,11 @@ export async function searchChunksByImage(
       modality: 'visual',
       sortBy: 'visual',
       size: params.size,
-      filters: buildFileFilters(params.variantId, params.videoId),
+      filters: buildFileFilters(
+        params.variantId,
+        params.videoId,
+        eligibility?.ids ?? null,
+      ),
       sourceFields: FILE_SOURCE_FIELDS,
       queryVectorMode: mode,
     },
@@ -384,7 +583,14 @@ export async function searchChunksByImage(
     variant_id: params.variantId,
     video_id: params.videoId ?? null,
     badge_strategy: 'single_knn',
-    took_ms: result.took_ms,
+    took_ms: result.took_ms + (eligibility?.enumeration_ms ?? 0),
     image_bytes: params.image.length,
+    filter_meta: eligibility
+      ? {
+          eligible_assets: eligibility.ids?.length ?? 0,
+          enumeration_ms: eligibility.enumeration_ms,
+          filters_applied: eligibility.filters_applied,
+        }
+      : undefined,
   };
 }
