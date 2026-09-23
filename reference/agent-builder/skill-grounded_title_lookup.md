@@ -168,11 +168,19 @@ when the page states them — do not return year-only stubs:
   - Otherwise map the identified work: feature film → `movie`; TV series or
     episode page → `tv_episode`; documentary → `documentary`.
   - Do not invent `tv_episode` for an unnamed clip of a series.
-- `description`: one or two short sentences, ≤480 characters, paraphrasing the
-  sourced synopsis of the identified work (work-level). Prefer the lead
-  Wikipedia synopsis. Do not paste a long plot dump. Do not claim scenes,
-  dialogue, or cast appearances in the uploaded file. Add a brief work-level
-  disclaimer in `evidence` when useful (e.g. "Work synopsis; not file content").
+- `description`: **4-7 sentences, ≤1600 characters**, a real plot/storyline
+  synopsis of the identified work (work-level) — not a one-line logline.
+  Ground every sentence in the read page; prefer combining the lead summary
+  and any dedicated "Plot"/"Synopsis" section from Wikipedia rather than the
+  lead paragraph alone, since the lead alone is usually too short to reach
+  4-7 sentences of real plot content. Paraphrase, do not quote at length.
+  Do not invent scenes, twists, or details absent from the source. Do not
+  claim scenes, dialogue, or cast appearances in the uploaded file — this
+  describes the work, not this specific file. Add a brief work-level
+  disclaimer in `evidence` when useful (e.g. "Work synopsis; not file
+  content"). If the read page only has a one-line description and no plot
+  section, it is fine to return a shorter description — never pad with
+  invented content to reach the sentence count.
 - `abstract`: one short sentence, ≤240 characters, naming the work and its
   kind/year when known (work-level). Same non-claim about the uploaded file.
 - `tags`: at most 8 genre or keyword strings taken from the read page (e.g.

@@ -82,6 +82,21 @@ const agentFieldSchema = z
   })
   .strict();
 
+/**
+ * `description` alone grew from a 1-2 sentence logline (≤480) to a real
+ * 4-7 sentence plot synopsis (≤1600) — see reference/agent-builder/
+ * skill-grounded_title_lookup.md "Field rules". Every other field (year,
+ * country, primary_language, video_type, abstract) stays on the tighter
+ * agentFieldSchema bound; only description needs the room.
+ */
+const agentDescriptionFieldSchema = z
+  .object({
+    value: z.string().trim().max(1600),
+    url: z.string().trim().max(2048).optional(),
+    evidence: z.string().trim().max(500).optional(),
+  })
+  .strict();
+
 const agentTagsFieldSchema = z
   .object({
     value: z.array(z.string().trim().min(1).max(64)).max(8),
@@ -122,7 +137,7 @@ const agentSuggestPayloadSchema = z
         country: agentFieldSchema.optional(),
         primary_language: agentFieldSchema.optional(),
         video_type: agentFieldSchema.optional(),
-        description: agentFieldSchema.optional(),
+        description: agentDescriptionFieldSchema.optional(),
         abstract: agentFieldSchema.optional(),
         tags: agentTagsFieldSchema.optional(),
       })
