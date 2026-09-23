@@ -5,6 +5,7 @@
  */
 import type { AppConfig } from '../config';
 import { getConfig } from '../config';
+import { canonicalizePrimaryLanguage } from './catalogs';
 import { z } from 'zod';
 
 export class AgentBuilderError extends Error {
@@ -44,8 +45,8 @@ export interface AgentBuilderSuggestPayload {
     names?: {
       en?: string;
       zh?: string | null;
-      ko?: string | null;
-      ja?: string | null;
+      /** Actor's own native-script name, only when distinct from en/zh. */
+      native?: { lang?: string; name?: string } | null;
     };
     character?: string | null;
     url?: string;
@@ -118,8 +119,13 @@ const agentSuggestPayloadSchema = z
               .object({
                 en: boundedString(160).optional(),
                 zh: boundedString(160).optional(),
-                ko: boundedString(160).optional(),
-                ja: boundedString(160).optional(),
+                native: z
+                  .object({
+                    lang: boundedString(20),
+                    name: boundedString(160),
+                  })
+                  .strict()
+                  .optional(),
               })
               .strict()
               .optional(),
@@ -411,9 +417,29 @@ export function sanitizeAgentSuggestRaw(raw: unknown): unknown {
         if (actor.names && typeof actor.names === 'object' && !Array.isArray(actor.names)) {
           const namesIn = actor.names as Record<string, unknown>;
           const namesOut: Record<string, unknown> = {};
-          for (const lang of ['en', 'zh', 'ko', 'ja'] as const) {
+          for (const lang of ['en', 'zh'] as const) {
             const v = namesIn[lang];
             if (typeof v === 'string' && v.trim()) namesOut[lang] = v.trim();
+          }
+          const nativeIn = namesIn.native;
+          if (nativeIn && typeof nativeIn === 'object' && !Array.isArray(nativeIn)) {
+            const langRaw = (nativeIn as Record<string, unknown>).lang;
+            const nameRaw = (nativeIn as Record<string, unknown>).name;
+            const canonicalLang =
+              typeof langRaw === 'string' ? canonicalizePrimaryLanguage(langRaw) : null;
+            const nativeName =
+              typeof nameRaw === 'string' ? nameRaw.normalize('NFKC').trim() : '';
+            if (canonicalLang && canonicalLang !== 'other' && nativeName) {
+              namesOut.native = { lang: canonicalLang, name: nativeName };
+            }
+          }
+          // Drop native when it just duplicates en/zh — it adds no information.
+          const native = namesOut.native as { lang: string; name: string } | undefined;
+          if (
+            native &&
+            (native.name === namesOut.en || native.name === namesOut.zh)
+          ) {
+            delete namesOut.native;
           }
           actor.names = namesOut;
         }

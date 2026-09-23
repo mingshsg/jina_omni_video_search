@@ -121,8 +121,7 @@ describe('parseAgentSuggestPayload', () => {
           names: {
             en: 'Audrey Hepburn',
             zh: null,
-            ko: null,
-            ja: null,
+            native: null,
           },
           character: null,
           url: "https://en.wikipedia.org/wiki/Breakfast_at_Tiffany's_(film)",
@@ -214,7 +213,7 @@ describe('parseAgentSuggestPayload', () => {
       },
       actors: [
         {
-          names: { en: 'Jun Kwang-ryul', ko: '전광렬' },
+          names: { en: 'Jun Kwang-ryul', native: { lang: 'ko', name: '전광렬' } },
           url: 'https://en.wikipedia.org/wiki/Hur_Jun_(TV_series)',
           evidence: 'Principal cast.',
         },
@@ -230,7 +229,7 @@ describe('parseAgentSuggestPayload', () => {
     ]);
     expect(parsed.actors?.[0]?.names).toEqual({
       en: 'Jun Kwang-ryul',
-      ko: '전광렬',
+      native: { lang: 'ko', name: '전광렬' },
     });
   });
 });

@@ -1,10 +1,19 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-export type PersonLocale = 'en' | 'zh' | 'ko' | 'ja';
+export type PersonLocale = 'en' | 'zh';
+
+export interface PersonNativeName {
+  /** BCP-47-ish tag, e.g. 'ko', 'ja', 'th' — see catalogs.ts PRIMARY_LANGUAGES. */
+  lang: string;
+  /** Verbatim native-script name; never reordered/reconstructed. */
+  name: string;
+}
 
 export interface PersonEntry {
   display: Partial<Record<PersonLocale, string>> & { en: string };
+  /** Present only when the person's own-script name isn't already `display.zh`. */
+  native?: PersonNativeName;
   aliases: string[];
 }
 
@@ -113,13 +122,7 @@ export function displayNameForPerson(
 ): string {
   const entry = getPerson(id);
   if (!entry) return id;
-  const loc = locale.startsWith('zh')
-    ? 'zh'
-    : locale.startsWith('ko')
-      ? 'ko'
-      : locale.startsWith('ja')
-        ? 'ja'
-      : 'en';
+  const loc: PersonLocale = locale.startsWith('zh') ? 'zh' : 'en';
   return entry.display[loc] ?? entry.display.en;
 }
 

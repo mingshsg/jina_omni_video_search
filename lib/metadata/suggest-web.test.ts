@@ -231,8 +231,7 @@ describe('normalizeAgentActorCandidates', () => {
         names: {
           en: 'Lee Jung-jae',
           zh: '李政宰',
-          ko: '이정재',
-          ja: null,
+          native: { lang: 'ko', name: '이정재' },
         },
         character: 'Seong Gi-hun',
         url: 'https://en.wikipedia.org/wiki/Lee_Jung-jae',
@@ -241,14 +240,18 @@ describe('normalizeAgentActorCandidates', () => {
     ]);
     expect(actor).toMatchObject({
       matched_person_id: 'person:lee-jung-jae',
-      names: { en: 'Lee Jung-jae', zh: '李政宰', ko: '이정재', ja: null },
+      names: {
+        en: 'Lee Jung-jae',
+        zh: '李政宰',
+        native: { lang: 'ko', name: '이정재' },
+      },
     });
   });
 
   it('keeps a sourced unknown actor unresolved and rejects unsafe entries', () => {
     const actors = normalizeAgentActorCandidates([
       {
-        names: { en: 'New Korean Actor', ko: '새 배우' },
+        names: { en: 'New Korean Actor', native: { lang: 'ko', name: '새 배우' } },
         url: 'https://ko.wikipedia.org/wiki/New_actor',
         evidence: 'Principal cast.',
       },
@@ -258,14 +261,14 @@ describe('normalizeAgentActorCandidates', () => {
         evidence: 'Untrusted.',
       },
       {
-        names: { ko: '영문 이름 없음' },
+        names: { native: { lang: 'ko', name: '영문 이름 없음' } },
         url: 'https://ko.wikipedia.org/wiki/Missing_English_name',
         evidence: 'Missing required English name.',
       },
     ]);
     expect(actors).toHaveLength(1);
     expect(actors[0]).toMatchObject({
-      names: { en: 'New Korean Actor', ko: '새 배우' },
+      names: { en: 'New Korean Actor', native: { lang: 'ko', name: '새 배우' } },
       matched_person_id: null,
     });
   });

@@ -113,7 +113,11 @@ Compact JSON only. **Omit unknown keys; never emit `null` placeholders.**
   },
   "actors": [
     {
-      "names": { "en": "Jane Doe", "zh": "张三" },
+      "names": {
+        "en": "Jane Doe",
+        "zh": "张三",
+        "native": { "lang": "ko", "name": "가나다" }
+      },
       "url": "https://…",
       "evidence": "…"
     }
@@ -122,9 +126,15 @@ Compact JSON only. **Omit unknown keys; never emit `null` placeholders.**
 }
 ```
 
-Actor `names.en` is required. Optional `zh`, `ko`, and `ja` (Japanese,
-ISO 639-1) are omitted when absent — do not send `null` language keys.
-Omit `character` and any field entry you cannot cite.
+Actor `names.en` is required (Chinese/Korean names stay family-name-first, no
+comma — e.g. "Lee Jung-jae"). `names.zh` is optional but the skill is asked to
+find it for *any* actor, regardless of nationality — pure convenience for
+Chinese-speaking searchers. `names.native` is optional, `{ "lang": <code>,
+"name": <verbatim native-script name> }` for the actor's own native language;
+it's omitted when it would duplicate `zh` or match `en` verbatim, and the
+value is never reordered or reconstructed — copied exactly as the source
+shows it. Omit `character` and any field entry you cannot cite; never send
+`null` language keys.
 
 The app accepts this JSON only through a strict bounded schema. It drops
 non-HTTPS or non-allowlisted URLs, applies fields and actors only for
@@ -137,10 +147,18 @@ read-only. Filled editor fields are never overwritten (draft + UI empty checks).
 The skill body source of truth is
 [`reference/agent-builder/skill-grounded_title_lookup.md`](../reference/agent-builder/skill-grounded_title_lookup.md)
 (loaded by [`scripts/ensure-suggest-agent.ts`](../scripts/ensure-suggest-agent.ts)).
-Prefer **1 targeted Wikipedia/Wikidata search + 1 page read**; hard budget is
-still 2 searches and 2 reads. Abstain early on ambiguous titles. Reader domains:
-Wikipedia (incl. language subdomains), Wikidata, IMDb, TMDB. Extract year,
-country, original language, video_type (file-level cues win over parent work),
-description/abstract, genre tags, and multilingual cast when sourced. Actor
-candidates require a sourced English name; the server resolves them only by
-exact alias against `config/people.json`.
+Two-phase budget: Phase 1 is **1 targeted Wikipedia/Wikidata search + 1 page
+read** to verify the work (unchanged); Phase 2 is an optional **+1
+search/+1 read** spent only on completing a missing actor zh/native name
+after the work is already verified — worst case still 2 searches + 2 reads.
+Every `read_url` call must pass a `question` argument so the tool returns
+only the relevant passages (cheaper, and less raw page text for prompt
+injection to hide in) instead of the whole page. Abstain early on ambiguous
+titles. Reader domains for work-level facts: Wikipedia (incl. language
+subdomains), Wikidata, IMDb, TMDB. Reader domains additionally allowed for
+Phase 2 name-only lookups: Baidu Baike, Douban, MyDramaList, HanCinema,
+AsianWiki. Extract year, country, original language, video_type (file-level
+cues win over parent work), description/abstract, genre tags, and
+multilingual cast when sourced. Actor candidates require a sourced English
+name; the server resolves them only by exact alias against
+`config/people.json`.

@@ -32,7 +32,7 @@ import {
 import type { LocalSuggestResult, SuggestFieldDraft } from './suggest-local';
 import { getAliasIndex } from './people';
 
-/** Domains we may pass to Reader (allowlist — plan §3). */
+/** Domains we may pass to Reader for work-level facts (allowlist — plan §3). */
 export const SUGGEST_WEB_ALLOWLIST = [
   'wikipedia.org',
   'en.wikipedia.org',
@@ -45,6 +45,21 @@ export const SUGGEST_WEB_ALLOWLIST = [
   'www.imdb.com',
   'themoviedb.org',
   'www.themoviedb.org',
+] as const;
+
+/**
+ * Extra lower-trust domains permitted only for actor name-completion lookups
+ * (plan/06). Actor candidates are still gated behind exact-alias catalog
+ * resolution before they become save-able, so the added source risk here is
+ * acceptable.
+ */
+export const SUGGEST_WEB_NAME_ALLOWLIST = [
+  ...SUGGEST_WEB_ALLOWLIST,
+  'baike.baidu.com',
+  'movie.douban.com',
+  'mydramalist.com',
+  'hancinema.net',
+  'asianwiki.com',
 ] as const;
 
 export interface SuggestWebCandidate {
@@ -70,8 +85,8 @@ export interface SuggestWebActorCandidate {
   names: {
     en: string;
     zh: string | null;
-    ko: string | null;
-    ja: string | null;
+    /** Actor's own native-script name; verbatim, never reordered. */
+    native: { lang: string; name: string } | null;
   };
   character: string | null;
   url: string;
@@ -91,15 +106,20 @@ export function normalizeAgentActorCandidates(
     .flatMap((actor) => {
       const en = actor.names?.en?.normalize('NFKC').trim() ?? '';
       const url = String(actor.url ?? '');
-      if (!en || !isAllowlistedUrl(url)) return [];
-      const names = {
-        en,
-        zh: actor.names?.zh?.normalize('NFKC').trim() || null,
-        ko: actor.names?.ko?.normalize('NFKC').trim() || null,
-        ja: actor.names?.ja?.normalize('NFKC').trim() || null,
-      };
+      if (!en || !isNameAllowlistedUrl(url)) return [];
+      const zh = actor.names?.zh?.normalize('NFKC').trim() || null;
+      const nativeRaw = actor.names?.native;
+      const nativeName =
+        nativeRaw && typeof nativeRaw.name === 'string'
+          ? nativeRaw.name.normalize('NFKC').trim()
+          : '';
+      const native =
+        nativeRaw && typeof nativeRaw.lang === 'string' && nativeName
+          ? { lang: nativeRaw.lang, name: nativeName }
+          : null;
+      const names = { en, zh, native };
       const matchedIds = new Set<string>();
-      for (const name of Object.values(names)) {
+      for (const name of [names.en, names.zh, names.native?.name]) {
         if (!name) continue;
         const id = aliasIndex.get(name.toLowerCase());
         if (id) matchedIds.add(id);
@@ -133,6 +153,15 @@ function hostnameOf(url: string): string | null {
 }
 
 export function isAllowlistedUrl(url: string): boolean {
+  return isUrlAllowlisted(url, SUGGEST_WEB_ALLOWLIST);
+}
+
+/** Same check, but against the wider name-completion-only allowlist. */
+export function isNameAllowlistedUrl(url: string): boolean {
+  return isUrlAllowlisted(url, SUGGEST_WEB_NAME_ALLOWLIST);
+}
+
+function isUrlAllowlisted(url: string, list: readonly string[]): boolean {
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -141,9 +170,7 @@ export function isAllowlistedUrl(url: string): boolean {
   }
   if (parsed.protocol !== 'https:') return false;
   const host = parsed.hostname.toLowerCase();
-  return SUGGEST_WEB_ALLOWLIST.some(
-    (d) => host === d || host.endsWith(`.${d}`),
-  );
+  return list.some((d) => host === d || host.endsWith(`.${d}`));
 }
 
 export type SuggestProgressStage = 'researching' | 'validating';

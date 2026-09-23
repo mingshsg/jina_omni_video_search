@@ -80,7 +80,11 @@ type SuggestField = {
 };
 
 type SuggestActorCandidate = {
-  names: { en: string; zh: string | null; ko: string | null; ja: string | null };
+  names: {
+    en: string;
+    zh: string | null;
+    native: { lang: string; name: string } | null;
+  };
   character: string | null;
   url: string;
   evidence: string;
@@ -148,6 +152,22 @@ type FieldProvenance = {
   tags?: MetaReviewEntry;
 };
 
+type ScalarSuggestKey =
+  | 'year'
+  | 'video_type'
+  | 'primary_language'
+  | 'country'
+  | 'description'
+  | 'abstract'
+  | 'tags';
+
+/**
+ * Suggestions that were NOT auto-applied because the field already had
+ * content. Kept so the UI can show them below the field with a "+" apply
+ * button instead of silently discarding them (plan/06).
+ */
+type PendingSuggestions = Partial<Record<ScalarSuggestKey, SuggestField>>;
+
 type Props = {
   videoId: string;
   onClose: () => void;
@@ -204,6 +224,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
   const [actorCandidates, setActorCandidates] = useState<SuggestActorCandidate[]>([]);
   const [fieldSources, setFieldSources] = useState<SuggestedSources>({});
   const [fieldProvenance, setFieldProvenance] = useState<FieldProvenance>({});
+  const [pendingSuggestions, setPendingSuggestions] = useState<PendingSuggestions>({});
   const suggestSeq = useRef(0);
   const suggestAbort = useRef<AbortController | null>(null);
   const suggestRequestId = useRef<string | null>(null);
@@ -291,6 +312,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
     setFieldProvenance(provenance);
     setInfo(null);
     setActorCandidates([]);
+    setPendingSuggestions({});
     const ids = data.meta.actor_ids ?? [];
     setSelectedActors(
       ids.map((id) => {
@@ -453,6 +475,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
     setSuggesting(true);
     setSuggestStage('queued');
     setActorCandidates([]);
+    setPendingSuggestions({});
     setError(null);
     setInfo(null);
     try {
@@ -540,6 +563,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
       const cur = formRef.current;
       const nextSources: SuggestedSources = {};
       const nextProvenance: FieldProvenance = {};
+      const nextPending: PendingSuggestions = {};
       let applied = 0;
       const sug = data.suggestions ?? {};
 
@@ -565,10 +589,14 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
       if (snapshot.yearEmpty && cur.year.trim() === '' && sug.year != null) {
         setYear(String(sug.year.value));
         mark('year', sug.year);
+      } else if (sug.year != null) {
+        nextPending.year = sug.year;
       }
       if (snapshot.typeEmpty && cur.videoType === '' && sug.video_type != null) {
         setVideoType(String(sug.video_type.value));
         mark('video_type', sug.video_type);
+      } else if (sug.video_type != null) {
+        nextPending.video_type = sug.video_type;
       }
       if (
         snapshot.langEmpty &&
@@ -577,10 +605,14 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
       ) {
         setLanguage(String(sug.primary_language.value));
         mark('primary_language', sug.primary_language);
+      } else if (sug.primary_language != null) {
+        nextPending.primary_language = sug.primary_language;
       }
       if (snapshot.countryEmpty && cur.country === '' && sug.country != null) {
         setCountry(String(sug.country.value));
         mark('country', sug.country);
+      } else if (sug.country != null) {
+        nextPending.country = sug.country;
       }
       if (
         snapshot.descriptionEmpty &&
@@ -589,6 +621,8 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
       ) {
         setDescription(String(sug.description.value));
         mark('description', sug.description);
+      } else if (sug.description != null) {
+        nextPending.description = sug.description;
       }
       if (
         snapshot.abstractEmpty &&
@@ -597,6 +631,8 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
       ) {
         setAbstract(String(sug.abstract.value));
         mark('abstract', sug.abstract);
+      } else if (sug.abstract != null) {
+        nextPending.abstract = sug.abstract;
       }
       const curTagsEmpty =
         cur.tagsText
@@ -611,12 +647,19 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
       ) {
         setTagsText(sug.tags.value.join(', '));
         mark('tags', sug.tags);
+      } else if (Array.isArray(sug.tags?.value) && sug.tags.value.length > 0) {
+        nextPending.tags = sug.tags;
       }
+
+      setPendingSuggestions(nextPending);
+      const pendingCount = Object.keys(nextPending).length;
 
       if (applied > 0) {
         setFieldSources((prev) => ({ ...prev, ...nextSources }));
         setFieldProvenance((prev) => ({ ...prev, ...nextProvenance }));
         setInfo(t.metaSuggestApplied);
+      } else if (pendingCount > 0) {
+        setInfo(t.metaSuggestReviewBelow);
       } else if (candidates.length === 0) {
         setInfo(t.metaSuggestEmpty);
       } else {
@@ -655,6 +698,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
     locale,
     t.metaSuggestEmpty,
     t.metaSuggestActorCandidatesFound,
+    t.metaSuggestReviewBelow,
     t.metaSuggestApplied,
     t.metaSuggestError,
     t.metaSuggestTimeout,
@@ -688,6 +732,64 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
       }));
     },
     [catalogs?.people],
+  );
+
+  const applyPendingSuggestion = useCallback(
+    (key: ScalarSuggestKey) => {
+      const draft = pendingSuggestions[key];
+      if (!draft) return;
+      if (key === 'tags') {
+        const existing = tagsText
+          .split(/[,，]/)
+          .map((s) => s.trim())
+          .filter(Boolean);
+        const incoming = Array.isArray(draft.value)
+          ? draft.value.map(String)
+          : [];
+        const merged = [...existing];
+        for (const tag of incoming) {
+          if (!merged.some((t) => t.toLowerCase() === tag.toLowerCase())) {
+            merged.push(tag);
+          }
+        }
+        setTagsText(merged.join(', '));
+      } else if (key === 'year') {
+        setYear(String(draft.value));
+      } else if (key === 'video_type') {
+        setVideoType(String(draft.value));
+      } else if (key === 'primary_language') {
+        setLanguage(String(draft.value));
+      } else if (key === 'country') {
+        setCountry(String(draft.value));
+      } else if (key === 'description') {
+        setDescription(String(draft.value));
+      } else if (key === 'abstract') {
+        setAbstract(String(draft.value));
+      }
+      setFieldSources((previous) => ({ ...previous, [key]: 'suggestion' }));
+      setFieldProvenance((previous) => ({
+        ...previous,
+        [key]: {
+          confidence: draft.confidence,
+          evidence: draft.evidence,
+          provider:
+            draft.source === 'external_web' ||
+            draft.source === 'local_title' ||
+            draft.source === 'caller_hint' ||
+            draft.source === 'media_tag'
+              ? draft.source
+              : undefined,
+          source_url: draft.source_url,
+          retrieved_at: draft.retrieved_at,
+        },
+      }));
+      setPendingSuggestions((previous) => {
+        const next = { ...previous };
+        delete next[key];
+        return next;
+      });
+    },
+    [pendingSuggestions, tagsText],
   );
 
   const save = useCallback(async () => {
@@ -850,7 +952,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
     onClose,
   ]);
 
-  const evidenceHelp = (key: keyof SuggestedSources): string | undefined => {
+  const evidenceHelp = (key: keyof SuggestedSources) => {
     if (fieldSources[key] !== 'suggestion') return undefined;
     const prov = fieldProvenance[key];
     const parts: string[] = [t.metaFieldSuggested];
@@ -858,7 +960,67 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
       parts.push(`${Math.round(prov.confidence * 100)}%`);
     }
     if (prov?.evidence) parts.push(prov.evidence);
-    return parts.join(' · ');
+    return (
+      <>
+        <span>{parts.join(' · ')}</span>
+        {prov?.source_url && (
+          <>
+            {' · '}
+            <a href={prov.source_url} target="_blank" rel="noreferrer">
+              {t.metaActorCandidateSource}
+            </a>
+          </>
+        )}
+      </>
+    );
+  };
+
+  const renderPendingSuggestion = (key: ScalarSuggestKey) => {
+    const draft = pendingSuggestions[key];
+    if (!draft) return null;
+    const displayValue = Array.isArray(draft.value)
+      ? draft.value.join(', ')
+      : String(draft.value);
+    return (
+      <>
+        <EuiSpacer size="xs" />
+        <EuiCallOut size="s" color="primary">
+          <EuiFlexGroup alignItems="center" gutterSize="s" responsive={false}>
+            <EuiFlexItem>
+              <EuiText size="xs">
+                <p>
+                  <strong>{t.metaSuggestPendingValue}:</strong> {displayValue}
+                </p>
+                <p>
+                  {draft.confidence != null
+                    ? `${Math.round(draft.confidence * 100)}% · `
+                    : ''}
+                  {draft.evidence}
+                  {draft.source_url && (
+                    <>
+                      {' · '}
+                      <a href={draft.source_url} target="_blank" rel="noreferrer">
+                        {t.metaActorCandidateSource}
+                      </a>
+                    </>
+                  )}
+                  {draft.retrieved_at ? ` · ${draft.retrieved_at}` : ''}
+                </p>
+              </EuiText>
+            </EuiFlexItem>
+            <EuiFlexItem grow={false}>
+              <EuiButtonEmpty
+                size="s"
+                onClick={() => applyPendingSuggestion(key)}
+              >
+                {t.metaSuggestPendingApply}
+              </EuiButtonEmpty>
+            </EuiFlexItem>
+          </EuiFlexGroup>
+        </EuiCallOut>
+        <EuiSpacer size="s" />
+      </>
+    );
   };
 
   return (
@@ -925,6 +1087,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
                 fullWidth
               />
             </EuiFormRow>
+            {renderPendingSuggestion('description')}
             <EuiFormRow
               label={t.metaAbstract}
               helpText={evidenceHelp('abstract')}
@@ -940,6 +1103,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
                 fullWidth
               />
             </EuiFormRow>
+            {renderPendingSuggestion('abstract')}
             <EuiFormRow label={t.metaYear} helpText={evidenceHelp('year')} fullWidth>
               <EuiFieldNumber
                 value={year}
@@ -952,6 +1116,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
                 placeholder="1990"
               />
             </EuiFormRow>
+            {renderPendingSuggestion('year')}
             <EuiFormRow
               label={t.metaActors}
               helpText={evidenceHelp('actors') ?? t.metaActorsHelp}
@@ -979,36 +1144,67 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
                 >
                   <ul>
                     {actorCandidates.map((candidate) => {
-                      const names = [
-                        candidate.names.en,
-                        candidate.names.zh,
-                        candidate.names.ko,
-                        candidate.names.ja,
-                      ].filter(Boolean);
                       const alreadySelected = selectedActors.some(
                         (option) => option.value === candidate.matched_person_id,
                       );
                       return (
                         <li key={`${candidate.url}:${candidate.names.en}`}>
-                          <strong>{names.join(' / ')}</strong>
-                          {candidate.character ? ` — ${candidate.character}` : ''}
-                          {' · '}
-                          <a href={candidate.url} target="_blank" rel="noreferrer">
-                            {t.metaActorCandidateSource}
-                          </a>
-                          {candidate.matched_person_id ? (
-                            <EuiButtonEmpty
-                              size="s"
-                              isDisabled={alreadySelected}
-                              onClick={() => addActorCandidate(candidate)}
-                            >
-                              {alreadySelected
-                                ? t.metaActorCandidateAdded
-                                : t.metaActorCandidateAdd}
-                            </EuiButtonEmpty>
-                          ) : (
-                            <span> · {t.metaActorCandidateUnresolved}</span>
-                          )}
+                          <EuiFlexGroup
+                            alignItems="flexStart"
+                            gutterSize="s"
+                            responsive={false}
+                          >
+                            <EuiFlexItem>
+                              <EuiText size="xs">
+                                <p>
+                                  <strong>{candidate.names.en}</strong>
+                                  {candidate.character
+                                    ? ` — ${candidate.character}`
+                                    : ''}
+                                </p>
+                                {candidate.names.zh && (
+                                  <p>
+                                    {t.metaActorCandidateZh}: {candidate.names.zh}
+                                  </p>
+                                )}
+                                {candidate.names.native && (
+                                  <p>
+                                    {t.metaActorCandidateNative} (
+                                    {candidate.names.native.lang}):{' '}
+                                    {candidate.names.native.name}
+                                  </p>
+                                )}
+                                <p>
+                                  <a
+                                    href={candidate.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                  >
+                                    {t.metaActorCandidateSource}
+                                  </a>
+                                  {' · '}
+                                  {candidate.retrieved_at}
+                                  {!candidate.matched_person_id && (
+                                    <> · {t.metaActorCandidateUnresolved}</>
+                                  )}
+                                </p>
+                              </EuiText>
+                            </EuiFlexItem>
+                            {candidate.matched_person_id && (
+                              <EuiFlexItem grow={false}>
+                                <EuiButtonEmpty
+                                  size="s"
+                                  isDisabled={alreadySelected}
+                                  onClick={() => addActorCandidate(candidate)}
+                                >
+                                  {alreadySelected
+                                    ? t.metaActorCandidateAdded
+                                    : t.metaActorCandidateAdd}
+                                </EuiButtonEmpty>
+                              </EuiFlexItem>
+                            )}
+                          </EuiFlexGroup>
+                          <EuiSpacer size="s" />
                         </li>
                       );
                     })}
@@ -1033,6 +1229,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
                 fullWidth
               />
             </EuiFormRow>
+            {renderPendingSuggestion('video_type')}
             <EuiFormRow
               label={t.metaLanguage}
               helpText={evidenceHelp('primary_language')}
@@ -1049,15 +1246,24 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
                 fullWidth
               />
             </EuiFormRow>
-            <EuiFormRow label={t.metaCountry} fullWidth>
+            {renderPendingSuggestion('primary_language')}
+            <EuiFormRow
+              label={t.metaCountry}
+              helpText={evidenceHelp('country')}
+              fullWidth
+            >
               <EuiSelect
                 options={countryOptions}
                 value={country}
-                onChange={(e) => setCountry(e.target.value)}
+                onChange={(e) => {
+                  clearSuggestionMark('country');
+                  setCountry(e.target.value);
+                }}
                 compressed
                 fullWidth
               />
             </EuiFormRow>
+            {renderPendingSuggestion('country')}
             <EuiFormRow
               label={t.metaTags}
               helpText={evidenceHelp('tags') ?? t.metaTagsHelp}
@@ -1073,6 +1279,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
                 fullWidth
               />
             </EuiFormRow>
+            {renderPendingSuggestion('tags')}
             <EuiText size="xs" color="subdued">
               <p>
                 {t.metaRevision}: {dto?.meta_revision ?? 0}

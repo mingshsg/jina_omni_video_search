@@ -235,6 +235,11 @@ export type UiMessages = {
   metaActorCandidateAdded: string;
   metaActorCandidateUnresolved: string;
   metaActorCandidateSource: string;
+  metaSuggestReviewBelow: string;
+  metaSuggestPendingApply: string;
+  metaSuggestPendingValue: string;
+  metaActorCandidateZh: string;
+  metaActorCandidateNative: string;
 
   // Live video
   liveTitle: string;
@@ -561,6 +566,12 @@ export const uiEn: UiMessages = {
   metaActorCandidateAdded: 'Added',
   metaActorCandidateUnresolved: 'Not in the controlled person catalog',
   metaActorCandidateSource: 'source',
+  metaSuggestReviewBelow:
+    'Suggestions are ready for review below — click + to apply.',
+  metaSuggestPendingApply: 'Apply suggestion',
+  metaSuggestPendingValue: 'Suggested value',
+  metaActorCandidateZh: 'Chinese',
+  metaActorCandidateNative: 'Native name',
 
   liveTitle: 'Live video',
   liveDescription:
@@ -890,6 +901,11 @@ export const uiZh: UiMessages = {
   metaActorCandidateAdded: '已加入',
   metaActorCandidateUnresolved: '尚未收录到受控人物目录',
   metaActorCandidateSource: '来源',
+  metaSuggestReviewBelow: '建议已准备好，请在下方查看并点击 + 采纳。',
+  metaSuggestPendingApply: '采纳该建议',
+  metaSuggestPendingValue: '建议值',
+  metaActorCandidateZh: '中文名',
+  metaActorCandidateNative: '本名',
 
   liveTitle: '直播视频',
   liveDescription:
