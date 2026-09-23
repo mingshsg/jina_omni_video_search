@@ -2,6 +2,13 @@
 
 ## Hybrid metadata search
 
+- [`hybrid-metadata-search-independent-code-review-2026-09-23.md`](./hybrid-metadata-search-independent-code-review-2026-09-23.md)
+  — **current worktree verdict**: gates are green but do not cover the
+  highest-risk path. The G5 guaranteed floor sends `retriever` in an
+  `_msearch` body the installed client does not type (`as never` suppresses
+  it), is reachable only through a silent `catch`, and has no test or
+  live-cluster evidence. Three P1 items before commit.
+  [Follow-up](../todo/22-hybrid-independent-code-review-2026-09-23.md).
 - [`hybrid-internet-suggest-code-review-2026-09-23.md`](./hybrid-internet-suggest-code-review-2026-09-23.md)
   — **current Internet Suggest verdict**: dedicated agent/tools are live and local fallback is safe, but timeout mismatch, unvalidated agent output, shadowed grounded descriptions, and missing actor-candidate UI block Phase 4b sign-off. [Follow-up](../todo/16-hybrid-holistic-review-and-internet-suggest-2026-09-23.md).
 - [`hybrid-metadata-search-holistic-review-2026-09-23.md`](./hybrid-metadata-search-holistic-review-2026-09-23.md)

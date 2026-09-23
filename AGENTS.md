@@ -100,9 +100,25 @@ third-party documentation with source URLs in each file's frontmatter.
   command output. If you claim Elasticsearch behaves a certain way, check the
   installed client typings in `node_modules/@elastic/elasticsearch` or the
   live docs, and say which.
-- **Plans are corrected, not rewritten.** When a review finds a defect, fix the
-  plan and record the disposition in the matching `todo/0N-*.md`. Review bodies
-  are historical evidence and are never edited.
+- **Every review is written down, not just spoken.** A review produces two
+  files, and both are part of the deliverable:
+  1. `reviews/<scope>-<kind>-<YYYY-MM-DD>.md` — the findings. Open with scope
+     and a one-line verdict in bold, then findings ordered by severity
+     (P1 blocking / P2 should-fix / P3 hygiene), each citing `file:line` and
+     quoting the code. End with a gates table naming what was **NOT RUN**.
+  2. `todo/NN-<scope>-<YYYY-MM-DD>.md` — the actionable checklist, `NN` being
+     the next free number. Link back to the review.
+
+  Then add an entry at the top of `reviews/README.md` under the right heading.
+- **Record what you checked and rejected**, not only what you found. A
+  finding you investigated and dismissed is useful evidence; state why.
+- **Plans are corrected, not rewritten.** When a review finds a defect, fix
+  the plan and record the disposition in the matching `todo/0N-*.md`. Review
+  bodies are historical evidence and are never edited — supersede them with a
+  new dated review instead.
+- **Never mark a gate passed that you did not run.** Say "NOT RUN" explicitly.
+  A green unit suite is not evidence about a request shape the server has to
+  accept, a latency target, or a relevance threshold.
 - **One concern per PR.** In particular, the change that converts ingest writes
   to partial updates touches existing code and must not be mixed with new
   feature work.
@@ -113,6 +129,10 @@ third-party documentation with source URLs in each file's frontmatter.
   history — `plan/hybrid-metadata-search` is retained for that reason.
 - **Run `yarn test` and `yarn build` before saying you are done**, and say which
   gates you did *not* run.
+- **Do not suppress a type error to make something compile.** `as never`,
+  `as any` and `@ts-expect-error` over a client request body hide the question
+  "does the server accept this shape?", which no unit test can answer. If you
+  need one, leave a comment naming the verification that is still owed.
 
 ## Current state
 
@@ -123,3 +143,8 @@ Agent Builder Suggest path. This is **not a release-complete claim**: live
 schema/search regression, labeled relevance and ambiguity tests, browser actor
 selection, representative p95/cost, and multi-replica durable job storage
 remain tracked in `todo/05`, `todo/06`, `todo/11`, `todo/14`, and `todo/16`.
+
+An independent pass over the whole worktree on 2026-09-23 added
+`todo/22`: three P1 items, the most serious being that the guaranteed-recall
+floor sends `retriever` in an `_msearch` body the installed client does not
+type. Read that tracker before extending hybrid retrieval.
