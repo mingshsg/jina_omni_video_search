@@ -358,7 +358,17 @@ export function parseQueryDictionary(query: string): DictionaryParseResult {
   if (extracted.actor_ids?.length) {
     freeParts.push(...actors.map((a) => a.alias));
   }
-  const free_text = freeParts.length > 0 ? freeParts.join(' ') : residual || raw.trim();
+  // Bug fix (todo/22 F2): free_text previously dropped the residual whenever
+  // an actor matched, so title terms ("Roman Holiday") never reached BM25 for
+  // a query like "Audrey Hepburn Roman Holiday" — only the actor alias did.
+  // free_text must carry alias terms *and* whatever text remains, which is
+  // exactly why the structured bool.should (not a flat multi_match) was
+  // chosen: a name can straddle fields, alias in meta.search_text and title
+  // in `title`.
+  if (residual) {
+    freeParts.push(residual);
+  }
+  const free_text = freeParts.length > 0 ? freeParts.join(' ') : raw.trim();
   const vector_query = residual;
   const scene_terms_present = residual.length > 0;
 

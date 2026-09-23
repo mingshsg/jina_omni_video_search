@@ -57,7 +57,9 @@ describe('buildHybridQueryDslExplain', () => {
       extractedBoosts: { country: ['KR'] },
     });
     expect(dsl.status).toBe('applied');
-    expect(dsl.query_vector).toBeUndefined();
+    // Raw embedding values must never be echoed in the explain payload —
+    // the type has no top-level field for them; only `vector_query` (query
+    // *text*, for display) and `knn_global.query_vector: 'omitted'` exist.
     expect(dsl.knn_global?.query_vector).toBe('omitted');
     const idsFilter = (
       dsl.asset_bm25?.query as {

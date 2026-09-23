@@ -123,6 +123,12 @@ third-party documentation with source URLs in each file's frontmatter.
 - **Never mark a gate passed that you did not run.** Say "NOT RUN" explicitly.
   A green unit suite is not evidence about a request shape the server has to
   accept, a latency target, or a relevance threshold.
+- **A P1 blocks new plans.** If any tracker in `todo/` has an open P1 finding,
+  fix it before opening a new `plan/NN`. Six P1s once sat open for eleven
+  commits and six new plans in a row (`todo/22`, `todo/30`) — nothing in the
+  process stopped it, and the review that caught it had to be repeated twice.
+  When in doubt, `grep -rn "^\- \[ \] \*\*[A-Z][0-9]" todo/*.md` and look for
+  P1 severity before starting new feature work.
 - **One concern per PR.** In particular, the change that converts ingest writes
   to partial updates touches existing code and must not be mixed with new
   feature work.

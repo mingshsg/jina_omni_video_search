@@ -227,6 +227,7 @@ export type UiMessages = {
   metaSuggesting: string;
   metaSuggestCancel: string;
   metaSuggestEmpty: string;
+  metaSuggestWebUnavailable: string;
   metaSuggestApplied: string;
   metaSuggestActorCandidatesFound: string;
   metaSuggestError: string;
@@ -571,6 +572,8 @@ export const uiEn: UiMessages = {
   metaSuggesting: 'Suggesting…',
   metaSuggestCancel: 'Cancel suggest',
   metaSuggestEmpty: 'No local clues in the title (year / type / work name).',
+  metaSuggestWebUnavailable:
+    'Internet research did not complete — showing local title clues only.',
   metaSuggestApplied: 'Filled empty fields from available title and sourced work evidence. Review before Save.',
   metaSuggestActorCandidatesFound:
     'Actor candidates are ready for review; unresolved identities remain read-only.',
@@ -922,6 +925,7 @@ export const uiZh: UiMessages = {
   metaSuggesting: '正在建议…',
   metaSuggestCancel: '取消建议',
   metaSuggestEmpty: '标题中没有可用的本地线索（年份/类型/作品名）。',
+  metaSuggestWebUnavailable: '联网调研未完成——仅展示本地标题线索。',
   metaSuggestApplied: '已根据标题线索和有来源的作品资料填入空字段，请审核后再保存。',
   metaSuggestActorCandidatesFound:
     '已找到演员候选，请人工检查；未匹配到人物目录的候选只供参考。',

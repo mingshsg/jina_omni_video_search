@@ -2,6 +2,7 @@
  * Hybrid text + vector retrieval (Phase 3).
  * Opt-in via hybrid.use_text; default path stays pure vector.
  */
+import type { estypes } from '@elastic/elasticsearch';
 import type { AppConfig } from '../config';
 import { getConfig } from '../config';
 import { createEmbeddingProvider } from '../embed/provider';
@@ -36,6 +37,24 @@ import {
   type SearchHit,
   type SearchModality,
 } from './search-core';
+
+/**
+ * Structured degradation log (todo/22 F3). Every branch of hybrid search
+ * that can silently fall back must call this so a persistent ES/provider
+ * failure is visible in logs rather than only as a response-body field
+ * (`text_channel_status`) nobody may be watching. No query text or secret
+ * value is logged — only a stable phase code and the error message.
+ */
+function logHybridDegradation(phase: string, err: unknown): void {
+  console.error(
+    JSON.stringify({
+      ok: false,
+      area: 'hybrid_search',
+      phase,
+      error: err instanceof Error ? err.message : String(err),
+    }),
+  );
+}
 
 async function embedQueryVector(
   cfg: AppConfig,
@@ -404,29 +423,42 @@ async function msearchFloorKnn(params: {
   }
   const client = getEsClient();
   const cfg = getConfig();
-  const searches: object[] = [];
+  // Bug fix (todo/22 F1): `_msearch` bodies do not accept `retriever` — the
+  // installed client's MsearchMultisearchBody type has `knn` but no
+  // `retriever`, and the previous version of this function suppressed that
+  // mismatch with `searches as never`. Use the top-level `knn` search API
+  // (stable since ES 8.x, and explicitly typed on MsearchMultisearchBody)
+  // instead. `knnRetrieverBody`'s return shape (field/k/num_candidates/
+  // filter/query_vector[_builder]) already matches `estypes.KnnSearch`
+  // directly, so no `retriever` wrapper is needed here.
+  const searches: estypes.MsearchRequestItem[] = [];
   for (const asset of params.assets) {
     searches.push({ index: cfg.ES_INDEX_CHUNKS });
     searches.push({
       size: 2,
       _source: [...FILE_SOURCE_FIELDS],
-      retriever: {
-        knn: knnRetrieverBody(
-          params.field,
-          2,
-          buildChunkFilters({
-            variantId: params.variantId,
-            eligibleVideoIds: [asset.video_id],
-          }),
-          params.mode,
-        ),
-      },
+      // `knnRetrieverBody` returns a loosely-typed `Record<string, unknown>`
+      // because it also feeds `retriever.knn` call sites elsewhere; its
+      // actual shape (field/k/num_candidates/filter/query_vector[_builder])
+      // is exactly `estypes.KnnSearch`, so this is a type-narrowing cast, not
+      // an unverified-shape one — that question is F1's real remaining item:
+      // confirm the target Elasticsearch project's `_msearch` accepts a
+      // top-level `knn` per search body before relying on this in prod.
+      knn: knnRetrieverBody(
+        params.field,
+        2,
+        buildChunkFilters({
+          variantId: params.variantId,
+          eligibleVideoIds: [asset.video_id],
+        }),
+        params.mode,
+      ) as unknown as estypes.KnnSearch,
     });
   }
 
   const res = await client.msearch({
     // NDJSON pairs: header, body, header, body, …
-    searches: searches as never,
+    searches,
   });
 
   const responses = res.responses ?? [];
@@ -886,14 +918,16 @@ export async function searchChunksHybrid(
             }
           }
         }
-      } catch {
+      } catch (err) {
         // Expansion failed after BM25 success → drop text prior entirely.
+        logHybridDegradation('lexical_expansion_failed', err);
         textStatus = 'failed';
         lexical = [];
         lexicalChunkCount = 0;
       }
     }
-  } catch {
+  } catch (err) {
+    logHybridDegradation('bm25_lexical_search_failed', err);
     textStatus = 'failed';
     lexical = [];
     lexicalChunkCount = 0;
@@ -959,12 +993,14 @@ export async function searchChunksHybrid(
               }
             }
           }
-        } catch {
-          // semantic expansion is optional — ranks still apply to union hits
+        } catch (err) {
+          // Semantic expansion is optional — ranks still apply to union hits.
+          logHybridDegradation('semantic_expansion_failed', err);
         }
       }
-    } catch {
-      // semantic is optional — leave empty
+    } catch (err) {
+      // Semantic channel is optional — leave empty.
+      logHybridDegradation('semantic_search_failed', err);
     }
   }
 
@@ -979,7 +1015,8 @@ export async function searchChunksHybrid(
       assetFacetsByVideo = await loadAssetFacetSnapshots(candidateVideoIds);
       httpRequests += 1;
       subsearches += 1;
-    } catch {
+    } catch (err) {
+      logHybridDegradation('facet_snapshot_failed', err);
       assetFacetsByVideo = new Map();
       snapshotFailed = true;
     }

@@ -252,6 +252,21 @@ function tryParseJson(text: string): unknown | undefined {
 }
 
 /** Find balanced `{ ... }` slices and return the first that parses as an object. */
+/**
+ * Bug fix (todo/30 S5): unbalanced — for unbalanced input (e.g. attacker-
+ * influenced text with many `{` and no matching `}`) the inner scan used to
+ * run to end-of-string for every `{`, making this O(n^2) on a string whose
+ * content this module does not control (it is reachable via converse/tool
+ * output). The overall response is already capped at 100 KB elsewhere, which
+ * bounds `n` but not the quadratic. Bound each inner scan to a fixed window
+ * (a real status payload here is a few KB at most) and, when a scan fails to
+ * close within that window, jump `i` to the end of the failed window instead
+ * of re-scanning an overlapping range starting at the next `{` — this keeps
+ * total work O(n) instead of needing an arbitrary candidate cap that could
+ * give up before reaching a valid object placed after a long garbage run.
+ */
+const MAX_JSON_SCAN_WINDOW = 20_000;
+
 function extractBalancedJsonObjects(text: string): unknown[] {
   const found: unknown[] = [];
   for (let i = 0; i < text.length; i++) {
@@ -259,7 +274,10 @@ function extractBalancedJsonObjects(text: string): unknown[] {
     let depth = 0;
     let inString = false;
     let escape = false;
-    for (let j = i; j < text.length; j++) {
+    let closedAt = -1;
+    const scanEnd = Math.min(text.length, i + MAX_JSON_SCAN_WINDOW);
+    let j = i;
+    for (; j < scanEnd; j++) {
       const ch = text[j]!;
       if (inString) {
         if (escape) {
@@ -279,20 +297,36 @@ function extractBalancedJsonObjects(text: string): unknown[] {
       else if (ch === '}') {
         depth -= 1;
         if (depth === 0) {
-          const slice = text.slice(i, j + 1);
-          const parsed = tryParseJson(slice);
-          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-            found.push(parsed);
-          }
+          closedAt = j;
           break;
         }
       }
+    }
+    if (closedAt >= 0) {
+      const slice = text.slice(i, closedAt + 1);
+      const parsed = tryParseJson(slice);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        found.push(parsed);
+      }
+    } else {
+      // Never closed within the window — skip the whole failed span rather
+      // than restarting a new O(window) scan at i+1, i+2, …. Trade-off,
+      // documented rather than hidden: a valid balanced object whose opening
+      // `{` falls *inside* this failed window (e.g. immediately after a long
+      // run of unmatched `{`) will not get its own fresh-depth attempt and
+      // can be missed. This function is explicitly best-effort (see the
+      // doc comment on extractToolTrace's neighbour), and after the S3 fix
+      // above this is reached only on assistant-authored text, not arbitrary
+      // fetched page content — bounded time matters more here than
+      // exhaustively finding every adversarially-placed object.
+      i = scanEnd - 1;
     }
   }
   return found;
 }
 
 /**
+
  * Extract the Suggest JSON object from an agent message.
  * Handles plain JSON, fenced code, prose wrappers, and nested tool-result text.
  */
@@ -531,40 +565,62 @@ export function extractConverseMessage(body: unknown): string {
     }
   }
 
-  // Fallback: scan steps for a final assistant message-like string containing JSON.
+  // Fallback: scan steps for a final assistant message-like string containing
+  // JSON. Bug fix (todo/30 S3): this used to also accept `message|content|
+  // text|output` from *any* step type, and — if none matched — fell through
+  // to `results[].data.content`, which is raw tool-result content (e.g.
+  // Jina Reader's fetched page text). A page that embeds a plausible
+  // `{"status":"ok","fields":{...}}` blob was then parsed as the agent's
+  // answer, bypassing the model entirely. Only a step the codebase's own
+  // contract (see agent-builder-suggest.test.ts) identifies as
+  // assistant-authored — `type === 'assistant'` — may supply the payload
+  // text; raw tool/result content is never trusted as a structured answer.
+  // If no assistant step is found, this throws `malformed` and the caller
+  // falls back to local suggestions, which is the safe direction to fail in.
   const steps = root.steps;
   if (Array.isArray(steps)) {
     for (let i = steps.length - 1; i >= 0; i--) {
       const step = steps[i];
       if (!step || typeof step !== 'object') continue;
       const s = step as Record<string, unknown>;
+      if (s.type !== 'assistant') continue;
       for (const key of ['message', 'content', 'text', 'output'] as const) {
         const v = s[key];
         if (typeof v === 'string' && v.includes('{') && v.includes('}')) {
           return v;
         }
       }
-      const results = s.results;
-      if (Array.isArray(results)) {
-        for (const r of results) {
-          if (!r || typeof r !== 'object') continue;
-          const data = (r as Record<string, unknown>).data;
-          if (data && typeof data === 'object') {
-            const content = (data as Record<string, unknown>).content;
-            if (
-              typeof content === 'string' &&
-              content.includes('"status"') &&
-              content.includes('{')
-            ) {
-              return content;
-            }
-          }
-        }
-      }
     }
   }
 
   throw new AgentBuilderError('malformed', 'Converse response missing message');
+}
+
+
+/**
+ * Bug fix (todo/30 S4): `entry.url` below is a tool-call *parameter the
+ * model emitted*, i.e. steerable by injected page content — unlike every
+ * other URL on the Suggest screen, which is checked against the domain
+ * allowlist in suggest-web.ts. That allowlist cannot be imported here
+ * without a circular dependency (suggest-web.ts imports this module), and a
+ * domain allowlist is arguably the wrong policy anyway for "here is what the
+ * agent searched/read" (the model may legitimately have looked at a
+ * non-allowlisted page even if we would not cite it as a source). The
+ * minimum bar for something the UI renders as a clickable `<a href>` is:
+ * http(s) only, no embedded control characters, sane length — this rejects
+ * `javascript:`/`data:` hrefs and pathological strings without conflating
+ * "safe to click" with "trusted enough to cite as a source".
+ */
+function isRenderableTraceUrl(url: string): boolean {
+  if (url.length === 0 || url.length > 2048) return false;
+  // eslint-disable-next-line no-control-regex
+  if (/[\x00-\x1f]/.test(url)) return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -589,7 +645,9 @@ export function extractToolTrace(body: unknown): AgentToolTraceEntry[] {
     const entry: AgentToolTraceEntry = { tool_id: toolId };
     if (typeof p.query === 'string') entry.query = p.query;
     if (typeof p.question === 'string') entry.question = p.question;
-    if (typeof p.url === 'string') entry.url = p.url;
+    if (typeof p.url === 'string' && isRenderableTraceUrl(p.url)) {
+      entry.url = p.url;
+    }
     trace.push(entry);
   }
   return trace;

@@ -183,6 +183,33 @@ describe('applyAgentPayloadToLocal', () => {
     expect(result.web?.actor_candidates).toEqual([]);
   });
 
+  // Regression (todo/30 S2): an explicitly ambiguous agent answer used to
+  // still ship a populated web.candidates list, which the client then
+  // auto-applied as a confident work_title. `web.candidates` (and `reads`,
+  // derived from it) must be empty whenever status !== 'ok', exactly like
+  // actor_candidates already is above.
+  it('drops web candidates for a non-ok status even when the payload includes them', () => {
+    const local = buildLocalSuggestions({ title: 'Some Title' });
+    const result = applyAgentPayloadToLocal({
+      local,
+      maxReads: 2,
+      payload: {
+        status: 'ambiguous',
+        fields: {},
+        actors: [],
+        candidates: [
+          {
+            title: 'Oldboy (2003 film) - Wikipedia',
+            url: 'https://en.wikipedia.org/wiki/Oldboy_(2003_film)',
+            reason: 'Could not disambiguate from three same-named films',
+          },
+        ],
+      },
+    });
+    expect(result.web?.candidates).toEqual([]);
+    expect(result.web?.reads).toEqual([]);
+  });
+
   it('passes the tool-call trace through to web.tool_trace when provided', () => {
     const local = buildLocalSuggestions({ title: '琅琊榜' });
     const trace = [

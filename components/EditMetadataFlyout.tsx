@@ -230,6 +230,10 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
   const [suggestStage, setSuggestStage] = useState<SuggestJobResponse['stage']>();
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  // Bug fix (todo/30 S1): web.status/reason existed on the response but was
+  // never read — a provider outage, timeout or malformed model output was
+  // shown to the operator identically to a real (if empty) suggestion.
+  const [webWarning, setWebWarning] = useState<string | null>(null);
   const [conflict, setConflict] = useState<number | null>(null);
   const [dto, setDto] = useState<MetaDto | null>(null);
   const [catalogs, setCatalogs] = useState<Catalogs | null>(null);
@@ -519,6 +523,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
     setPendingSuggestions({});
     setError(null);
     setInfo(null);
+    setWebWarning(null);
     try {
       const startRes = await fetch(
         `/api/library/${encodeURIComponent(videoId)}/meta/suggest`,
@@ -593,6 +598,15 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
         })),
       );
       setToolTrace(data.web?.tool_trace ?? []);
+      // Bug fix (todo/30 S1): a provider outage/timeout/malformed response is
+      // reported as web.status === 'unavailable'. Surface it distinctly from
+      // a real empty result so the operator knows no internet research
+      // happened and the remaining suggestions are local title clues only.
+      if (data.web?.status === 'unavailable') {
+        setWebWarning(
+          `${t.metaSuggestWebUnavailable}${data.web.reason ? ` (${data.web.reason})` : ''}`,
+        );
+      }
       if (
         (data.status === 'empty' || !data.suggestions) &&
         candidates.length === 0
@@ -695,11 +709,22 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
 
       // Work-title candidate isn't part of `sug` (structured agent fields) —
       // it comes from the work-identification web candidate list instead.
-      const topCandidateTitle = data.web?.candidates?.[0]?.title?.trim();
+      // Bug fix (todo/30 S2): only trust this when the agent actually
+      // resolved to a single answer. `status !== 'ok'` (e.g. 'ambiguous' —
+      // the agent explicitly could not disambiguate) must never auto-apply a
+      // candidate as if it were a confirmed title. The server now also gates
+      // `web.candidates` on status==='ok'; this check is defense-in-depth.
+      // Confidence lowered from an invented 0.7 (higher than any other
+      // web-derived field in this flow) to 0.55, matching the confidence
+      // used elsewhere for an unconfirmed single web source.
+      const topCandidateTitle =
+        data.web?.status === 'ok'
+          ? data.web?.candidates?.[0]?.title?.trim()
+          : undefined;
       if (topCandidateTitle) {
         const workTitleDraft: SuggestField = {
           value: topCandidateTitle,
-          confidence: 0.7,
+          confidence: 0.55,
           source: 'external_web',
           evidence:
             data.web?.candidates?.[0]?.snippet || t.metaWorkTitleSuggestEvidence,
@@ -1259,6 +1284,17 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
         {info && !error && (
           <>
             <EuiCallOut color="primary" size="s" title={info} />
+            <EuiSpacer size="m" />
+          </>
+        )}
+        {webWarning && !error && (
+          <>
+            <EuiCallOut
+              color="warning"
+              iconType="alert"
+              size="s"
+              title={webWarning}
+            />
             <EuiSpacer size="m" />
           </>
         )}

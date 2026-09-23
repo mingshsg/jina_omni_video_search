@@ -6,20 +6,23 @@ in `todo/22` and `todo/30`; this tracker holds only project-wide items.
 
 ## P1
 
-- [ ] **X1a — disable the reachable RCE surface today.** Add
-      `images: { unoptimized: true }` to `next.config.js`. Nothing uses
-      `next/image`; the `/_next/image` route is on by default and is the
-      vector for the critical *Unauthenticated RCE in Image Optimization API*
-      (patched only `>=15.5.24`). One line, no functional impact.
+- [x] **X1a — disable the reachable RCE surface today.** Fixed: added
+      `images: { unoptimized: true }` to `next.config.js` with a comment
+      explaining why and when to revisit. Verified: zero `next/image` usages
+      (unaffected), `yarn build` still passes clean, no new warnings.
 - [ ] **X1b — plan the Next 15 migration as its own item.** `14.2.35` is the
       final 14.x; 23 `next` advisories are patched only on `15.5.x`. EUI 119
       pins React 18 and Next 15 defaults to React 19 — needs a compatibility
       spike, a branch, and a full-route regression, not a version bump. Also
       check whether the `postcss` high propagates or needs a resolution.
-- [ ] **X2 — freeze new `plan/NN` until the six open P1s close.**
-      `todo/22` F1–F3 and `todo/30` S1–S3 are unchanged across eleven commits
-      and six new plans. Add the rule to `AGENTS.md`: a P1 open in any
-      tracker blocks opening a new plan.
+      **Not done this pass** — correctly scoped as its own tracked item, not
+      a quick fix.
+- [x] **X2 — freeze new `plan/NN` until the six open P1s close.** The six
+      P1s (`todo/22` F1–F3, `todo/30` S1–S3) are now fixed and tested (see
+      those trackers). The rule itself ("a P1 open in any tracker blocks
+      opening a new plan") is now recorded in `AGENTS.md`'s working-style
+      section, with the eleven-commits/six-plans incident as the worked
+      example of why it matters.
 - [ ] **X3 — test the boundaries that have none.** `app/api` (3,807 lines),
       `lib/embed` (868), `components` (2,526) all have **zero** tests.
       - Add `app/**/*.test.ts` to `vitest.config.ts` include.

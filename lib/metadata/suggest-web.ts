@@ -253,16 +253,26 @@ export function applyAgentPayloadToLocal(params: {
     toolTrace,
   } = params;
   const suggestions = { ...local.suggestions };
-  const candidates: SuggestWebCandidate[] = (payload.candidates ?? [])
-    .filter((candidate) => candidate.url && isAllowlistedUrl(candidate.url))
-    .slice(0, 3)
-    .map((candidate) => ({
-      provider: 'agent_builder' as const,
-      title: String(candidate.title ?? '').slice(0, 300),
-      url: String(candidate.url),
-      snippet: String(candidate.reason ?? '').slice(0, 280),
-      allowlisted: true,
-    }));
+  // Bug fix (todo/30 S2): `candidates` used to be built unconditionally, so
+  // an explicitly `ambiguous` agent answer ("I could not disambiguate; here
+  // are three films") still shipped a populated candidate list. The client
+  // then auto-applied candidates[0] as a confident work_title with a
+  // fabricated 0.7 confidence — an abstention rendered as an answer. Gate
+  // candidates/reads the same way actorCandidates and field suggestions
+  // already are, on `payload.status === 'ok'`.
+  const candidates: SuggestWebCandidate[] =
+    payload.status === 'ok'
+      ? (payload.candidates ?? [])
+          .filter((candidate) => candidate.url && isAllowlistedUrl(candidate.url))
+          .slice(0, 3)
+          .map((candidate) => ({
+            provider: 'agent_builder' as const,
+            title: String(candidate.title ?? '').slice(0, 300),
+            url: String(candidate.url),
+            snippet: String(candidate.reason ?? '').slice(0, 280),
+            allowlisted: true,
+          }))
+      : [];
   const reads = candidates.slice(0, maxReads).map((candidate) => ({
     url: candidate.url,
     title: candidate.title,
@@ -573,6 +583,19 @@ async function enrichViaAgentBuilder(params: {
   } catch (err) {
     const reason =
       err instanceof AgentBuilderError ? err.code : 'transport';
+    // Bug fix (todo/30 S1): this failure used to be swallowed entirely — no
+    // server log, and the client never read `web.status`/`web.reason`, so an
+    // outage was indistinguishable from a real (if empty) result. Log here;
+    // the client-side surface fix is in EditMetadataFlyout.tsx.
+    console.error(
+      JSON.stringify({
+        ok: false,
+        area: 'suggest_web',
+        phase: 'agent_builder_enrichment_failed',
+        reason,
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
     const suggestions = { ...local.suggestions };
     stripLocalTitleProse(suggestions);
     return {

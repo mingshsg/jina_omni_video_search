@@ -20,6 +20,16 @@ describe('parseQueryDictionary', () => {
     expect(parsed.parser).toBe('dictionary');
   });
 
+  // Regression (todo/22 F2): free_text used to drop the residual whenever an
+  // actor matched, so title terms never reached BM25 — only the alias did.
+  it('keeps non-actor terms in free_text alongside a matched actor', () => {
+    const parsed = parseQueryDictionary('Audrey Hepburn Roman Holiday');
+    expect(parsed.extracted.actor_ids).toEqual(['person:audrey-hepburn']);
+    expect(parsed.free_text.toLowerCase()).toContain('audrey hepburn');
+    expect(parsed.free_text.toLowerCase()).toContain('roman holiday');
+    expect(parsed.vector_query.toLowerCase()).toContain('roman holiday');
+  });
+
   it('marks name-only queries as lacking scene terms', () => {
     const parsed = parseQueryDictionary('Audrey Hepburn');
     expect(parsed.extracted.actor_ids).toEqual(['person:audrey-hepburn']);
