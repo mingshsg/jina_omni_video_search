@@ -19,6 +19,7 @@ import {
   AgentBuilderError,
   converseSuggestAgent,
   isAgentBuilderSuggestConfigured,
+  isRenderableTraceUrl,
   type AgentBuilderFieldDraft,
   type AgentBuilderSuggestPayload,
   type AgentToolTraceEntry,
@@ -81,6 +82,13 @@ export interface SuggestWebMeta {
   agent_id?: string;
   actor_candidates?: SuggestWebActorCandidate[];
   /**
+   * Count of agent-proposed cast members dropped because their source URL
+   * was missing or off the name allowlist (todo/32 R1). Non-zero means the
+   * agent *did* find cast that is deliberately not shown — the UI must say
+   * so rather than render an empty list.
+   */
+  actor_candidates_dropped?: number;
+  /**
    * Best-effort trace of the agent's own search_web/read_url tool calls
    * (query/question/url per call), for UI transparency into how a
    * suggestion was researched. Empty when unavailable (e.g. local/jina-rest
@@ -104,17 +112,44 @@ export interface SuggestWebActorCandidate {
   matched_person_id: string | null;
 }
 
+export interface NormalizedActorCandidates {
+  candidates: SuggestWebActorCandidate[];
+  /**
+   * Agent-proposed actors discarded because their source URL is missing or
+   * not on the name allowlist.
+   *
+   * Bug fix (todo/32 R1): this drop used to be completely silent — the same
+   * defect class as todo/30 S6, which was fixed for all seven scalar fields
+   * but left in place here. The gate itself is deliberately *kept*: actor
+   * candidates feed catalog growth, and aliases reach the search hot path
+   * via `findContainedAliases`, so a bad actor name has a much wider blast
+   * radius than a bad `country`. What was wrong was discarding research
+   * without telling the operator anything happened. Counting them lets the
+   * UI say "N cast candidates were found but not shown because their source
+   * wasn't trusted" instead of rendering an empty list that is
+   * indistinguishable from "the agent found no cast at all".
+   */
+  dropped_uncited: number;
+}
+
 export function normalizeAgentActorCandidates(
   actors: AgentBuilderSuggestPayload['actors'],
   max = 8,
   retrievedAt = new Date().toISOString(),
-): SuggestWebActorCandidate[] {
+): NormalizedActorCandidates {
   const aliasIndex = getAliasIndex();
-  return (actors ?? [])
+  let droppedUncited = 0;
+  const candidates = (actors ?? [])
     .flatMap((actor) => {
       const en = actor.names?.en?.normalize('NFKC').trim() ?? '';
+      // No English name at all is malformed agent output, not a policy
+      // drop — nothing the operator could act on, so it is not counted.
+      if (!en) return [];
       const url = String(actor.url ?? '');
-      if (!en || !isNameAllowlistedUrl(url)) return [];
+      if (!isNameAllowlistedUrl(url)) {
+        droppedUncited += 1;
+        return [];
+      }
       const zh = actor.names?.zh?.normalize('NFKC').trim() || null;
       const nativeRaw = actor.names?.native;
       const nativeName =
@@ -145,6 +180,7 @@ export function normalizeAgentActorCandidates(
       ];
     })
     .slice(0, Math.max(0, max));
+  return { candidates, dropped_uncited: droppedUncited };
 }
 
 export interface EnrichedSuggestResult extends LocalSuggestResult {
@@ -214,6 +250,43 @@ function isFileLevelVideoType(value: unknown): boolean {
 }
 
 /**
+ * Every URL the agent surfaced anywhere in its payload — per-field
+ * citations, candidate hits, and actor sources — deduped, safety-checked,
+ * and capped. Deliberately *not* filtered by the domain allowlist: this is
+ * "what did the agent consult", for the operator to review before saving as
+ * `meta.reference_urls`, not a per-fact trust claim (todo/30 S6).
+ */
+function collectReferenceUrls(payload: AgentBuilderSuggestPayload): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const add = (url: unknown): void => {
+    if (out.length >= META_BOUNDS.referenceUrlsMax) return;
+    if (typeof url !== 'string' || !url) return;
+    const trimmed = url.trim();
+    if (!trimmed || !isRenderableTraceUrl(trimmed) || seen.has(trimmed)) return;
+    seen.add(trimmed);
+    out.push(trimmed);
+  };
+  const fields = payload.fields;
+  if (fields) {
+    add(fields.year?.url);
+    add(fields.country?.url);
+    add(fields.primary_language?.url);
+    add(fields.video_type?.url);
+    add(fields.description?.url);
+    add(fields.abstract?.url);
+    add(fields.tags?.url);
+  }
+  for (const candidate of payload.candidates ?? []) {
+    add(candidate?.url);
+  }
+  for (const actor of payload.actors ?? []) {
+    add(actor?.url);
+  }
+  return out.slice(0, META_BOUNDS.referenceUrlsMax);
+}
+
+/**
  * Prefer an agent draft over a weaker local_title draft for the same field.
  * external_web always wins over local_title when the agent value is present.
  */
@@ -279,88 +352,113 @@ export function applyAgentPayloadToLocal(params: {
   }));
 
   let actorCandidates: SuggestWebActorCandidate[] = [];
+  let actorCandidatesDropped = 0;
   if (payload.status === 'ok') {
-    actorCandidates = normalizeAgentActorCandidates(
+    const normalizedActors = normalizeAgentActorCandidates(
       payload.actors,
       8,
       retrievedAt,
     );
+    actorCandidates = normalizedActors.candidates;
+    actorCandidatesDropped = normalizedActors.dropped_uncited;
 
-    const cited = (
+    const readField = (
       field: AgentBuilderFieldDraft | undefined,
-    ): { value: unknown; url: string; evidence: string } | null => {
-      if (!field || typeof field.url !== 'string' || !isAllowlistedUrl(field.url)) {
-        return null;
-      }
+    ): { value: unknown; url: string | null; evidence: string; cited: boolean } | null => {
+      if (!field) return null;
+      const rawUrl = typeof field.url === 'string' && field.url ? field.url : null;
       return {
         value: field.value,
-        url: field.url,
+        url: rawUrl,
         evidence: String(field.evidence ?? '').slice(0, 280),
+        // Bug fix (todo/30 S6): this used to *gate* the whole fact — no
+        // allowlisted URL meant the value was silently dropped, even though
+        // the zod schema in agent-builder-suggest.ts always treated `url`
+        // as optional. Product direction (方案 A): still apply the fact,
+        // just trust it less and label it distinctly (see
+        // `discountForCitation` / the `[agent, uncited]` evidence prefix
+        // below) rather than discard real agent output.
+        cited: !!rawUrl && isAllowlistedUrl(rawUrl),
       };
     };
 
-    const year = cited(payload.fields?.year);
+    /**
+     * Confidence penalty applied when a field has no allowlisted citation.
+     * Keeps relative field ordering (year still trusted more than tags)
+     * while making uncited facts visibly lower-confidence in the editor.
+     */
+    const discountForCitation = (base: number, wasCited: boolean): number =>
+      wasCited ? base : Math.max(0.3, Math.round((base - 0.15) * 100) / 100);
+
+    /** Only pass through source_url when it satisfies the stricter https-only
+     * provenance schema used at Save time (validate.ts fieldProvenanceSchema)
+     * — an http-only or otherwise-unciteable URL is still shown in evidence
+     * text, just not carried as a clickable "source" link. */
+    const citableSourceUrl = (url: string | null): string | undefined =>
+      url && url.startsWith('https://') ? url : undefined;
+
+    const year = readField(payload.fields?.year);
     if (
       typeof year?.value === 'number' &&
       year.value >= META_BOUNDS.yearMin &&
       year.value <= META_BOUNDS.yearMax &&
       shouldPreferAgentField({
         local: suggestions.year,
-        agentConfidence: 0.7,
+        agentConfidence: discountForCitation(0.7, year.cited),
       })
     ) {
       suggestions.year = {
         value: year.value,
-        confidence: 0.7,
+        confidence: discountForCitation(0.7, year.cited),
         source: 'external_web',
-        evidence: `[agent] ${year.evidence || `year ${year.value}`}`,
-        source_url: year.url,
+        evidence: `[agent${year.cited ? '' : ', uncited'}] ${year.evidence || `year ${year.value}`}`,
+        source_url: citableSourceUrl(year.url),
         retrieved_at: retrievedAt,
       };
     }
 
-    const country = cited(payload.fields?.country);
+    const country = readField(payload.fields?.country);
     if (
       typeof country?.value === 'string' &&
       COUNTRY_CODE_SET.has(country.value.trim().toUpperCase()) &&
       shouldPreferAgentField({
         local: suggestions.country,
-        agentConfidence: 0.65,
+        agentConfidence: discountForCitation(0.65, country.cited),
       })
     ) {
       suggestions.country = {
         value: country.value.trim().toUpperCase(),
-        confidence: 0.65,
+        confidence: discountForCitation(0.65, country.cited),
         source: 'external_web',
-        evidence: `[agent] ${country.evidence || 'work production country'}`,
-        source_url: country.url,
+        evidence: `[agent${country.cited ? '' : ', uncited'}] ${country.evidence || 'work production country'}`,
+        source_url: citableSourceUrl(country.url),
         retrieved_at: retrievedAt,
       };
     }
 
-    const language = cited(payload.fields?.primary_language);
+    const language = readField(payload.fields?.primary_language);
     if (typeof language?.value === 'string') {
       const canonical = canonicalizePrimaryLanguage(String(language.value));
       if (
         canonical &&
         shouldPreferAgentField({
           local: suggestions.primary_language,
-          agentConfidence: 0.65,
+          agentConfidence: discountForCitation(0.65, language.cited),
         })
       ) {
         suggestions.primary_language = {
           value: canonical,
-          confidence: 0.65,
+          confidence: discountForCitation(0.65, language.cited),
           source: 'external_web',
-          evidence: `[agent] ${language.evidence || 'work original language'}`,
-          source_url: language.url,
+          evidence: `[agent${language.cited ? '' : ', uncited'}] ${language.evidence || 'work original language'}`,
+          source_url: citableSourceUrl(language.url),
           retrieved_at: retrievedAt,
         };
       }
     }
 
     // Prefer file-level local title clues (trailer/interview) over work kind.
-    const videoType = cited(payload.fields?.video_type);
+    const videoType = readField(payload.fields?.video_type);
     const localType = suggestions.video_type;
     const keepLocalFileType = isFileLevelVideoType(localType?.value);
     if (
@@ -369,58 +467,58 @@ export function applyAgentPayloadToLocal(params: {
       VIDEO_TYPE_SET.has(String(videoType.value).trim()) &&
       shouldPreferAgentField({
         local: localType,
-        agentConfidence: 0.6,
+        agentConfidence: discountForCitation(0.6, videoType.cited),
       })
     ) {
       suggestions.video_type = {
         value: String(videoType.value).trim(),
-        confidence: 0.6,
+        confidence: discountForCitation(0.6, videoType.cited),
         source: 'external_web',
-        evidence: `[agent] ${videoType.evidence || 'sourced video type'}`,
-        source_url: videoType.url,
+        evidence: `[agent${videoType.cited ? '' : ', uncited'}] ${videoType.evidence || 'sourced video type'}`,
+        source_url: citableSourceUrl(videoType.url),
         retrieved_at: retrievedAt,
       };
     }
 
-    const description = cited(payload.fields?.description);
+    const description = readField(payload.fields?.description);
     if (
       typeof description?.value === 'string' &&
       description.value.trim() &&
       shouldPreferAgentField({
         local: suggestions.description,
-        agentConfidence: 0.65,
+        agentConfidence: discountForCitation(0.65, description.cited),
       })
     ) {
       suggestions.description = {
         value: description.value.trim().slice(0, META_BOUNDS.descriptionMax),
-        confidence: 0.65,
+        confidence: discountForCitation(0.65, description.cited),
         source: 'external_web',
-        evidence: `[agent] ${description.evidence || 'grounded work description'}`,
-        source_url: description.url,
+        evidence: `[agent${description.cited ? '' : ', uncited'}] ${description.evidence || 'grounded work description'}`,
+        source_url: citableSourceUrl(description.url),
         retrieved_at: retrievedAt,
       };
     }
 
-    const abstract = cited(payload.fields?.abstract);
+    const abstract = readField(payload.fields?.abstract);
     if (
       typeof abstract?.value === 'string' &&
       abstract.value.trim() &&
       shouldPreferAgentField({
         local: suggestions.abstract,
-        agentConfidence: 0.65,
+        agentConfidence: discountForCitation(0.65, abstract.cited),
       })
     ) {
       suggestions.abstract = {
         value: abstract.value.trim().slice(0, META_BOUNDS.abstractMax),
-        confidence: 0.65,
+        confidence: discountForCitation(0.65, abstract.cited),
         source: 'external_web',
-        evidence: `[agent] ${abstract.evidence || 'grounded work abstract'}`,
-        source_url: abstract.url,
+        evidence: `[agent${abstract.cited ? '' : ', uncited'}] ${abstract.evidence || 'grounded work abstract'}`,
+        source_url: citableSourceUrl(abstract.url),
         retrieved_at: retrievedAt,
       };
     }
 
-    const tags = cited(payload.fields?.tags);
+    const tags = readField(payload.fields?.tags);
     if (Array.isArray(tags?.value)) {
       const bounded = tags.value
         .map((tag) => String(tag).normalize('NFKC').trim())
@@ -430,23 +528,42 @@ export function applyAgentPayloadToLocal(params: {
         bounded.length > 0 &&
         shouldPreferAgentField({
           local: suggestions.tags,
-          agentConfidence: 0.55,
+          agentConfidence: discountForCitation(0.55, tags.cited),
         })
       ) {
         suggestions.tags = {
           value: bounded,
-          confidence: 0.55,
+          confidence: discountForCitation(0.55, tags.cited),
           source: 'external_web',
-          evidence: `[agent] ${tags.evidence || 'sourced genre keywords'}`,
-          source_url: tags.url,
+          evidence: `[agent${tags.cited ? '' : ', uncited'}] ${tags.evidence || 'sourced genre keywords'}`,
+          source_url: citableSourceUrl(tags.url),
           retrieved_at: retrievedAt,
         };
       }
     }
 
+    // Bug fix (todo/30 S6, part 2): surface every URL the agent touched —
+    // cited or not, field-level or candidate/actor-level — as a durable
+    // `reference_urls` suggestion. This is deliberately independent of the
+    // per-field citation gate above: even an uncited fact, or a citation
+    // that didn't pass the (narrow) domain allowlist, is still a page the
+    // operator likely wants recorded as "what we consulted" so they can
+    // spot-check it before saving.
+    const referenceUrls = collectReferenceUrls(payload);
+    if (referenceUrls.length > 0) {
+      suggestions.reference_urls = {
+        value: referenceUrls,
+        confidence: 0.5,
+        source: 'external_web',
+        evidence: '[agent] pages consulted while researching this title',
+        retrieved_at: retrievedAt,
+      };
+    }
+
     // Agent identified a work: never leave residual Title-clue prose.
     stripLocalTitleProse(suggestions);
   } else {
+
     // Research ran but abstained/failed structured fill — do not surface
     // local Title-clue description/abstract as if they were researched.
     stripLocalTitleProse(suggestions);
@@ -465,6 +582,7 @@ export function applyAgentPayloadToLocal(params: {
       elapsed_ms: elapsedMs,
       agent_id: agentId,
       actor_candidates: actorCandidates,
+      actor_candidates_dropped: actorCandidatesDropped,
       tool_trace: toolTrace,
     },
   };

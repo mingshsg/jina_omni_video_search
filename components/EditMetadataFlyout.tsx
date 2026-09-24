@@ -3,8 +3,11 @@
 import {
   EuiButton,
   EuiAccordion,
+  EuiBadge,
   EuiButtonEmpty,
+  EuiButtonIcon,
   EuiComboBox,
+  EuiConfirmModal,
   type EuiComboBoxOptionOption,
   EuiFieldNumber,
   EuiFieldText,
@@ -16,6 +19,7 @@ import {
   EuiFlyoutHeader,
   EuiForm,
   EuiFormRow,
+  EuiPanel,
   EuiSelect,
   EuiSpacer,
   EuiText,
@@ -56,6 +60,7 @@ type MetaDto = {
       zh?: string;
       native?: { lang: string; name: string };
     };
+    reference_urls?: string[];
     review?: {
       description?: MetaReviewEntry;
       abstract?: MetaReviewEntry;
@@ -66,6 +71,7 @@ type MetaDto = {
       country?: MetaReviewEntry;
       tags?: MetaReviewEntry;
       work_title?: MetaReviewEntry;
+      reference_urls?: MetaReviewEntry;
     };
   };
 };
@@ -121,6 +127,7 @@ type SuggestResult = {
     description?: SuggestField;
     abstract?: SuggestField;
     tags?: SuggestField;
+    reference_urls?: SuggestField;
   };
   web?: {
     status?: 'ok' | 'ambiguous' | 'empty' | 'unavailable' | 'skipped';
@@ -133,6 +140,7 @@ type SuggestResult = {
       allowlisted: boolean;
     }>;
     actor_candidates?: SuggestActorCandidate[];
+    actor_candidates_dropped?: number;
     tool_trace?: SuggestToolTraceEntry[];
   } | null;
 };
@@ -163,6 +171,7 @@ type SuggestedSources = {
   abstract?: 'suggestion';
   tags?: 'suggestion';
   work_title?: 'suggestion';
+  reference_urls?: 'suggestion';
 };
 
 type FieldProvenance = {
@@ -175,6 +184,7 @@ type FieldProvenance = {
   abstract?: MetaReviewEntry;
   tags?: MetaReviewEntry;
   work_title?: MetaReviewEntry;
+  reference_urls?: MetaReviewEntry;
 };
 
 type ScalarSuggestKey =
@@ -185,7 +195,8 @@ type ScalarSuggestKey =
   | 'description'
   | 'abstract'
   | 'tags'
-  | 'work_title';
+  | 'work_title'
+  | 'reference_urls';
 
 /**
  * Suggestions that were NOT auto-applied because the field already had
@@ -228,6 +239,13 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
   const [saving, setSaving] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
   const [suggestStage, setSuggestStage] = useState<SuggestJobResponse['stage']>();
+  // Elapsed-time readout while Suggest runs — the stage label ("Agent is
+  // searching...") is otherwise the operator's only signal, and with no
+  // further stage transitions for a while there's no way to tell "still
+  // working" from "stuck". Ticks every second; independent of the actual
+  // job status so it doesn't need a job-status poll to update.
+  const [suggestElapsedMs, setSuggestElapsedMs] = useState(0);
+  const suggestStartRef = useRef<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   // Bug fix (todo/30 S1): web.status/reason existed on the response but was
@@ -245,6 +263,9 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
   const [language, setLanguage] = useState('');
   const [country, setCountry] = useState('');
   const [tagsText, setTagsText] = useState('');
+  const [selectedReferenceUrls, setSelectedReferenceUrls] = useState<
+    EuiComboBoxOptionOption[]
+  >([]);
   const [workTitleEn, setWorkTitleEn] = useState('');
   const [workTitleZh, setWorkTitleZh] = useState('');
   const [workTitleNativeLang, setWorkTitleNativeLang] = useState('');
@@ -256,7 +277,20 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
     [],
   );
   const [actorCandidates, setActorCandidates] = useState<SuggestActorCandidate[]>([]);
+  // Pending text in each selected actor's "add a known name" input, keyed by
+  // catalog person id. Local-only until the operator submits it.
+  const [knownAsDraft, setKnownAsDraft] = useState<Record<string, string>>({});
   const [toolTrace, setToolTrace] = useState<SuggestToolTraceEntry[]>([]);
+  // todo/32 R1: agent-found cast withheld because its source wasn't on the
+  // name allowlist. Rendered as an explicit notice — an empty candidate
+  // list must not be ambiguous between "none found" and "found, withheld".
+  const [actorCandidatesDropped, setActorCandidatesDropped] = useState(0);
+  // todo/32 R2: removing a known name rewrites the shared person catalog
+  // and takes effect for every video's search immediately, with no undo —
+  // so the destructive direction is confirmed. Adding stays frictionless.
+  const [knownAsRemoveTarget, setKnownAsRemoveTarget] = useState<
+    { personId: string; personLabel: string; name: string } | null
+  >(null);
   const [fieldSources, setFieldSources] = useState<SuggestedSources>({});
   const [fieldProvenance, setFieldProvenance] = useState<FieldProvenance>({});
   const [pendingSuggestions, setPendingSuggestions] = useState<PendingSuggestions>({});
@@ -272,6 +306,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
     country: '',
     tagsText: '',
     workTitleEn: '',
+    referenceUrls: [] as string[],
   });
 
   useEffect(() => {
@@ -284,8 +319,35 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
       country,
       tagsText,
       workTitleEn,
+      referenceUrls: selectedReferenceUrls.map((o) => String(o.value ?? o.label)),
     };
-  }, [description, abstract, year, videoType, language, country, tagsText, workTitleEn]);
+  }, [
+    description,
+    abstract,
+    year,
+    videoType,
+    language,
+    country,
+    tagsText,
+    workTitleEn,
+    selectedReferenceUrls,
+  ]);
+
+  useEffect(() => {
+    if (!suggesting) {
+      suggestStartRef.current = null;
+      return;
+    }
+    suggestStartRef.current = Date.now();
+    setSuggestElapsedMs(0);
+    const tick = () => {
+      if (suggestStartRef.current != null) {
+        setSuggestElapsedMs(Date.now() - suggestStartRef.current);
+      }
+    };
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [suggesting]);
 
   const clearSuggestionMark = useCallback(
     (field: keyof SuggestedSources) => {
@@ -314,6 +376,12 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
     setLanguage(data.meta.primary_language ?? '');
     setCountry(data.meta.country ?? '');
     setTagsText((data.meta.tags ?? []).join(', '));
+    setSelectedReferenceUrls(
+      (data.meta.reference_urls ?? []).map((url) => ({
+        label: url,
+        value: url,
+      })),
+    );
     setWorkTitleEn(data.meta.work_title?.en ?? '');
     setWorkTitleZh(data.meta.work_title?.zh ?? '');
     setWorkTitleNativeLang(data.meta.work_title?.native?.lang ?? '');
@@ -350,11 +418,13 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
     adopt('primary_language', review.primary_language);
     adopt('tags', review.tags);
     adopt('work_title', review.work_title);
+    adopt('reference_urls', review.reference_urls);
     setFieldSources(sources);
     setFieldProvenance(provenance);
     setInfo(null);
     setActorCandidates([]);
     setToolTrace([]);
+    setActorCandidatesDropped(0);
     setPendingSuggestions({});
     const ids = data.meta.actor_ids ?? [];
     setSelectedActors(
@@ -482,6 +552,13 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
             ? t.metaSuggestStageValidating
             : t.metaSuggesting;
 
+  const suggestElapsedText = (() => {
+    const totalSeconds = Math.floor(suggestElapsedMs / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${String(seconds).padStart(2, '0')}`;
+  })();
+
   const cancelSuggest = useCallback(() => {
     suggestAbort.current?.abort();
     const requestId = suggestRequestId.current;
@@ -512,6 +589,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
           .split(/[,，]/)
           .map((s) => s.trim())
           .filter(Boolean).length === 0,
+      referenceUrlsEmpty: selectedReferenceUrls.length === 0,
     };
     suggestAbort.current?.abort();
     const ac = new AbortController();
@@ -520,6 +598,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
     setSuggestStage('queued');
     setActorCandidates([]);
     setToolTrace([]);
+    setActorCandidatesDropped(0);
     setPendingSuggestions({});
     setError(null);
     setInfo(null);
@@ -564,7 +643,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
 
       const pollStarted = Date.now();
       while (job.status === 'pending') {
-        if (Date.now() - pollStarted > 120_000) {
+        if (Date.now() - pollStarted > 210_000) {
           throw new Error(t.metaSuggestTimeout);
         }
         await waitForPoll(1_000, ac.signal);
@@ -598,6 +677,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
         })),
       );
       setToolTrace(data.web?.tool_trace ?? []);
+      setActorCandidatesDropped(data.web?.actor_candidates_dropped ?? 0);
       // Bug fix (todo/30 S1): a provider outage/timeout/malformed response is
       // reported as web.status === 'unavailable'. Surface it distinctly from
       // a real empty result so the operator knows no internet research
@@ -706,6 +786,26 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
       } else if (Array.isArray(sug.tags?.value) && sug.tags.value.length > 0) {
         nextPending.tags = sug.tags;
       }
+      const curReferenceUrlsEmpty = cur.referenceUrls.length === 0;
+      if (
+        snapshot.referenceUrlsEmpty &&
+        curReferenceUrlsEmpty &&
+        Array.isArray(sug.reference_urls?.value) &&
+        sug.reference_urls.value.length > 0
+      ) {
+        setSelectedReferenceUrls(
+          sug.reference_urls.value.map((url) => ({
+            label: String(url),
+            value: String(url),
+          })),
+        );
+        mark('reference_urls', sug.reference_urls);
+      } else if (
+        Array.isArray(sug.reference_urls?.value) &&
+        sug.reference_urls.value.length > 0
+      ) {
+        nextPending.reference_urls = sug.reference_urls;
+      }
 
       // Work-title candidate isn't part of `sug` (structured agent fields) —
       // it comes from the work-identification web candidate list instead.
@@ -793,6 +893,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
     description,
     abstract,
     tagsText,
+    selectedReferenceUrls,
     videoId,
     locale,
     t.metaSuggestEmpty,
@@ -858,6 +959,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
         const data = (await res.json()) as {
           id?: string;
           display?: string;
+          aliases?: string[];
           error?: { code?: string; message?: string };
         };
         if (!res.ok || !data.id) {
@@ -873,6 +975,23 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
             ? previous
             : [...previous, option],
         );
+        // Bug fix (fixes the "Known as" panel below staying empty for a
+        // just-created actor): `catalogs.people` is only populated at load
+        // time via GET /api/metadata/catalogs — without this, a freshly
+        // created person has no entry there until the whole catalog is
+        // reloaded, so their known-names list would render empty/missing
+        // immediately after creation.
+        setCatalogs((previous) => {
+          if (!previous) return previous;
+          const newPerson = {
+            id: data.id!,
+            display: option.label,
+            aliases: data.aliases ?? [input.en],
+          };
+          return previous.people.some((p) => p.id === newPerson.id)
+            ? previous
+            : { ...previous, people: [...previous.people, newPerson] };
+        });
         return option;
       } catch {
         setError(t.metaActorCatalogAddError);
@@ -880,6 +999,76 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
       }
     },
     [locale, t.metaActorCatalogAddError],
+  );
+
+  /**
+   * Replaces a catalog person's full "known as" list (`PATCH
+   * /api/metadata/catalogs/people/{id}`). Optimistically updates local
+   * `catalogs.people` so the chip list reflects the change immediately;
+   * rolls back to the pre-edit list on failure (409 alias-conflict with
+   * another person, or a validation error) so the UI never shows a name
+   * that didn't actually persist.
+   */
+  const updatePersonKnownAs = useCallback(
+    async (personId: string, nextAliases: string[]) => {
+      const previousPeople = catalogs?.people;
+      setCatalogs((previous) => {
+        if (!previous) return previous;
+        return {
+          ...previous,
+          people: previous.people.map((p) =>
+            p.id === personId ? { ...p, aliases: nextAliases } : p,
+          ),
+        };
+      });
+      try {
+        const res = await fetch(
+          `/api/metadata/catalogs/people/${encodeURIComponent(personId)}`,
+          {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept-Language': locale,
+            },
+            body: JSON.stringify({ aliases: nextAliases }),
+          },
+        );
+        const data = (await res.json()) as {
+          aliases?: string[];
+          error?: { code?: string; message?: string };
+        };
+        if (!res.ok) {
+          setError(data.error?.message ?? t.metaKnownAsError);
+          if (previousPeople) {
+            setCatalogs((previous) =>
+              previous ? { ...previous, people: previousPeople } : previous,
+            );
+          }
+          return;
+        }
+        // Reconcile with the server's normalized/deduped list (trim, NFKC,
+        // de-dup order) rather than trusting the optimistic local value.
+        if (data.aliases) {
+          setCatalogs((previous) => {
+            if (!previous) return previous;
+            return {
+              ...previous,
+              people: previous.people.map((p) =>
+                p.id === personId ? { ...p, aliases: data.aliases! } : p,
+              ),
+            };
+          });
+        }
+      } catch {
+        setError(t.metaKnownAsError);
+        if (previousPeople) {
+          setCatalogs((previous) =>
+            previous ? { ...previous, people: previousPeople } : previous,
+          );
+        }
+      }
+    },
+    [catalogs?.people, locale, t.metaKnownAsError],
   );
 
   const createActorFromFreeText = useCallback(
@@ -953,6 +1142,22 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
           }
         }
         setTagsText(merged.join(', '));
+      } else if (key === 'reference_urls') {
+        const existing = selectedReferenceUrls.map((o) =>
+          String(o.value ?? o.label),
+        );
+        const incoming = Array.isArray(draft.value)
+          ? draft.value.map(String)
+          : [];
+        const merged = [...existing];
+        for (const url of incoming) {
+          if (!merged.includes(url)) {
+            merged.push(url);
+          }
+        }
+        setSelectedReferenceUrls(
+          merged.map((url) => ({ label: url, value: url })),
+        );
       } else if (key === 'year') {
         setYear(String(draft.value));
       } else if (key === 'video_type') {
@@ -992,7 +1197,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
         return next;
       });
     },
-    [pendingSuggestions, tagsText],
+    [pendingSuggestions, tagsText, selectedReferenceUrls],
   );
 
   const save = useCallback(async () => {
@@ -1004,6 +1209,9 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
       .split(/[,，]/)
       .map((s) => s.trim())
       .filter(Boolean);
+    const referenceUrls = selectedReferenceUrls
+      .map((o) => String(o.value ?? o.label).trim())
+      .filter(Boolean);
     const yearNum = year.trim() === '' ? null : Number(year);
     if (yearNum !== null && (!Number.isInteger(yearNum) || Number.isNaN(yearNum))) {
       setError(t.metaSaveError);
@@ -1013,6 +1221,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
 
     const baseline = dto.meta;
     const baselineTags = baseline.tags ?? [];
+    const baselineReferenceUrls = baseline.reference_urls ?? [];
     const baselineActors = baseline.actor_ids ?? [];
     const nextActors = selectedActors.map((o) => String(o.value));
 
@@ -1081,6 +1290,11 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
       takeSource('tags');
     }
 
+    if (!sameTags(referenceUrls, baselineReferenceUrls)) {
+      body.reference_urls = referenceUrls.length === 0 ? null : referenceUrls;
+      takeSource('reference_urls');
+    }
+
     const nextWorkTitleEn = workTitleEn.trim();
     const nextWorkTitleZh = workTitleZh.trim();
     const nextWorkTitleNativeLang = workTitleNativeLang.trim();
@@ -1115,6 +1329,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
       'country',
       'tags',
       'work_title',
+      'reference_urls',
     ] as const;
     if (!editableKeys.some((k) => body[k] !== undefined)) {
       setError(t.metaSaveError);
@@ -1164,6 +1379,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
   }, [
     dto,
     tagsText,
+    selectedReferenceUrls,
     year,
     description,
     abstract,
@@ -1304,7 +1520,23 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
               color="primary"
               iconType="search"
               size="s"
-              title={suggestStageText}
+              title={
+                <EuiFlexGroup
+                  alignItems="center"
+                  justifyContent="spaceBetween"
+                  gutterSize="s"
+                  responsive={false}
+                >
+                  <EuiFlexItem grow={false}>{suggestStageText}</EuiFlexItem>
+                  <EuiFlexItem grow={false}>
+                    <EuiText size="xs" color="subdued">
+                      <span aria-label={t.metaSuggestElapsedLabel}>
+                        {suggestElapsedText}
+                      </span>
+                    </EuiText>
+                  </EuiFlexItem>
+                </EuiFlexGroup>
+              }
             >
               <p>{t.metaSuggestStageHelp}</p>
             </EuiCallOut>
@@ -1441,6 +1673,139 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
                 fullWidth
               />
             </EuiFormRow>
+            {selectedActors.length > 0 && (
+              <>
+                <EuiText size="xs" color="subdued">
+                  <p>{t.metaKnownAsHelp}</p>
+                </EuiText>
+                <EuiSpacer size="xs" />
+                {selectedActors.map((option) => {
+                  const personId = String(option.value);
+                  const person = catalogs?.people.find((p) => p.id === personId);
+                  // Free-text-created / suggestion-added actors are folded
+                  // into `catalogs.people` as soon as they're created (see
+                  // `createPerson`) — this should only be null for a brief
+                  // instant mid-request, never steady-state.
+                  if (!person) return null;
+                  const draft = knownAsDraft[personId] ?? '';
+                  const canRemove = person.aliases.length > 1;
+                  const addName = () => {
+                    const trimmed = draft.trim();
+                    setKnownAsDraft((prev) => ({ ...prev, [personId]: '' }));
+                    if (!trimmed) return;
+                    if (
+                      person.aliases.some(
+                        (a) => a.toLowerCase() === trimmed.toLowerCase(),
+                      )
+                    ) {
+                      return;
+                    }
+                    void updatePersonKnownAs(personId, [
+                      ...person.aliases,
+                      trimmed,
+                    ]);
+                  };
+                  const removeName = (name: string) => {
+                    if (!canRemove) return;
+                    // Confirmed, not immediate: this rewrites the shared
+                    // person catalog for every video (todo/32 R2).
+                    setKnownAsRemoveTarget({
+                      personId,
+                      personLabel: person.display,
+                      name,
+                    });
+                  };
+                  return (
+                    <div key={personId}>
+                      <EuiPanel
+                        color="subdued"
+                        paddingSize="s"
+                        hasShadow={false}
+                        hasBorder
+                      >
+                        <EuiText size="xs">
+                          <strong>{person.display}</strong>
+                        </EuiText>
+                        <EuiSpacer size="xs" />
+                        <EuiFlexGroup
+                          wrap
+                          responsive={false}
+                          gutterSize="xs"
+                          alignItems="center"
+                        >
+                          {person.aliases.map((name) =>
+                            canRemove ? (
+                              <EuiFlexItem grow={false} key={name}>
+                                <EuiBadge
+                                  color="hollow"
+                                  iconType="cross"
+                                  iconSide="right"
+                                  iconOnClick={() => removeName(name)}
+                                  iconOnClickAriaLabel={
+                                    t.metaKnownAsRemoveAriaLabel
+                                  }
+                                >
+                                  {name}
+                                </EuiBadge>
+                              </EuiFlexItem>
+                            ) : (
+                              <EuiFlexItem grow={false} key={name}>
+                                <EuiBadge color="hollow">{name}</EuiBadge>
+                              </EuiFlexItem>
+                            ),
+                          )}
+                          <EuiFlexItem grow={false} style={{ minWidth: 160 }}>
+                            <EuiFieldText
+                              compressed
+                              placeholder={t.metaKnownAsAddPlaceholder}
+                              value={draft}
+                              onChange={(e) =>
+                                setKnownAsDraft((prev) => ({
+                                  ...prev,
+                                  [personId]: e.target.value,
+                                }))
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  addName();
+                                }
+                              }}
+                            />
+                          </EuiFlexItem>
+                          <EuiFlexItem grow={false}>
+                            <EuiButtonIcon
+                              iconType="plusCircle"
+                              aria-label={t.metaKnownAsAddAriaLabel}
+                              onClick={addName}
+                              disabled={!draft.trim()}
+                            />
+                          </EuiFlexItem>
+                        </EuiFlexGroup>
+                      </EuiPanel>
+                      <EuiSpacer size="xs" />
+                    </div>
+                  );
+                })}
+                <EuiSpacer size="s" />
+              </>
+            )}
+            {actorCandidatesDropped > 0 && (
+              <>
+                <EuiCallOut
+                  color="warning"
+                  size="s"
+                  iconType="questionInCircle"
+                  title={t.metaActorCandidatesWithheld.replace(
+                    '{count}',
+                    String(actorCandidatesDropped),
+                  )}
+                >
+                  <p>{t.metaActorCandidatesWithheldHelp}</p>
+                </EuiCallOut>
+                <EuiSpacer size="s" />
+              </>
+            )}
             {actorCandidates.length > 0 && (
               <>
                 <EuiCallOut
@@ -1633,6 +1998,41 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
               />
             </EuiFormRow>
             {renderPendingSuggestion('tags')}
+            <EuiFormRow
+              label={t.metaReferenceUrls}
+              helpText={evidenceHelp('reference_urls') ?? t.metaReferenceUrlsHelp}
+              fullWidth
+            >
+              <EuiComboBox
+                noSuggestions
+                selectedOptions={selectedReferenceUrls}
+                onChange={(opts) => {
+                  clearSuggestionMark('reference_urls');
+                  setSelectedReferenceUrls(opts);
+                }}
+                onCreateOption={(searchValue) => {
+                  const trimmed = searchValue.trim();
+                  if (!trimmed) return false;
+                  if (
+                    selectedReferenceUrls.some(
+                      (o) => String(o.value ?? o.label) === trimmed,
+                    )
+                  ) {
+                    return false;
+                  }
+                  clearSuggestionMark('reference_urls');
+                  setSelectedReferenceUrls((prev) => [
+                    ...prev,
+                    { label: trimmed, value: trimmed },
+                  ]);
+                }}
+                isClearable
+                compressed
+                fullWidth
+                placeholder="https://…"
+              />
+            </EuiFormRow>
+            {renderPendingSuggestion('reference_urls')}
             <EuiText size="xs" color="subdued">
               <p>
                 {t.metaRevision}: {dto?.meta_revision ?? 0}
@@ -1679,6 +2079,35 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
           </EuiFlexItem>
         </EuiFlexGroup>
       </EuiFlyoutFooter>
+      {knownAsRemoveTarget && (
+        <EuiConfirmModal
+          title={t.metaKnownAsRemoveConfirmTitle}
+          onCancel={() => setKnownAsRemoveTarget(null)}
+          onConfirm={() => {
+            const target = knownAsRemoveTarget;
+            setKnownAsRemoveTarget(null);
+            const person = catalogs?.people.find(
+              (p) => p.id === target.personId,
+            );
+            if (!person) return;
+            void updatePersonKnownAs(
+              target.personId,
+              person.aliases.filter((a) => a !== target.name),
+            );
+          }}
+          cancelButtonText={t.cancelConfirm}
+          confirmButtonText={t.metaKnownAsRemoveAriaLabel}
+          buttonColor="danger"
+          defaultFocusedButton="cancel"
+        >
+          <p>{t.metaKnownAsRemoveConfirmBody}</p>
+          <EuiText size="s">
+            <strong>{knownAsRemoveTarget.name}</strong>
+            {' — '}
+            {knownAsRemoveTarget.personLabel}
+          </EuiText>
+        </EuiConfirmModal>
+      )}
     </EuiFlyout>
   );
 }

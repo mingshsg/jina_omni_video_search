@@ -22,13 +22,12 @@ skill `grounded_title_lookup` → tools `jina.search_web` / `jina.read_url`.
 
 ```bash
 yarn download-agent-builder-artefacts
-# or: yarn tsx scripts/download-agent-builder-artefacts.ts
 ```
 
 Provision / sync live resources from repo definitions:
 
 ```bash
-yarn tsx scripts/ensure-suggest-agent.ts
+yarn ensure-suggest-agent
 ```
 
 The ensure script embeds the same skill and instructions; after changing either,

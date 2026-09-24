@@ -73,6 +73,7 @@ These are the mistakes an agent will most likely make here.
 | 6 | Putting tests in `app/` or `scripts/` | `vitest.config.ts` includes only `lib/**/*.test.ts` and `worker/**/*.test.ts`. Your tests will silently not run. |
 | 7 | Putting data files under `data/` | `data/**` is gitignored, excluded by `.dockerignore`, and mounted over by Compose. Versioned resources go in `config/`; only runtime media goes in `data/`. |
 | 8 | Trusting the Elasticsearch version number | The target is Serverless, whose root API reports a *target* version that says nothing about feature availability. Probe capabilities at runtime. |
+| 9 | Assuming the running demo reflects your latest edit | `docker-compose.yml`'s `app`/`live-worker` services use `build: .` with no source bind-mount (only `${VIDEO_DATA_DIR}:/app/data` for media) — the container is a baked image, not a live view of the working tree. `docker compose up` alone reuses the existing image. After any code change, rebuild and restart before testing through the running demo: `docker compose up -d --build app` (add `live-worker` too if you touched worker code). A passing `yarn build`/`yarn test` on the host is not evidence the container has the change — check `docker ps` "CREATED" time against your last edit, or grep the built `.next` output, before concluding a fix isn't working. |
 
 ## Where to read, by task
 
@@ -155,6 +156,13 @@ selection, representative p95/cost, and multi-replica durable job storage
 remain tracked in `todo/05`, `todo/06`, `todo/11`, `todo/14`, and `todo/16`.
 
 An independent pass over the whole worktree on 2026-09-23 added
-`todo/22`: three P1 items, the most serious being that the guaranteed-recall
-floor sends `retriever` in an `_msearch` body the installed client does not
-type. Read that tracker before extending hybrid retrieval.
+`todo/22`. Its three P1 items are now fixed — including the most serious,
+where the guaranteed-recall floor sent `retriever` in an `_msearch` body the
+installed client does not type (fixed at `lib/es/hybrid-search.ts:426-433`).
+Ten non-P1 items remain open there; read that tracker before extending
+hybrid retrieval.
+
+A later review of the Suggest metadata-editor work added `todo/32`. Its one
+P1 — agent-proposed cast being silently discarded when uncited — is fixed;
+the remaining items are documentation, commit hygiene, and an owed auth
+decision shared with `todo/30` S7.

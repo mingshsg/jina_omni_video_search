@@ -15,6 +15,7 @@ export type UiMessages = {
   localeEn: string;
 
   // Search
+  searchLabel: string;
   searchPlaceholder: string;
   searchButton: string;
   modalityLabel: string;
@@ -220,6 +221,8 @@ export type UiMessages = {
   metaCountry: string;
   metaTags: string;
   metaTagsHelp: string;
+  metaReferenceUrls: string;
+  metaReferenceUrlsHelp: string;
   metaRevision: string;
   metaEmptyOption: string;
   metaSaved: string;
@@ -239,6 +242,7 @@ export type UiMessages = {
   metaSuggestStageResearching: string;
   metaSuggestStageValidating: string;
   metaSuggestStageHelp: string;
+  metaSuggestElapsedLabel: string;
   metaActorCandidates: string;
   metaActorCandidateAdd: string;
   metaActorCandidateAdded: string;
@@ -246,6 +250,17 @@ export type UiMessages = {
   metaActorCandidateAddToCatalog: string;
   metaActorCandidateSource: string;
   metaActorCatalogAddError: string;
+  metaActorCandidatesWithheld: string;
+  metaActorCandidatesWithheldHelp: string;
+  metaKnownAs: string;
+  metaKnownAsHelp: string;
+  metaKnownAsAddPlaceholder: string;
+  metaKnownAsAddAriaLabel: string;
+  metaKnownAsRemoveAriaLabel: string;
+  metaKnownAsError: string;
+  metaKnownAsRemoveConfirmTitle: string;
+  metaKnownAsRemoveConfirmBody: string;
+  metaKnownAsMinRequired: string;
   metaSuggestReviewBelow: string;
   metaSuggestPendingApply: string;
   metaSuggestPendingValue: string;
@@ -349,6 +364,7 @@ export const uiEn: UiMessages = {
   localeZh: '中文',
   localeEn: 'EN',
 
+  searchLabel: 'Describe a moment to find',
   searchPlaceholder: 'a cat on a windowsill',
   searchButton: 'Search',
   modalityLabel: 'Modality',
@@ -565,6 +581,9 @@ export const uiEn: UiMessages = {
   metaCountry: 'Production country/region',
   metaTags: 'Tags',
   metaTagsHelp: 'Comma-separated',
+  metaReferenceUrls: 'Reference URLs',
+  metaReferenceUrlsHelp:
+    'Add links as chips (Wikipedia, IMDb, …). Stored as an array — commas inside a URL are fine.',
   metaRevision: 'Revision',
   metaEmptyOption: '—',
   metaSaved: 'Metadata saved',
@@ -588,6 +607,7 @@ export const uiEn: UiMessages = {
   metaSuggestStageValidating: 'Validating sources and structured fields',
   metaSuggestStageHelp:
     'This may take about a minute. You can keep editing or save the current draft while it runs.',
+  metaSuggestElapsedLabel: 'Elapsed time',
   metaActorCandidates: 'Sourced cast candidates for review',
   metaActorCandidateAdd: 'Add matched person',
   metaActorCandidateAdded: 'Added',
@@ -595,6 +615,21 @@ export const uiEn: UiMessages = {
   metaActorCandidateAddToCatalog: 'Add to catalog',
   metaActorCandidateSource: 'source',
   metaActorCatalogAddError: 'Could not add this person to the catalog. Try again.',
+  metaActorCandidatesWithheld:
+    '{count} cast candidate(s) found but not shown',
+  metaActorCandidatesWithheldHelp:
+    'The agent proposed these names but did not cite a source we trust for identity. Cast names are held to a stricter source rule than other fields, because adding a person also affects search for every video. Add them manually if you can verify them.',
+  metaKnownAs: 'Known as',
+  metaKnownAsHelp:
+    'Every name this person can be found by (English, native script, nicknames, alternate spellings). Saved to the shared person catalog immediately — not on Save — and affects search for every video, not just this one.',
+  metaKnownAsAddPlaceholder: 'Add a known name…',
+  metaKnownAsAddAriaLabel: 'Add known name',
+  metaKnownAsRemoveAriaLabel: 'Remove known name',
+  metaKnownAsError: 'Could not update known names. Try again.',
+  metaKnownAsRemoveConfirmTitle: 'Remove this name from the catalog?',
+  metaKnownAsRemoveConfirmBody:
+    'This person will no longer be findable by this name in any video, and the change applies immediately. There is no undo.',
+  metaKnownAsMinRequired: 'At least one known name is required.',
   metaSuggestReviewBelow:
     'Suggestions are ready for review below — click + to apply.',
   metaSuggestPendingApply: 'Apply suggestion',
@@ -705,6 +740,7 @@ export const uiZh: UiMessages = {
   localeZh: '中文',
   localeEn: 'EN',
 
+  searchLabel: '描述要查找的画面',
   searchPlaceholder: '窗台上的猫',
   searchButton: '检索',
   modalityLabel: '模态',
@@ -918,6 +954,9 @@ export const uiZh: UiMessages = {
   metaCountry: '制作国家/地区',
   metaTags: '标签',
   metaTagsHelp: '逗号分隔',
+  metaReferenceUrls: '参考链接',
+  metaReferenceUrlsHelp:
+    '以标签形式添加链接（维基百科、IMDb 等）。按数组存储，URL 内的逗号不会拆坏。',
   metaRevision: '修订号',
   metaEmptyOption: '—',
   metaSaved: '元数据已保存',
@@ -939,6 +978,7 @@ export const uiZh: UiMessages = {
   metaSuggestStageResearching: 'Agent 正在搜索并阅读公开资料',
   metaSuggestStageValidating: '正在校验来源和结构化字段',
   metaSuggestStageHelp: '此过程可能需要约一分钟；等待期间可以继续编辑或保存当前草稿。',
+  metaSuggestElapsedLabel: '已用时间',
   metaActorCandidates: '待审核的有来源演员候选',
   metaActorCandidateAdd: '加入已匹配人物',
   metaActorCandidateAdded: '已加入',
@@ -946,6 +986,20 @@ export const uiZh: UiMessages = {
   metaActorCandidateAddToCatalog: '加入目录',
   metaActorCandidateSource: '来源',
   metaActorCatalogAddError: '加入人物目录失败,请重试。',
+  metaActorCandidatesWithheld: '已找到 {count} 位演员候选,但未予显示',
+  metaActorCandidatesWithheldHelp:
+    '智能体给出了这些姓名,但没有引用我们信任的身份来源。演员姓名的来源要求比其他字段更严格,因为新增人物会影响所有视频的检索。如果你能自行核实,可手动添加。',
+  metaKnownAs: '别名/其他称呼',
+  metaKnownAsHelp:
+    '此人可被检索到的所有名字(英文名、原文名、昵称、其他拼写)。修改会立即写入共享人物目录(不随"保存"生效),并影响所有视频的检索,而不仅是当前视频。',
+  metaKnownAsAddPlaceholder: '添加一个已知名字…',
+  metaKnownAsAddAriaLabel: '添加已知名字',
+  metaKnownAsRemoveAriaLabel: '移除已知名字',
+  metaKnownAsError: '更新已知名字失败,请重试。',
+  metaKnownAsRemoveConfirmTitle: '从目录中移除该名字?',
+  metaKnownAsRemoveConfirmBody:
+    '移除后,任何视频都无法再通过该名字检索到此人,且立即生效,无法撤销。',
+  metaKnownAsMinRequired: '至少需要保留一个已知名字。',
   metaSuggestReviewBelow: '建议已准备好，请在下方查看并点击 + 采纳。',
   metaSuggestPendingApply: '采纳该建议',
   metaSuggestPendingValue: '建议值',

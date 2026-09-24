@@ -238,6 +238,184 @@ describe('applyAgentPayloadToLocal', () => {
     });
     expect(result.web?.tool_trace).toBeUndefined();
   });
+
+  // Bug fix (todo/30 S6, 方案 A): a field with no URL, or a URL that isn't on
+  // the domain allowlist, used to be silently dropped entirely — the zod
+  // schema always treated `url` as optional, so this was a schema/code
+  // contradiction, not an intentional trust gate. An agent-asserted fact
+  // must still reach the operator, just at a visibly lower confidence and
+  // with `evidence` marked `[agent, uncited]` instead of `[agent]`.
+  it('still applies a field with no url at all, at a lower confidence', () => {
+    const local = buildLocalSuggestions({ title: 'Some Unmatched Title' });
+    const result = applyAgentPayloadToLocal({
+      local,
+      maxReads: 2,
+      payload: {
+        status: 'ok',
+        fields: {
+          year: {
+            value: 2003,
+            evidence: 'The model recalled this without citing a page.',
+          },
+        },
+      },
+    });
+    expect(result.suggestions.year).toMatchObject({
+      value: 2003,
+      source: 'external_web',
+      confidence: 0.55,
+    });
+    expect(result.suggestions.year?.evidence).toMatch(/^\[agent, uncited\]/);
+    expect(result.suggestions.year?.source_url).toBeUndefined();
+  });
+
+  it('still applies a field whose url is not on the domain allowlist', () => {
+    const local = buildLocalSuggestions({ title: 'Some Unmatched Title' });
+    const result = applyAgentPayloadToLocal({
+      local,
+      maxReads: 2,
+      payload: {
+        status: 'ok',
+        fields: {
+          country: {
+            value: 'KR',
+            url: 'https://random-fan-blog.example/post',
+            evidence: 'A fan blog said so.',
+          },
+        },
+      },
+    });
+    expect(result.suggestions.country).toMatchObject({
+      value: 'KR',
+      source: 'external_web',
+      confidence: 0.5,
+      source_url: 'https://random-fan-blog.example/post',
+    });
+    expect(result.suggestions.country?.evidence).toMatch(/^\[agent, uncited\]/);
+  });
+
+  it('applies a cited field at full confidence with a plain [agent] evidence prefix', () => {
+    const local = buildLocalSuggestions({ title: 'Some Unmatched Title' });
+    const result = applyAgentPayloadToLocal({
+      local,
+      maxReads: 2,
+      payload: {
+        status: 'ok',
+        fields: {
+          country: {
+            value: 'KR',
+            url: 'https://en.wikipedia.org/wiki/Some_Show',
+            evidence: 'Infobox country field.',
+          },
+        },
+      },
+    });
+    expect(result.suggestions.country?.confidence).toBe(0.65);
+    expect(result.suggestions.country?.evidence).toBe(
+      '[agent] Infobox country field.',
+    );
+  });
+
+  it('omits an http-only source_url even for a discounted uncited fact', () => {
+    const local = buildLocalSuggestions({ title: 'Some Unmatched Title' });
+    const result = applyAgentPayloadToLocal({
+      local,
+      maxReads: 2,
+      payload: {
+        status: 'ok',
+        fields: {
+          country: {
+            value: 'KR',
+            url: 'http://random-fan-blog.example/post',
+            evidence: 'A fan blog said so.',
+          },
+        },
+      },
+    });
+    // http-only URLs can't be saved as field_provenance.source_url (that
+    // schema requires https) — omit rather than ship an unsavable draft.
+    expect(result.suggestions.country?.source_url).toBeUndefined();
+  });
+
+  it('collects reference_urls from cited fields, candidates, and actors, deduped', () => {
+    const local = buildLocalSuggestions({ title: 'Some Unmatched Title' });
+    const result = applyAgentPayloadToLocal({
+      local,
+      maxReads: 2,
+      payload: {
+        status: 'ok',
+        fields: {
+          year: {
+            value: 2003,
+            url: 'https://en.wikipedia.org/wiki/Some_Show',
+            evidence: 'Infobox year.',
+          },
+          country: {
+            value: 'KR',
+            url: 'https://en.wikipedia.org/wiki/Some_Show',
+            evidence: 'Same page — should dedup.',
+          },
+        },
+        candidates: [
+          {
+            title: 'Some Show - Wikipedia',
+            url: 'https://en.wikipedia.org/wiki/Some_Show',
+          },
+          {
+            title: 'Some Show - IMDb',
+            url: 'https://www.imdb.com/title/tt0000000/',
+          },
+        ],
+        actors: [
+          {
+            names: { en: 'Jane Doe' },
+            url: 'https://www.imdb.com/name/nm0000000/',
+          },
+        ],
+      },
+    });
+    expect(result.suggestions.reference_urls?.value).toEqual([
+      'https://en.wikipedia.org/wiki/Some_Show',
+      'https://www.imdb.com/title/tt0000000/',
+      'https://www.imdb.com/name/nm0000000/',
+    ]);
+  });
+
+  it('includes uncited/non-allowlisted urls in reference_urls even though they were not cited', () => {
+    const local = buildLocalSuggestions({ title: 'Some Unmatched Title' });
+    const result = applyAgentPayloadToLocal({
+      local,
+      maxReads: 2,
+      payload: {
+        status: 'ok',
+        fields: {
+          country: {
+            value: 'KR',
+            url: 'https://random-fan-blog.example/post',
+            evidence: 'A fan blog said so.',
+          },
+        },
+      },
+    });
+    expect(result.suggestions.reference_urls?.value).toEqual([
+      'https://random-fan-blog.example/post',
+    ]);
+  });
+
+  it('omits reference_urls entirely when the payload has no urls at all', () => {
+    const local = buildLocalSuggestions({ title: 'Some Unmatched Title' });
+    const result = applyAgentPayloadToLocal({
+      local,
+      maxReads: 2,
+      payload: {
+        status: 'ok',
+        fields: {
+          year: { value: 2003, evidence: 'No citation.' },
+        },
+      },
+    });
+    expect(result.suggestions.reference_urls).toBeUndefined();
+  });
 });
 
 describe('pickReadableCandidates', () => {
@@ -282,7 +460,7 @@ describe('extractConsensusYear', () => {
 
 describe('normalizeAgentActorCandidates', () => {
   it('resolves multilingual names to one controlled person id', () => {
-    const [actor] = normalizeAgentActorCandidates([
+    const { candidates } = normalizeAgentActorCandidates([
       {
         names: {
           en: 'Lee Jung-jae',
@@ -294,6 +472,7 @@ describe('normalizeAgentActorCandidates', () => {
         evidence: 'Listed in the principal cast.',
       },
     ]);
+    const [actor] = candidates;
     expect(actor).toMatchObject({
       matched_person_id: 'person:lee-jung-jae',
       names: {
@@ -305,7 +484,7 @@ describe('normalizeAgentActorCandidates', () => {
   });
 
   it('keeps a sourced unknown actor unresolved and rejects unsafe entries', () => {
-    const actors = normalizeAgentActorCandidates([
+    const { candidates: actors, dropped_uncited } = normalizeAgentActorCandidates([
       {
         names: { en: 'New Korean Actor', native: { lang: 'ko', name: '새 배우' } },
         url: 'https://ko.wikipedia.org/wiki/New_actor',
@@ -327,5 +506,39 @@ describe('normalizeAgentActorCandidates', () => {
       names: { en: 'New Korean Actor', native: { lang: 'ko', name: '새 배우' } },
       matched_person_id: null,
     });
+    // Regression (todo/32 R1): the non-allowlisted entry must be *counted*,
+    // not silently vanish. The entry missing an English name is malformed
+    // agent output rather than a policy drop, so it is not counted.
+    expect(dropped_uncited).toBe(1);
+  });
+
+  it('reports uncited cast drops through web.actor_candidates_dropped', () => {
+    const local = buildLocalSuggestions({ title: 'Some Title' });
+    const result = applyAgentPayloadToLocal({
+      local,
+      maxReads: 2,
+      payload: {
+        status: 'ok',
+        fields: {},
+        actors: [
+          {
+            names: { en: 'Trusted Person' },
+            url: 'https://en.wikipedia.org/wiki/Trusted',
+            evidence: 'Cast list.',
+          },
+          {
+            names: { en: 'Untrusted Person' },
+            url: 'https://random-blog.example/person',
+            evidence: 'Fan blog.',
+          },
+          {
+            names: { en: 'No Source Person' },
+            evidence: 'No url at all.',
+          },
+        ],
+      },
+    });
+    expect(result.web?.actor_candidates).toHaveLength(1);
+    expect(result.web?.actor_candidates_dropped).toBe(2);
   });
 });

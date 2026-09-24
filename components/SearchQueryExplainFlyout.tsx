@@ -176,7 +176,17 @@ export function SearchQueryExplainFlyout({ data, onClose }: Props) {
           compressed
           type="column"
           listItems={rows}
-          titleProps={{ style: { width: '28%' } }}
+          // Bug fix: `titleProps={{ style: { width: '28%' } }}` used to set a
+          // width on the <dt>, but EUI's type="column" is a CSS grid whose
+          // tracks are sized by `grid-template-columns` on the *parent*
+          // (`minmax(auto, max-content)` by default) — a width on a grid
+          // *item* can't widen its track. The label track therefore collapsed
+          // toward min-content and broke identifiers mid-word, one or two
+          // characters per line ("quer/y", "ranki/ng_s/trate/gy").
+          // `columnWidths` is the supported prop that sets the grid template:
+          // the label column gets a 150px floor (so it never collapses) and
+          // grows to fit a longer label, and the value column takes the rest.
+          columnWidths={['minmax(150px, max-content)', '1fr']}
         />
         <EuiSpacer size="m" />
         <EuiText size="xs" color="subdued">

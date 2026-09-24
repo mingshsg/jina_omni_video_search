@@ -70,17 +70,75 @@ were added on top of these while they stayed open.
       on assistant-authored text, not arbitrary fetched page content. Added a
       regression test proving a 50,000-char trailing unmatched-brace run
       resolves in well under 500 ms without losing an earlier valid object.
-- [ ] **S6** — either verify citations or stop rendering a model-supplied URL
+- [x] **S6** — either verify citations or stop rendering a model-supplied URL
       as a source link for free-text fields (`suggest-web.ts:279-290`). Label
       `description`/`abstract` differently from catalog-validated fields.
-      Needs a plan amendment, not just a patch. **Not fixed this pass** —
-      correctly scoped as a product decision, not a code patch.
-- [ ] **S7** — add auth, rate limiting, a size cap and a removal path to
-      `POST /api/metadata/catalogs/people`
-      (`app/api/metadata/catalogs/people/route.ts:33`). Aliases feed
-      `findContainedAliases` in the search hot path, so a bad alias silently
-      injects an actor filter into every query for all users. Also needs a
-      plan amendment. **Not fixed this pass.**
+      Needs a plan amendment, not just a patch. **Resolved differently than
+      originally scoped, by explicit product decision (方案 A):** investigation
+      found the actual defect was worse than "unverified citation is rendered
+      as a source link" — `cited()` in `suggest-web.ts` *required* an
+      allowlisted `field.url` to accept a value at all, silently discarding
+      the entire fact (not just its link) whenever the agent asserted
+      something without an allowlisted citation. This directly contradicted
+      the zod schema in `agent-builder-suggest.ts`, which always marked `url`
+      optional — a schema/code contradiction, not an intentional trust gate.
+      Reproduced via a real Suggest run on 《大长今/Jewel in the Palace》 where
+      only Year/Tags filled in (from local filename-regex fallback, not the
+      agent) while every agent-researched field was dropped without any error
+      surfaced to the operator.
+      Fix: `cited()` now returns the value regardless of citation status,
+      tagging each result `cited: boolean`. Confidence is discounted (base −
+      0.15, floor 0.3) and `evidence` is prefixed `[agent, uncited]` instead
+      of `[agent]` when there's no allowlisted URL, so the operator can see
+      at a glance which facts are lower-trust — but nothing is silently
+      dropped. `source_url` is only carried through when it is an `https://`
+      link (satisfies the stricter save-time provenance schema); an
+      `http://`-only or non-allowlisted URL is still visible in the evidence
+      text and now also collected into a new **`meta.reference_urls`**
+      field — every URL the agent touched (cited fields, uncited fields,
+      candidates, actor sources), deduped and safety-checked
+      (`isRenderableTraceUrl`, http(s)-only, capped at 20), surfaced as its
+      own suggestion so the operator has a durable "what was consulted"
+      research trail independent of the per-fact citation gate. Same
+      relaxation was intentionally **not** applied to
+      `normalizeAgentActorCandidates`, which still hard-requires
+      `isNameAllowlistedUrl` — actor identity resolution stays stricter
+      pending a separate product decision.
+      `reference_urls` added end-to-end: `AssetMeta`/`AssetMetaEditorDto`/
+      `MetaReviewMap` types and PATCH zod schema (`validate.ts`, new
+      `META_BOUNDS.referenceUrlsMax`/`referenceUrlMaxLen` in `catalogs.ts`),
+      `CLEARABLE_META_KEYS`/`REVIEW_FIELD_KEYS`/`EDITABLE_KEYS`
+      (`asset-meta.ts`, `validate.ts`), ES mapping
+      (`asset-meta-mapping.ts`, `index: false` keyword array — not used for
+      filtering), and full UI wiring in `EditMetadataFlyout.tsx` (comma-
+      separated `EuiFieldText`, mirroring the existing `tags` field exactly:
+      state, suggestion-merge-on-load, pending-suggestion apply/dedupe,
+      save-diff, i18n labels in `ui.ts`).
+      Tests: `lib/metadata/suggest-web.test.ts` (uncited field still applies
+      at lower confidence; non-allowlisted URL still applies; cited field
+      keeps full confidence and plain `[agent]` prefix; http-only URL omits
+      `source_url`; `reference_urls` collected/deduped from fields,
+      candidates, and actors; omitted entirely when no URLs exist at all) and
+      `lib/metadata/people.test.ts` (`reference_urls` PATCH accept/dedupe/
+      reject-malformed/clear). 438/438 tests pass; `yarn build` passes.
+- [ ] **S7** — add auth, rate limiting, a size cap and a removal path to the
+      person-catalog write routes. Aliases feed `findContainedAliases` in the
+      search hot path, so a bad alias silently injects an actor filter into
+      every query for all users. Also needs a plan amendment. **Not fixed.**
+      **Scope widened 2026-09-23 (todo/32 R3): this now covers TWO routes,
+      not one.** Any fix must cover both or it leaves a hole:
+      - `POST /api/metadata/catalogs/people`
+        (`app/api/metadata/catalogs/people/route.ts:33`) — creates a person.
+      - `PATCH /api/metadata/catalogs/people/{personId}`
+        (`app/api/metadata/catalogs/people/[personId]/route.ts`) — replaces
+        an existing person's whole known-as list. Added for the "Known as"
+        editor; same unauthenticated exposure, and additionally *destructive*
+        (a full-list replace can remove names, unlike POST which only adds).
+      Partial mitigation already in place on the PATCH route: bounds are
+      enforced from a single source (`KNOWN_AS_MAX`), cross-person alias
+      collisions are rejected with 409 rather than silently overwriting, and
+      the UI confirms before removing a name (todo/32 R2). None of that is a
+      substitute for auth.
 - [ ] **S8** — rate limit is keyed on spoofable `x-forwarded-for`
       (`suggest/route.ts:59-62`); with no auth this leaves `MAX_ACTIVE=2` as
       the only throttle on outbound LLM + Jina spend. **Not fixed this
@@ -131,5 +189,11 @@ claim is still inferred from code comments and tests, not a captured live
 body — the *fix* does not depend on that shape being confirmed, since it
 fails closed either way, but full confidence in the fallback path still
 wants one), browser E2E, a true prompt-injection fixture against a live
-agent, live floor `msearch` under load. S6, S7, S8 remain open — each needs
+agent, live floor `msearch` under load. S7, S8 remain open — each needs
 a product/plan decision, not just a patch.
+
+**2026-09-23 update:** S6 resolved by explicit product decision (方案 A —
+relax the per-field citation gate rather than tighten it) plus a new
+`meta.reference_urls` field; see the S6 entry above for the full change.
+`yarn test` PASS (62 files / 438 tests, up from 62/428 — 10 new regression
+tests). `yarn build` PASS. `tsc --noEmit` clean on every file touched.

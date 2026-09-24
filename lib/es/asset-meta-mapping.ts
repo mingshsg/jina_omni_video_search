@@ -67,6 +67,13 @@ export function videoAssetsMetaMappingProperties(
         country: { type: 'keyword' },
         tags: { type: 'keyword' },
         tags_key: { type: 'keyword' },
+        /**
+         * Reference/source page links (Wikipedia, IMDb, …). Stored but not
+         * used for filtering/aggregation — `index: false` avoids wasted
+         * keyword doc_values on freeform URLs while still allowing
+         * `_source` retrieval and display in the editor.
+         */
+        reference_urls: { type: 'keyword', index: false },
         work_title: {
           type: 'object',
           properties: {
@@ -93,6 +100,7 @@ export function videoAssetsMetaMappingProperties(
             country: reviewField,
             tags: reviewField,
             work_title: reviewField,
+            reference_urls: reviewField,
           },
         },
         revision: { type: 'long' },

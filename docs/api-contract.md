@@ -738,9 +738,22 @@ Omitted field = unchanged; `null` or empty array clears. Requires
   "country": "US",
   "video_type": "trailer",
   "primary_language": "en",
-  "tags": ["fashion"]
+  "tags": ["fashion"],
+  "reference_urls": ["https://en.wikipedia.org/wiki/Breakfast_at_Tiffany%27s"]
 }
 ```
+
+`reference_urls` (optional, array of strings) records the pages consulted
+while researching this asset — a durable research trail, not a per-fact
+citation binding. Validation is deliberately looser than the per-field
+`field_provenance.source_url` (which requires `https://`): **`http://` or
+`https://`** are both accepted, there is no domain allowlist, entries are
+trimmed/deduped preserving first-seen order, and the list is bounded by
+`META_BOUNDS.referenceUrlsMax` (20) × `referenceUrlMaxLen` (2048). The
+rationale is that this field is operator-reviewed before Save, whereas
+`source_url` is auto-applied from agent output. `null` or an all-empty array
+clears it. Stored as `keyword, index: false` — retrievable and editable, but
+never used for filtering, aggregation, or BM25.
 
 | Code | HTTP | When |
 | --- | --- | --- |
@@ -894,6 +907,58 @@ Pinned catalogs for the Library editor (and later search facets).
 Query: `?locale=en|zh&q=` (optional people autocomplete).
 
 **200:** `{ "video_types", "primary_languages", "countries":[{code,label}], "people":[{id,display,aliases}] }`.
+
+### `POST /api/metadata/catalogs/people`
+
+Grows the controlled person catalog (`config/people.json`) with one entry,
+so free-text or Suggest-proposed cast can become a valid `actor_ids` value
+without bypassing the catalog-ID invariant.
+
+**Body:** `{ "en": string, "zh"?: string, "native"?: { "lang": string, "name": string } }`
+(each ≤200 chars; `lang` ≤16). `aliases` are **derived server-side** from
+those names — the client cannot set them here.
+
+**201:** `{ "id", "display", "aliases" }`.
+
+| Code | HTTP | When |
+| --- | --- | --- |
+| `PEOPLE_INVALID` | 400 | Bad JSON / validation |
+| `PEOPLE_CONFLICT` | 409 | A name already belongs to a different person |
+| `PEOPLE_FAILED` | 500 | Catalog write failure |
+
+### `PATCH /api/metadata/catalogs/people/{personId}`
+
+Replaces a person's **entire** "known as" list (their `aliases` array) — the
+only write path for growing a person's known names after creation, since
+`POST` only seeds the initial en/zh/native set. Used by the "Known as" editor
+in the metadata flyout.
+
+**Body:** `{ "aliases": string[] }` — full-list replace, not a delta.
+Bounded by `KNOWN_AS_MAX` (30) entries × `KNOWN_AS_NAME_MAX_LEN` (200 chars),
+imported from `lib/metadata/people.ts` so the schema cannot drift from the
+enforcement. Entries are NFKC-normalized, trimmed and deduped; the resulting
+list may not be empty.
+
+**200:** `{ "id", "display", "aliases" }` (server-normalized list — reconcile
+optimistic UI against this, not against what was sent).
+
+| Code | HTTP | When |
+| --- | --- | --- |
+| `PEOPLE_INVALID` | 400 | Bad id/JSON, empty result list, or bound exceeded |
+| `PEOPLE_INVALID` | 404 | Unknown `personId` |
+| `PEOPLE_CONFLICT` | 409 | A name already belongs to a different person — the write is **rejected**, not merged |
+| `PEOPLE_FAILED` | 500 | Catalog write failure |
+
+Two cautions, both tracked:
+
+- **Global effect.** `aliases` feed `findContainedAliases`, which runs in the
+  BM25/query-parse hot path for every query. Editing one person changes
+  search behavior for *all* videos, immediately, with no undo. The UI
+  confirms before removing a name for this reason.
+- **Unauthenticated.** Like `POST` above, this route has no auth, rate limit
+  or removal path — tracked as S7 in
+  `todo/30-suggest-pipeline-review-2026-09-23.md`, which explicitly covers
+  both routes.
 
 ---
 

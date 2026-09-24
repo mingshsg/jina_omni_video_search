@@ -704,7 +704,7 @@ export default function SearchPage() {
     <AppShell pageTitle={t.appTitle} pageDescription={t.appSubtitle}>
       <EuiFlexGroup gutterSize="m" alignItems="flexEnd" wrap>
         <EuiFlexItem grow={4}>
-          <EuiFormRow fullWidth label={t.searchPlaceholder}>
+          <EuiFormRow fullWidth label={t.searchLabel}>
             <EuiFieldSearch
               fullWidth
               placeholder={t.searchPlaceholder}

@@ -36,6 +36,7 @@ export type MetaReviewMap = {
   country?: MetaFieldReview;
   tags?: MetaFieldReview;
   work_title?: MetaFieldReview;
+  reference_urls?: MetaFieldReview;
 };
 
 /** The actual work/production title — distinct from `title` (filename-derived). */
@@ -62,6 +63,14 @@ export interface AssetMeta {
   tags?: string[];
   tags_key?: string[];
   work_title?: WorkTitle;
+  /**
+   * Reference/source page links (Wikipedia, IMDb, …) kept as durable
+   * metadata — a research trail, not a per-fact citation binding. Any
+   * http(s) URL is accepted (see validate at the PATCH boundary); this is
+   * reviewed by the operator before Save, unlike the stricter per-field
+   * `source_url` provenance below which gates what Suggest may auto-apply.
+   */
+  reference_urls?: string[];
   review?: MetaReviewMap;
   revision: number;
   updated_at: string;
@@ -83,6 +92,7 @@ export interface AssetMetaEditorDto {
     country?: string;
     tags?: string[];
     work_title?: WorkTitle;
+    reference_urls?: string[];
     review?: MetaReviewMap;
   };
   meta_revision: number;
@@ -136,6 +146,38 @@ function optionalTrimmedString(max: number) {
     });
 }
 
+const EVIDENCE_MAX = 500;
+
+/** Soft URL gate: never reject a PATCH because of a bad link — drop it. */
+function softHttpsUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 2048) return undefined;
+  if (!trimmed.startsWith('https://')) return undefined;
+  try {
+    // eslint-disable-next-line no-new
+    new URL(trimmed);
+    return trimmed;
+  } catch {
+    return undefined;
+  }
+}
+
+function softHttpUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > META_BOUNDS.referenceUrlMaxLen) return undefined;
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return undefined;
+    }
+    return trimmed;
+  } catch {
+    return undefined;
+  }
+}
+
 const reviewSchema = z
   .object({
     source: z.enum(['manual', 'suggestion']),
@@ -145,13 +187,11 @@ const reviewSchema = z
     provider: z
       .enum(['local_title', 'media_tag', 'caller_hint', 'external_web'])
       .optional(),
-    source_url: z.string().url().startsWith('https://').max(2048).optional(),
+    source_url: z.preprocess(softHttpsUrl, z.string().optional()),
     retrieved_at: z.string().datetime().optional(),
     request_id: z.string().uuid().optional(),
   })
   .strict();
-
-const EVIDENCE_MAX = 500;
 
 const workTitleSchema = z
   .object({
@@ -180,11 +220,31 @@ const fieldProvenanceSchema = z
     provider: z
       .enum(['local_title', 'media_tag', 'caller_hint', 'external_web'])
       .optional(),
-    source_url: z.string().url().startsWith('https://').max(2048).optional(),
+    // Invalid / non-https URLs are dropped — they must not block Save.
+    source_url: z.preprocess(softHttpsUrl, z.string().optional()),
     retrieved_at: z.string().datetime().optional(),
     request_id: z.string().uuid().optional(),
   })
   .strict();
+
+/**
+ * Reference/source links kept as durable metadata. Stored as a string array
+ * (chip UI). Malformed entries are dropped at parse time — never reject Save.
+ */
+const referenceUrlListSchema = z
+  .array(z.string())
+  .max(META_BOUNDS.referenceUrlsMax)
+  .transform((urls) => {
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const raw of urls) {
+      const ok = softHttpUrl(raw);
+      if (!ok || seen.has(ok)) continue;
+      seen.add(ok);
+      out.push(ok);
+    }
+    return out;
+  });
 
 export const metaPatchBodySchema = z
   .object({
@@ -221,6 +281,9 @@ export const metaPatchBodySchema = z
       ])
       .optional(),
     work_title: z.union([workTitleSchema, z.null()]).optional(),
+    reference_urls: z
+      .union([referenceUrlListSchema, z.null()])
+      .optional(),
     /** Optional per-field provenance when saving accepted suggestions. */
     field_sources: z
       .object({
@@ -233,6 +296,7 @@ export const metaPatchBodySchema = z
         country: fieldSourceSchema.optional(),
         tags: fieldSourceSchema.optional(),
         work_title: fieldSourceSchema.optional(),
+        reference_urls: fieldSourceSchema.optional(),
       })
       .strict()
       .optional(),
@@ -248,6 +312,7 @@ export const metaPatchBodySchema = z
         country: fieldProvenanceSchema.optional(),
         tags: fieldProvenanceSchema.optional(),
         work_title: fieldProvenanceSchema.optional(),
+        reference_urls: fieldProvenanceSchema.optional(),
       })
       .strict()
       .optional(),
@@ -274,6 +339,7 @@ const EDITABLE_KEYS = [
   'country',
   'tags',
   'work_title',
+  'reference_urls',
 ] as const;
 
 export function parseMetaPatchBody(
@@ -452,6 +518,21 @@ export function parseMetaPatchBody(
     }
   }
 
+  if (body.reference_urls !== undefined) {
+    if (body.reference_urls === null) {
+      fields.reference_urls = null;
+    } else {
+      // Already soft-filtered + deduped by referenceUrlListSchema.
+      const display = body.reference_urls;
+      if (display.length === 0) {
+        fields.reference_urls = null;
+      } else {
+        fields.reference_urls = display;
+        review.reference_urls = reviewEntry('reference_urls');
+      }
+    }
+  }
+
   return {
     expected_revision: body.expected_revision,
     fields,
@@ -480,6 +561,7 @@ export function toEditorDto(
       country: meta?.country,
       tags: meta?.tags,
       work_title: meta?.work_title,
+      reference_urls: meta?.reference_urls,
       review: meta?.review,
     },
   };

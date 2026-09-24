@@ -610,8 +610,12 @@ export function extractConverseMessage(body: unknown): string {
  * http(s) only, no embedded control characters, sane length — this rejects
  * `javascript:`/`data:` hrefs and pathological strings without conflating
  * "safe to click" with "trusted enough to cite as a source".
+ *
+ * Exported: reused by suggest-web.ts to sanity-check URLs collected into
+ * `meta.reference_urls` that did not pass the (stricter, domain-based)
+ * citation allowlist — same "safe to store/render" bar, not a trust claim.
  */
-function isRenderableTraceUrl(url: string): boolean {
+export function isRenderableTraceUrl(url: string): boolean {
   if (url.length === 0 || url.length > 2048) return false;
   // eslint-disable-next-line no-control-regex
   if (/[\x00-\x1f]/.test(url)) return false;

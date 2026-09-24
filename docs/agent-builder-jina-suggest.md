@@ -42,6 +42,13 @@ dedicated agent `video_metadata_research`. The agent has:
 - no default Elastic tools, built-in skills, plugins, workflows, AI indices,
   or broad connector capabilities
 
+**Do not chat-test Suggest on the default Elastic AI Agent**
+(`elastic-ai-agent`). That agent has no custom skills assigned. Asking it for
+title lookup makes the model invent a skill name (e.g. mistyped
+`Grounde title lookup`) and fail with `Skill … not found`. In Kibana Agent
+Chat, select **Video metadata research** (`video_metadata_research`). The app
+always uses that agent id via `SUGGEST_AGENT_ID`.
+
 The same two tool IDs are attached to the skill. This is deliberate: the
 agent-level allowlist prevents other tools from entering the agent context,
 while the skill activates the tools with the task instructions.
@@ -57,8 +64,8 @@ deployments do not require Kibana/Agent Builder):
   (Agent Builder `converse` model override; same EIS catalogue model as the
   query parser's `google-gemini-3.5-flash-lite`. Empty falls back to the
   Kibana project default, often Claude Sonnet 5.)
-- `SUGGEST_WEB_TIMEOUT_MS=60000` (live multilingual smokes took 39–43s;
-  representative p95 is still an open gate)
+- `SUGGEST_WEB_TIMEOUT_MS=180000` (agent tool rounds often need 1–3 minutes;
+  browser poll budget is ~210s; representative p95 is still an open gate)
 - Kibana URL: set `KIBANA_URL` or use Cloud ES URL (`.es.` → `.kb.`)
 - Auth: `KIBANA_API_KEY` or fall back to `ELASTICSEARCH_API_KEY`
 
@@ -147,10 +154,16 @@ read-only. Filled editor fields are never overwritten (draft + UI empty checks).
 The skill body source of truth is
 [`reference/agent-builder/skill-grounded_title_lookup.md`](../reference/agent-builder/skill-grounded_title_lookup.md)
 (loaded by [`scripts/ensure-suggest-agent.ts`](../scripts/ensure-suggest-agent.ts)).
-Two-phase budget: Phase 1 is **1 targeted Wikipedia/Wikidata search + 1 page
+Two-phase budget: Phase 1 is **1 targeted search + 1 page
 read** to verify the work (unchanged); Phase 2 is an optional **+1
 search/+1 read** spent only on completing a missing actor zh/native name
 after the work is already verified — worst case still 2 searches + 2 reads.
+The Phase 1 search is **not** restricted to a single site: it previously
+appended `site:wikipedia.org`, which made the allowlisted IMDb/TMDB domains
+structurally unreachable (they were filtered out of the result set before
+ranking). The skill now selects a source per work — Wikipedia for prose and
+cast-with-character-names, IMDb for structured country/language/AKA details,
+TMDB as a fallback for thin non-English works.
 Every `read_url` call must pass a `question` argument so the tool returns
 only the relevant passages (cheaper, and less raw page text for prompt
 injection to hide in) instead of the whole page. Abstain early on ambiguous

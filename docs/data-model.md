@@ -153,6 +153,7 @@ Apply via `PUT video-assets` (index name from `ES_INDEX_ASSETS`).
           "country": { "type": "keyword" },
           "tags": { "type": "keyword" },
           "tags_key": { "type": "keyword" },
+          "reference_urls": { "type": "keyword", "index": false },
           "review": {
             "type": "object",
             "properties": {
@@ -252,6 +253,22 @@ Every `meta.review.<field>` object has the same bounded properties:
 `source`, `confirmed`, `confidence`, `evidence`, `provider`, `source_url`,
 `retrieved_at`, and `request_id`. The abbreviated mapping above shows the first
 three; `lib/es/asset-meta-mapping.ts` is the executable source of truth.
+
+`meta.reference_urls` is a durable record of the pages consulted while
+researching an asset (Wikipedia, IMDb, an official page…). It is
+**`index: false`** — stored and editable, never searched, aggregated, or
+`copy_to`'d into `meta.search_text`. It is deliberately *not* a per-fact
+citation: `meta.review.<field>.source_url` carries that, under the stricter
+https-only rule. Bounds live in `META_BOUNDS` (`referenceUrlsMax` 20,
+`referenceUrlMaxLen` 2048); it clears on `null`, and has a
+`meta.review.reference_urls` entry like any other editable field.
+
+Deployment note: because the index is `dynamic: strict`, an index created
+before this field existed will **reject** it — and `patchAssetMeta` handles
+that rejection by dropping the offending field and retrying, so the save
+returns 200 with the field silently discarded. Run `yarn setup-indices`
+(which idempotently adds new `meta` properties) after upgrading, or
+`reference_urls` will appear to save and then come back empty.
 
 ### Status values (asset)
 

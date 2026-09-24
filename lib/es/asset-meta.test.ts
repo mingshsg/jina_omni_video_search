@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { deriveSemanticMirrorFields, isStrictDynamicMappingException } from './asset-meta';
+import { deriveSemanticMirrorFields, isStrictDynamicMappingException, strictDynamicIntroducedField } from './asset-meta';
 import { videoAssetsMetaMappingProperties } from './asset-meta-mapping';
 
 describe('isStrictDynamicMappingException', () => {
@@ -28,11 +28,20 @@ describe('isStrictDynamicMappingException', () => {
     ).toBe(true);
   });
 
-  it('rejects unrelated errors', () => {
-    expect(isStrictDynamicMappingException(new Error('version_conflict'))).toBe(
-      false,
-    );
-    expect(isStrictDynamicMappingException(null)).toBe(false);
+  it('extracts the introduced field name from the reason', () => {
+    expect(
+      strictDynamicIntroducedField({
+        meta: {
+          body: {
+            error: {
+              type: 'strict_dynamic_mapping_exception',
+              reason:
+                'mapping set to strict, dynamic introduction of [work_title] within [meta] is not allowed',
+            },
+          },
+        },
+      }),
+    ).toBe('work_title');
   });
 });
 

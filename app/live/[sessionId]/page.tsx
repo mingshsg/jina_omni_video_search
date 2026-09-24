@@ -606,13 +606,14 @@ export default function LiveSessionPage() {
           />
           <EuiSpacer size="m" />
           {searchMode === 'text' ? (
-            <EuiFormRow label={t.searchPlaceholder}>
+            <EuiFormRow label={t.searchLabel}>
               <EuiFieldSearch
                 fullWidth
+                placeholder={t.searchPlaceholder}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onSearch={() => void runSearch()}
-                aria-label={t.searchPlaceholder}
+                aria-label={t.searchLabel}
               />
             </EuiFormRow>
           ) : (

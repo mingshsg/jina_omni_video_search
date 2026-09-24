@@ -56,10 +56,10 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { id } = addPersonToCatalog(parsed.data);
+    const { id, entry } = addPersonToCatalog(parsed.data);
     const locale = localeFromRequest(request);
     return NextResponse.json(
-      { id, display: displayNameForPerson(id, locale) },
+      { id, display: displayNameForPerson(id, locale), aliases: entry.aliases },
       { status: 201 },
     );
   } catch (err) {

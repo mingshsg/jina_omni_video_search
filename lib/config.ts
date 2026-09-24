@@ -168,7 +168,7 @@ const envSchema = z
       .enum(['none', 'jina', 'agent_builder'])
       .optional()
       .default('none'),
-    SUGGEST_WEB_TIMEOUT_MS: positiveInt(60_000),
+    SUGGEST_WEB_TIMEOUT_MS: positiveInt(180_000),
     SUGGEST_WEB_MAX_READS: positiveInt(2),
     /** Kibana base URL (optional on Elastic Cloud; derived from ES `.es.` → `.kb.`). */
     KIBANA_URL: z.string().optional().default(''),

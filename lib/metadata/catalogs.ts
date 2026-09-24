@@ -110,6 +110,9 @@ export const META_BOUNDS = {
   /** Mirrors NEW_PERSON_NAME_MAX_LEN in people.ts — same display-name class. */
   workTitleNameMax: 200,
   workTitleNativeLangMax: 16,
+  /** Reference/source page links (e.g. Wikipedia, IMDb) kept as metadata. */
+  referenceUrlsMax: 20,
+  referenceUrlMaxLen: 2048,
 } as const;
 
 export function countryLabel(

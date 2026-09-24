@@ -136,6 +136,7 @@ describe('diffMappingProperties', () => {
           country: { type: 'keyword' },
           tags: { type: 'keyword' },
           tags_key: { type: 'keyword' },
+          reference_urls: { type: 'keyword', index: false },
           work_title: {
             properties: {
               en: { type: 'text' },

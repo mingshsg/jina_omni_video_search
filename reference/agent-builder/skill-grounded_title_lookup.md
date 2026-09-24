@@ -59,7 +59,7 @@ work-level facts — those are Phase-1-only.
 
 Worst case across both phases: 2 search calls + 2 reads. Parallel tool calls
 are allowed only when they stay inside this budget and shorten wall time
-(for example reading two language-Wikipedia pages of the same work in
+(for example reading two language editions of the same work's page in
 parallel during Phase 1); never fan out exploratory reads.
 
 ### Efficient search recipe (Phase 1, follow in order)
@@ -76,16 +76,34 @@ parallel during Phase 1); never fan out exploratory reads.
      drama title, not only the character token).
 2. **One** targeted search: exact-phrase cleaned work title plus a short media
    context (`film` / `movie` / `TV series` / `drama` / `电视剧` / `영화` /
-   `映画` / broadcaster when it helps, e.g. `MBC`). Prefer hits on Wikipedia
-   or Wikidata (`site:wikipedia.org` or `site:wikidata.org`). Add `year_hint`
+   `映画` / broadcaster when it helps, e.g. `MBC`). Do **not** constrain the
+   query to a single site (no `site:wikipedia.org`) — let the search surface
+   whichever allowlisted source actually covers the work. Add `year_hint`
    only as corroboration, never as the sole match key.
 3. From search snippets alone: if two distinct works look equally plausible,
    return `ambiguous` **immediately** — do not spend a read. If nothing
    identifies a work, return `empty`.
 4. Otherwise pick the single best HTTPS allowlisted hit and **read it once**,
    with a `question` covering year/country/language/kind/genres/cast (see
-   above). Prefer a Wikipedia work page; Wikidata is preferred when the
-   search hit is a structured item and the Wikipedia lead is redundant.
+   above). Choose the source by what the work needs, not by habit — all four
+   Phase-1 domains are equally permitted:
+   - **Wikipedia** is usually the strongest single choice, because one page
+     carries *both* the synopsis prose (`description`/`abstract`) and a cast
+     list that gives character names and native-script names together (e.g.
+     "Song Kang-ho as Kim Ki-taek (김기택)"). Prefer it when the work has a
+     real article and you need prose or cast.
+   - **IMDb** is the better choice when the work has no usable Wikipedia
+     article, or when the fields you still need are the structured ones. Its
+     "Details" block states country of origin, languages, release date and
+     "Also known as" title variants explicitly. Note its plot/"Storyline"
+     section often does **not** survive extraction, so do not pick IMDb when
+     `description`/`abstract` is the main gap.
+   - **TMDB** is a reasonable fallback for non-English works that are thin on
+     both of the above.
+   - **Wikidata** when the hit is a structured item and a Wikipedia lead
+     would be redundant.
+   Do not read a second page merely to corroborate a fact the first page
+   already stated — the Phase-1 budget is still one read.
 5. Search snippets are discovery evidence only. Never populate a field
    without reading its page.
 
@@ -170,10 +188,11 @@ when the page states them — do not return year-only stubs:
   - Do not invent `tv_episode` for an unnamed clip of a series.
 - `description`: **4-7 sentences, ≤1600 characters**, a real plot/storyline
   synopsis of the identified work (work-level) — not a one-line logline.
-  Ground every sentence in the read page; prefer combining the lead summary
-  and any dedicated "Plot"/"Synopsis" section from Wikipedia rather than the
-  lead paragraph alone, since the lead alone is usually too short to reach
-  4-7 sentences of real plot content. Paraphrase, do not quote at length.
+  Ground every sentence in the read page; prefer combining the lead/overview
+  summary with any dedicated "Plot"/"Synopsis"/"Storyline" section on that
+  page rather than the lead paragraph alone, since the lead alone is usually
+  too short to reach 4-7 sentences of real plot content. Paraphrase, do not
+  quote at length.
   Do not invent scenes, twists, or details absent from the source. Do not
   claim scenes, dialogue, or cast appearances in the uploaded file — this
   describes the work, not this specific file. Add a brief work-level
@@ -279,6 +298,45 @@ compact reply:
 }
 ```
 
+The Wikipedia URLs above are **incidental to that example**, not a required
+source — every `url` is Wikipedia only because that one page happened to
+carry the synopsis and the cast together. All four Phase-1 domains are
+first-class. When the single page you read is IMDb, cite IMDb; the contract
+is identical. For example, for a work whose structured details you read from
+IMDb:
+
+```
+{
+  "status": "ok",
+  "candidates": [
+    {
+      "title": "Parasite",
+      "url": "https://www.imdb.com/title/tt6751668/",
+      "year": 2019,
+      "reason": "Title page matches the cleaned work title."
+    }
+  ],
+  "fields": {
+    "country": {
+      "value": "KR",
+      "url": "https://www.imdb.com/title/tt6751668/",
+      "evidence": "Details lists country of origin: South Korea."
+    },
+    "primary_language": {
+      "value": "ko",
+      "url": "https://www.imdb.com/title/tt6751668/",
+      "evidence": "Details lists Languages: Korean."
+    }
+  },
+  "notes": "Structured details read from the IMDb title page."
+}
+```
+
+Note that this second example still returns `candidates` — a `status: "ok"`
+reply should always name the page(s) you considered, whatever the domain.
+It shows fewer `fields` only because it is illustrating source choice, not
+because an `ok` reply may skip the fields it can support.
+
 Allowed keys and types when present:
 
 - `status`: `"ok"` | `"ambiguous"` | `"empty"` | `"unavailable"`
@@ -295,3 +353,6 @@ Allowed keys and types when present:
 For `ambiguous`, `empty`, and `unavailable`: omit `fields` (or use `{}`), set
 `actors` to `[]` or omit it, and keep `notes` short for the abstention reason.
 Do not emit null placeholders.
+
+
+

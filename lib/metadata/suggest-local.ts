@@ -82,6 +82,8 @@ export interface LocalSuggestResult {
     description?: SuggestFieldDraft<string>;
     abstract?: SuggestFieldDraft<string>;
     tags?: SuggestFieldDraft<string[]>;
+    /** Populated only by web/agent enrichment — no local source exists. */
+    reference_urls?: SuggestFieldDraft<string[]>;
   };
 }
 

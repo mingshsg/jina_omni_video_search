@@ -317,6 +317,9 @@ export function expandActorIds(
 }
 
 const NEW_PERSON_NAME_MAX_LEN = 200;
+/** "Known as" list bound — mirrors META_BOUNDS.tagsMax's order of magnitude. */
+export const KNOWN_AS_MAX = 30;
+export const KNOWN_AS_NAME_MAX_LEN = NEW_PERSON_NAME_MAX_LEN;
 
 export class PersonCatalogError extends Error {
   readonly code: 'invalid' | 'conflict';
@@ -422,3 +425,85 @@ export function addPersonToCatalog(input: NewPersonInput): {
   loadPeopleCatalog(true);
   return { id, entry };
 }
+
+/**
+ * Replace a person's full "known as" list (their entire `aliases` array —
+ * the same field that seeds from `en`/`zh`/`native.name` at creation time
+ * and is what `findContainedAliases`/search matching reads). This is the
+ * only write path for growing a person's known names *after* creation —
+ * `addPersonToCatalog` only ever seeds the initial three.
+ *
+ * Deliberately a full-list replace, not an append/remove pair: the caller
+ * (the "Known as" chip list in the editor) already holds the current list
+ * and diffs locally, so a replace keeps this function's contract simple and
+ * matches the chip-list UI's natural save shape (compare-and-PATCH-whole-list,
+ * the same pattern already used for `tags`/`reference_urls` in
+ * `validate.ts`).
+ *
+ * Re-validates the *whole* catalog before writing (`validatePeopleCatalog`),
+ * which is what turns a cross-person alias collision into a rejected write
+ * (`PersonCatalogError('conflict', ...)`) instead of a silent
+ * last-writer-wins overwrite in `getAliasIndex()` at read time — see
+ * `reviews/hybrid-internet-suggest-code-review-2026-09-23.md` R5-06. This
+ * only guards *new* writes; it does not audit aliases already on file.
+ *
+ * Not safe against concurrent writers on separate processes/replicas — this
+ * is a read-modify-write of the whole catalog file. The atomic temp-file +
+ * rename protects against a torn file, not against a lost update, exactly
+ * as documented on `addPersonToCatalog` above.
+ */
+export function setPersonAliases(
+  id: string,
+  aliases: string[],
+): { id: string; entry: PersonEntry } {
+  const current = loadPeopleCatalog(true);
+  const existing = current[id];
+  if (!existing) {
+    throw new PersonCatalogError('invalid', `Unknown person id: ${id}`);
+  }
+
+  const cleaned = [
+    ...new Set(
+      aliases
+        .map((a) => a.normalize('NFKC').trim())
+        .filter((a) => a.length > 0),
+    ),
+  ];
+  if (cleaned.length === 0) {
+    throw new PersonCatalogError(
+      'invalid',
+      'At least one known name is required',
+    );
+  }
+  if (cleaned.length > KNOWN_AS_MAX) {
+    throw new PersonCatalogError(
+      'invalid',
+      `At most ${KNOWN_AS_MAX} known names are allowed`,
+    );
+  }
+  const overlong = cleaned.find((a) => a.length > KNOWN_AS_NAME_MAX_LEN);
+  if (overlong) {
+    throw new PersonCatalogError(
+      'invalid',
+      `Known name exceeds ${KNOWN_AS_NAME_MAX_LEN} characters`,
+    );
+  }
+
+  const nextEntry: PersonEntry = { ...existing, aliases: cleaned };
+  const next: PeopleCatalog = { ...current, [id]: nextEntry };
+  try {
+    validatePeopleCatalog(next);
+  } catch (err) {
+    throw new PersonCatalogError(
+      'conflict',
+      err instanceof Error
+        ? err.message
+        : 'Known name conflicts with another person',
+    );
+  }
+  writePeopleCatalogAtomic(next);
+  resetPeopleCatalogCache();
+  loadPeopleCatalog(true);
+  return { id, entry: nextEntry };
+}
+

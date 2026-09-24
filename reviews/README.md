@@ -16,6 +16,18 @@ loses an action item.
 
 ## Current — hybrid metadata search
 
+- [`suggest-metadata-editor-session-review-2026-09-23.md`](./suggest-metadata-editor-session-review-2026-09-23.md)
+  — **`reference_urls`, todo/30 S6 citation relaxation, "Known as" alias
+  editor + new `PATCH` route, image-search `filters` fix, UI fixes, and the
+  Agent Builder prompt rebalance that unblocks IMDb.** Behavior is sound and
+  five claims were verified against live infrastructure (mapping,
+  persistence, alias-collision 409, deployed prompt, image search), but
+  actor candidates were still *silently* discarded when uncited — the exact
+  defect S6 existed to fix — and the tree bundles six unrelated concerns
+  plus pre-existing third-party work. **P1 and all P2/P3 code findings fixed
+  the same day; only the commit-split items (R5/R5a) remain open.**
+  → [`todo/32`](../todo/32-suggest-metadata-editor-session-2026-09-23.md)
+
 - [`hybrid-suggest-pipeline-review-2026-09-23.md`](./hybrid-suggest-pipeline-review-2026-09-23.md)
   — **Suggest pipeline.** Write-safety holds (never writes, cancellation safe,
   no secret leak) but the trust boundary does not: failure is displayed as

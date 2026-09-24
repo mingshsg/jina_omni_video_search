@@ -1,5 +1,5 @@
 {
-  "fetched_at": "2026-09-23T00:38:03.729Z",
+  "fetched_at": "2026-09-23T23:10:38.630Z",
   "kibana_host": "https://***.kb.southeastasia.azure.elastic.cloud:443",
   "ok": true,
   "checks": {
@@ -12,8 +12,8 @@
     "assigned_tools_present": true
   },
   "hashes": {
-    "skill_content_sha256": "a5f5187bb2e32c17d6392f51bd6c47554e840e46cd25b18931ce95ea9b1ea0dd",
-    "agent_instructions_sha256": "cd5843270c92075a7a129e6b91a1a7c1cdfce4c14820e89fa5a28c35aa67a6ea"
+    "skill_content_sha256": "01e8facb9cecfedebedd112119e9784ee2ec333b533ba35e61ee99a15316439c",
+    "agent_instructions_sha256": "19d42232a8834f190fbfa4d85ceda592003caa4d9e1bff0e9d25f2ef2259974f"
   },
   "agent": {
     "id": "video_metadata_research",
@@ -32,7 +32,7 @@
       "jina.search_web",
       "jina.read_url"
     ],
-    "content_len": 4947
+    "content_len": 17340
   },
   "tools": {
     "assigned": [

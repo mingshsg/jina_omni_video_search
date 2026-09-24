@@ -1,6 +1,6 @@
 import { getConfig } from '../config';
 import { publishDescriptionEmbedding } from '../metadata/description-embed';
-import type { AssetMeta, MetaPatchApply } from '../metadata/validate';
+import type { AssetMeta, MetaPatchApply, MetaReviewMap } from '../metadata/validate';
 import { toEditorDto, type AssetMetaEditorDto } from '../metadata/validate';
 import { getEsClient } from './client';
 import { getAsset } from './index-assets';
@@ -60,6 +60,7 @@ const CLEARABLE_META_KEYS = [
   'tags',
   'tags_key',
   'work_title',
+  'reference_urls',
   'description_semantic',
   'abstract_semantic',
   'work_title_semantic',
@@ -75,6 +76,7 @@ const REVIEW_FIELD_KEYS = [
   'country',
   'tags',
   'work_title',
+  'reference_urls',
 ] as const;
 
 /**
@@ -151,6 +153,20 @@ const META_UPDATE_SCRIPT = `
 
   ctx._source.meta.updated_at = now;
 `;
+
+/** Field name ES refused to introduce under dynamic:strict, if any. */
+export function strictDynamicIntroducedField(err: unknown): string | null {
+  if (!err || typeof err !== 'object') return null;
+  const e = err as {
+    meta?: { body?: { error?: { reason?: string } } };
+    message?: string;
+  };
+  const reason = e.meta?.body?.error?.reason ?? '';
+  const message = typeof e.message === 'string' ? e.message : '';
+  const hay = `${reason}\n${message}`;
+  const m = hay.match(/dynamic introduction of \[([^\]]+)\]/);
+  return m?.[1] ?? null;
+}
 
 /** True when ES rejects a field not present under dynamic:strict. */
 export function isStrictDynamicMappingException(err: unknown): boolean {
@@ -284,10 +300,23 @@ export async function patchAssetMeta(
     ...(apply.fields.actor_ids === null ? (['actors'] as const) : []),
   ];
 
-  const runUpdate = async (
-    markSemanticStale: boolean,
-    fields: Record<string, unknown>,
-  ) => {
+  const wantSemanticStale =
+    cfg.ASSET_SEMANTIC_ENABLED &&
+    ('description' in apply.fields || 'abstract' in apply.fields);
+
+  const semanticMirror = cfg.EMBED_INFERENCE_ID
+    ? deriveSemanticMirrorFields(apply.fields)
+    : {};
+  let fields: Record<string, unknown> =
+    Object.keys(semanticMirror).length > 0
+      ? { ...apply.fields, ...semanticMirror }
+      : { ...apply.fields };
+  let review: MetaReviewMap | null | undefined = apply.review
+    ? { ...apply.review }
+    : apply.review;
+  let markSemanticStale = wantSemanticStale;
+
+  const runUpdate = async () => {
     await client.update({
       index: cfg.ES_INDEX_ASSETS,
       id: videoId,
@@ -300,7 +329,7 @@ export async function patchAssetMeta(
           expected_revision: apply.expected_revision,
           now: new Date().toISOString(),
           fields,
-          review: apply.review ?? null,
+          review: review ?? null,
           clear_review_keys,
           clearable: CLEARABLE_META_KEYS,
           mark_semantic_stale: markSemanticStale,
@@ -309,34 +338,56 @@ export async function patchAssetMeta(
     });
   };
 
-  const wantSemanticStale =
-    cfg.ASSET_SEMANTIC_ENABLED &&
-    ('description' in apply.fields || 'abstract' in apply.fields);
-
-  const semanticMirror = cfg.EMBED_INFERENCE_ID
-    ? deriveSemanticMirrorFields(apply.fields)
-    : {};
-  const fieldsWithMirror =
-    Object.keys(semanticMirror).length > 0
-      ? { ...apply.fields, ...semanticMirror }
-      : apply.fields;
-
-  try {
-    await runUpdate(wantSemanticStale, fieldsWithMirror);
-  } catch (err: unknown) {
-    // Mapping drift: semantic fields not on live index yet — keep editorial save.
-    if (
-      (wantSemanticStale || fieldsWithMirror !== apply.fields) &&
-      isStrictDynamicMappingException(err)
-    ) {
-      try {
-        await runUpdate(false, apply.fields);
-      } catch (retryErr: unknown) {
-        await classifyPatchError(retryErr, videoId, apply.expected_revision);
+  // Soft-retry on mapping drift: drop semantic stale mark, then mirror
+  // fields, then any single unknown meta field (e.g. work_title before
+  // yarn setup-indices). Editorial Save must not hard-fail on strict mapping.
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    try {
+      await runUpdate();
+      lastErr = undefined;
+      break;
+    } catch (err: unknown) {
+      lastErr = err;
+      if (!isStrictDynamicMappingException(err)) {
+        await classifyPatchError(err, videoId, apply.expected_revision);
       }
-    } else {
+      if (markSemanticStale) {
+        markSemanticStale = false;
+        continue;
+      }
+      const introduced = strictDynamicIntroducedField(err);
+      if (introduced && introduced.endsWith('_semantic') && introduced in fields) {
+        delete fields[introduced];
+        continue;
+      }
+      if (
+        introduced &&
+        (introduced === 'description_embedding' ||
+          introduced === 'description_embedding_meta')
+      ) {
+        markSemanticStale = false;
+        continue;
+      }
+      if (introduced && introduced in fields) {
+        delete fields[introduced];
+        if (review) {
+          const nextReview: Record<string, unknown> = { ...review };
+          delete nextReview[introduced];
+          if (introduced === 'actor_ids') delete nextReview.actors;
+          review =
+            Object.keys(nextReview).length > 0
+              ? (nextReview as MetaReviewMap)
+              : undefined;
+        }
+        continue;
+      }
+      // Nothing left to strip
       await classifyPatchError(err, videoId, apply.expected_revision);
     }
+  }
+  if (lastErr) {
+    await classifyPatchError(lastErr, videoId, apply.expected_revision);
   }
 
   const dto = await getAssetMetaEditorDto(videoId);

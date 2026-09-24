@@ -13,6 +13,7 @@ import {
   PersonCatalogError,
   resetPeopleCatalogCache,
   searchPeople,
+  setPersonAliases,
   slugifyPersonId,
   sortedTokenActorKey,
   validatePeopleCatalog,
@@ -163,6 +164,56 @@ describe('meta patch validation', () => {
     expect(cleared.fields.tags).toBeNull();
     expect(cleared.fields.tags_key).toBeNull();
     expect(cleared.review?.tags).toBeUndefined();
+  });
+
+  it('accepts reference_urls, dedupes, and records review provenance', () => {
+    const ok = parseMetaPatchBody({
+      expected_revision: 0,
+      reference_urls: [
+        'https://en.wikipedia.org/wiki/Some_Show',
+        'https://en.wikipedia.org/wiki/Some_Show',
+        'http://example.com/page',
+      ],
+    });
+    expect(ok.fields.reference_urls).toEqual([
+      'https://en.wikipedia.org/wiki/Some_Show',
+      'http://example.com/page',
+    ]);
+    expect(ok.review?.reference_urls).toEqual({
+      source: 'manual',
+      confirmed: true,
+    });
+  });
+
+  it('drops malformed reference_urls instead of rejecting the PATCH', () => {
+    const ok = parseMetaPatchBody({
+      expected_revision: 0,
+      reference_urls: [
+        'javascript:alert(1)',
+        'not a url',
+        'https://en.wikipedia.org/wiki/Four_Hands,_Two_Sonatas',
+      ],
+    });
+    expect(ok.fields.reference_urls).toEqual([
+      'https://en.wikipedia.org/wiki/Four_Hands,_Two_Sonatas',
+    ]);
+  });
+
+  it('clears reference_urls when every entry is undroppable garbage', () => {
+    const cleared = parseMetaPatchBody({
+      expected_revision: 0,
+      reference_urls: ['javascript:alert(1)', 'not a url'],
+    });
+    expect(cleared.fields.reference_urls).toBeNull();
+  });
+
+  it('clears reference_urls on null and on an all-empty list', () => {
+    const cleared = parseMetaPatchBody({
+      expected_revision: 0,
+      reference_urls: null,
+    });
+    expect(cleared.fields.reference_urls).toBeNull();
+    expect(cleared.review?.reference_urls).toBeUndefined();
   });
 
   it('records suggestion provenance via field_sources', () => {
@@ -368,6 +419,62 @@ describe('addPersonToCatalog (isolated fs)', () => {
     expect(() => addPersonToCatalog({ en: 'a'.repeat(201) })).toThrow(
       PersonCatalogError,
     );
+  });
+
+  it('setPersonAliases replaces the known-as list, trims/dedupes, and persists', () => {
+    const { id, entry } = setPersonAliases('person:existing-actor', [
+      'Existing Actor',
+      ' Existing Actor ', // dup after trim — collapses
+      'EA',
+      'Known Nickname',
+    ]);
+    expect(id).toBe('person:existing-actor');
+    expect(entry.aliases).toEqual(['Existing Actor', 'EA', 'Known Nickname']);
+
+    const onDisk = JSON.parse(
+      fs.readFileSync(path.join(tmpDir, 'config', 'people.json'), 'utf8'),
+    );
+    expect(onDisk[id].aliases).toEqual(entry.aliases);
+
+    // Reloading from disk reflects the write, not a stale cache.
+    resetPeopleCatalogCache();
+    expect(loadPeopleCatalog()[id]?.aliases).toEqual(entry.aliases);
+  });
+
+  it('setPersonAliases rejects an unknown person id', () => {
+    expect(() =>
+      setPersonAliases('person:does-not-exist', ['Someone']),
+    ).toThrow(PersonCatalogError);
+  });
+
+  it('setPersonAliases rejects an empty resulting list', () => {
+    expect(() =>
+      setPersonAliases('person:existing-actor', ['  ', '\t']),
+    ).toThrow(PersonCatalogError);
+  });
+
+  it('setPersonAliases rejects a name already owned by a different person', () => {
+    addPersonToCatalog({ en: 'Second Person' });
+    try {
+      setPersonAliases('person:second-person', ['Existing Actor']);
+      expect.unreachable();
+    } catch (err) {
+      expect(err).toBeInstanceOf(PersonCatalogError);
+      expect((err as PersonCatalogError).code).toBe('conflict');
+    }
+    // Rejected write must not have persisted — the conflicting alias never
+    // lands on disk (this is the R5-06 write-path guard).
+    const onDisk = JSON.parse(
+      fs.readFileSync(path.join(tmpDir, 'config', 'people.json'), 'utf8'),
+    );
+    expect(onDisk['person:second-person'].aliases).toEqual(['Second Person']);
+  });
+
+  it('setPersonAliases rejects more than the allowed known-name count', () => {
+    const many = Array.from({ length: 31 }, (_, i) => `Alias ${i}`);
+    expect(() =>
+      setPersonAliases('person:existing-actor', many),
+    ).toThrow(PersonCatalogError);
   });
 });
 
