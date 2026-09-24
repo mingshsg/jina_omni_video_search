@@ -6,8 +6,27 @@ import {
   hasActiveFilters,
   interpretEligibleTotal,
   parseSearchFilters,
+  searchFiltersSchema,
   SearchFilterError,
 } from './search-filters';
+
+describe('searchFiltersSchema', () => {
+  // Regression: app/api/search/image/route.ts embeds this schema directly
+  // as a request-body field and, for the "no filters selected" multipart
+  // case, always sends an explicit `null` (FormData has no absent-vs-null
+  // distinction once its parser normalizes a missing field) — `.optional()`
+  // alone only tolerates `undefined` and 400'd every filter-less image
+  // search with "filters: Expected object, received null".
+  it('accepts null as well as undefined (image-search always sends null, never omits the key)', () => {
+    expect(searchFiltersSchema.safeParse(null).success).toBe(true);
+    expect(searchFiltersSchema.safeParse(undefined).success).toBe(true);
+  });
+
+  it('still rejects a non-object, non-null filters value', () => {
+    expect(searchFiltersSchema.safeParse('nope').success).toBe(false);
+    expect(searchFiltersSchema.safeParse(42).success).toBe(false);
+  });
+});
 
 describe('parseSearchFilters', () => {
   beforeAll(() => {

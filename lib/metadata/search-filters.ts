@@ -55,6 +55,15 @@ export const searchFiltersSchema = z
     tags: stringArray(META_BOUNDS.facetArrayMax, META_BOUNDS.tagMaxLen),
   })
   .strict()
+  // Bug fix: image search (app/api/search/image/route.ts) embeds this same
+  // schema as a request-body field and always sends an explicit `null` for
+  // "no filters selected" (FormData has no concept of an absent-vs-null
+  // field once the multipart parser normalizes it) — `.optional()` alone
+  // only tolerates `undefined`, so every filter-less image search 400'd
+  // with "filters: Expected object, received null". `parseSearchFilters`
+  // below already treats `null` and `undefined` identically; this just
+  // lets the schema agree before that function ever runs.
+  .nullable()
   .optional();
 
 export type SearchFiltersInput = z.infer<typeof searchFiltersSchema>;
