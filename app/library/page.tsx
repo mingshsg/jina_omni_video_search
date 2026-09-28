@@ -17,7 +17,10 @@ import {
 } from '@elastic/eui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppShell, formatDurationMs } from '@/components/AppShell';
+import { DramaResultsFlyout } from '@/components/DramaResultsFlyout';
+import { DramaStartFlyout } from '@/components/DramaStartFlyout';
 import { EditMetadataFlyout } from '@/components/EditMetadataFlyout';
+import type { DramaSummaryDto } from '@/lib/drama/safe-dto';
 import { formatChunkPresetLabel } from '@/lib/ingest/chunk-presets';
 import { useLocale } from '@/lib/i18n/locale-context';
 
@@ -38,6 +41,7 @@ type LibraryAsset = {
   suggested_group_id?: 'trailer' | 'demo';
   created_at: string;
   updated_at: string;
+  drama?: DramaSummaryDto;
   variants: Array<{
     variant_id: string;
     chunk_preset: string;
@@ -50,6 +54,24 @@ type LibraryAsset = {
     error?: string;
   }>;
 };
+
+function dramaColor(
+  status: string,
+): 'default' | 'primary' | 'success' | 'warning' | 'danger' {
+  switch (status) {
+    case 'succeeded':
+      return 'success';
+    case 'partial':
+      return 'warning';
+    case 'failed':
+      return 'danger';
+    case 'pending':
+    case 'running':
+      return 'primary';
+    default:
+      return 'default';
+  }
+}
 
 type BatchMode = 'selected' | 'all';
 
@@ -94,6 +116,12 @@ export default function LibraryPage() {
   const [batchMode, setBatchMode] = useState<BatchMode | null>(null);
   const [editTarget, setEditTarget] = useState<LibraryAsset | null>(null);
   const [backfillTarget, setBackfillTarget] = useState<LibraryAsset | null>(null);
+  const [dramaStartTarget, setDramaStartTarget] = useState<LibraryAsset | null>(
+    null,
+  );
+  const [dramaViewTarget, setDramaViewTarget] = useState<LibraryAsset | null>(
+    null,
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -273,6 +301,18 @@ export default function LibraryPage() {
               {item.has_audio ? '' : ' · no audio'}
               {item.group_id ? ` · ${t.metaGroup}: ${item.group_id}` : ''}
             </EuiText>
+            {item.drama && (
+              <EuiText size="xs">
+                <EuiBadge color={dramaColor(item.drama.status)}>
+                  {item.drama.status}
+                </EuiBadge>
+                {item.drama.synopsis_status === 'provisional' && (
+                  <EuiBadge color="warning">
+                    {item.drama.synopsis_status}
+                  </EuiBadge>
+                )}
+              </EuiText>
+            )}
           </div>
         ),
       },
@@ -334,6 +374,30 @@ export default function LibraryPage() {
             enabled: (item: LibraryAsset) =>
               !batchBusy && busyId !== item.video_id,
             onClick: (item: LibraryAsset) => setBackfillTarget(item),
+          },
+          {
+            name: t.dramaStartTitle,
+            description: t.dramaStartTitle,
+            type: 'icon' as const,
+            icon: 'videoPlayer',
+            available: (item: LibraryAsset) =>
+              item.status === 'ready' && !item.drama,
+            enabled: (item: LibraryAsset) =>
+              item.status === 'ready' &&
+              !item.drama &&
+              !batchBusy &&
+              busyId !== item.video_id,
+            onClick: (item: LibraryAsset) => setDramaStartTarget(item),
+          },
+          {
+            name: t.dramaViewResults,
+            description: t.dramaViewResults,
+            type: 'icon' as const,
+            icon: 'eye',
+            available: (item: LibraryAsset) => Boolean(item.drama),
+            enabled: (item: LibraryAsset) =>
+              Boolean(item.drama) && !batchBusy && busyId !== item.video_id,
+            onClick: (item: LibraryAsset) => setDramaViewTarget(item),
           },
           {
             name: t.actionEditMeta,
@@ -534,6 +598,26 @@ export default function LibraryPage() {
             setToast(t.metaSaved);
             void load();
           }}
+        />
+      )}
+
+      {dramaStartTarget && (
+        <DramaStartFlyout
+          videoId={dramaStartTarget.video_id}
+          title={dramaStartTarget.title || dramaStartTarget.video_id}
+          onClose={() => setDramaStartTarget(null)}
+          onStarted={() => {
+            setToast(t.dramaStartedToast);
+            void load();
+          }}
+        />
+      )}
+
+      {dramaViewTarget && dramaViewTarget.drama && (
+        <DramaResultsFlyout
+          videoId={dramaViewTarget.video_id}
+          drama={dramaViewTarget.drama}
+          onClose={() => setDramaViewTarget(null)}
         />
       )}
     </AppShell>

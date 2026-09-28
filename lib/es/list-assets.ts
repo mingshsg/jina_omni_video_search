@@ -1,5 +1,7 @@
 import { getConfig } from '../config';
 import { inferGroupFromVariants } from '../metadata/groups';
+import type { DramaSummaryDto } from '../drama/safe-dto';
+import { dramaSummaryFromAsset } from '../drama/safe-dto';
 import { getEsClient } from './client';
 import type { VideoAssetDocument } from './index-assets';
 
@@ -20,6 +22,7 @@ export interface LibraryAssetSummary {
   suggested_group_id?: 'trailer' | 'demo';
   created_at: string;
   updated_at: string;
+  drama?: DramaSummaryDto;
   variants: Array<{
     variant_id: string;
     chunk_preset: string;
@@ -37,6 +40,7 @@ function toSummary(doc: VideoAssetDocument): LibraryAssetSummary {
   const suggestedGroup = doc.meta?.group_id
     ? null
     : inferGroupFromVariants(doc.variants ?? []);
+  const drama = dramaSummaryFromAsset(doc);
   return {
     video_id: doc.video_id,
     title: doc.title,
@@ -54,6 +58,7 @@ function toSummary(doc: VideoAssetDocument): LibraryAssetSummary {
     ...(suggestedGroup ? { suggested_group_id: suggestedGroup } : {}),
     created_at: doc.created_at,
     updated_at: doc.updated_at,
+    ...(drama ? { drama } : {}),
     variants: (doc.variants ?? []).map((v) => ({
       variant_id: v.variant_id,
       chunk_preset: v.chunk_preset,

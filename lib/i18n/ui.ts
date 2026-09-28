@@ -160,6 +160,30 @@ export type UiMessages = {
   dramaRetryLabel: string;
   dramaPartialNote: string;
   dramaFailedNote: string;
+  dramaStartAction: string;
+  dramaStartTitle: string;
+  dramaViewResults: string;
+  dramaResultOverview: string;
+  dramaResultRunId: string;
+  dramaResultSynopsis: string;
+  dramaResultStructure: string;
+  dramaResultKeyScenes: string;
+  dramaResultKeyActors: string;
+  dramaResultSubtitles: string;
+  dramaResultNoDetail: string;
+  dramaResultLoading: string;
+  dramaSynopsisStatus: string;
+  dramaProvisionalNote: string;
+  dramaSubtitleSource: string;
+  dramaSubtitleSourceAuto: string;
+  dramaSubtitleSourceExisting: string;
+  dramaSubtitleSourceForceAsr: string;
+  dramaDirectorCoverage: string;
+  dramaDirectorCoverageSampled: string;
+  dramaNoModulesError: string;
+  dramaNeedDirectorsForActors: string;
+  dramaNeedLanguageForSubtitles: string;
+  dramaStartedToast: string;
   autoStartLabel: string;
   autoStartHelp: string;
   chunkPresetSelectLabel: string;
@@ -554,6 +578,34 @@ export const uiEn: UiMessages = {
     'Enrichment finished partially — the video is searchable, but some modules failed. You can retry them.',
   dramaFailedNote:
     'Enrichment failed — the video is searchable. Retry the enrichment or inspect the error.',
+  dramaStartAction: 'Start enrichment',
+  dramaStartTitle: 'Process as drama',
+  dramaViewResults: 'Drama results',
+  dramaResultOverview: 'Run overview',
+  dramaResultRunId: 'Run ID',
+  dramaResultSynopsis: 'Synopsis',
+  dramaResultStructure: 'Structure',
+  dramaResultKeyScenes: 'Key scenes',
+  dramaResultKeyActors: 'Key actors',
+  dramaResultSubtitles: 'Subtitle files',
+  dramaResultNoDetail: 'No enrichment detail available yet for this run.',
+  dramaResultLoading: 'Loading enrichment detail…',
+  dramaSynopsisStatus: 'Synopsis status',
+  dramaProvisionalNote:
+    'This synopsis is provisional and has not been audited yet — treat it as review-needed, not approved metadata.',
+  dramaSubtitleSource: 'Subtitle method',
+  dramaSubtitleSourceAuto: 'Auto (sidecar → embedded → ASR)',
+  dramaSubtitleSourceExisting: 'Existing subtitles only',
+  dramaSubtitleSourceForceAsr: 'Force ASR',
+  dramaDirectorCoverage: 'Director coverage',
+  dramaDirectorCoverageSampled:
+    'Sampled windows only. Full-episode coverage is not available yet.',
+  dramaNoModulesError: 'Select at least one drama module.',
+  dramaNeedDirectorsForActors:
+    'Key actors requires the directors script module in the same run.',
+  dramaNeedLanguageForSubtitles:
+    'Select at least one subtitle language when Subtitles is enabled.',
+  dramaStartedToast: 'Drama enrichment started',
   autoStartLabel: 'Start immediately',
   autoStartHelp: 'Off = show workload estimate and wait for confirm',
   chunkPresetSelectLabel: 'Chunk window',
@@ -966,6 +1018,32 @@ export const uiZh: UiMessages = {
     '增强部分完成——视频已可检索，但部分模块失败，可以重试。',
   dramaFailedNote:
     '增强失败——视频已可检索，可重试增强或查看错误。',
+  dramaStartAction: '开始增强',
+  dramaStartTitle: '按剧处理',
+  dramaViewResults: '剧集结果',
+  dramaResultOverview: '运行概览',
+  dramaResultRunId: '运行 ID',
+  dramaResultSynopsis: '剧情简介',
+  dramaResultStructure: '结构区间',
+  dramaResultKeyScenes: '关键场景',
+  dramaResultKeyActors: '关键演员',
+  dramaResultSubtitles: '字幕文件',
+  dramaResultNoDetail: '该本轮暂无可用的增强详情。',
+  dramaResultLoading: '正在加载增强详情…',
+  dramaSynopsisStatus: '简介状态',
+  dramaProvisionalNote:
+    '该简介为暂定版本，尚未经过审核——请视为待审内容，而非已确认的元数据。',
+  dramaSubtitleSource: '字幕方式',
+  dramaSubtitleSourceAuto: '自动（外挂 → 内嵌 → ASR）',
+  dramaSubtitleSourceExisting: '仅使用现有字幕',
+  dramaSubtitleSourceForceAsr: '强制 ASR',
+  dramaDirectorCoverage: '导演稿覆盖',
+  dramaDirectorCoverageSampled:
+    '仅采样窗口。完整覆盖全片尚未实现。',
+  dramaNoModulesError: '请至少选择一个剧集模块。',
+  dramaNeedDirectorsForActors: '关键演员需要同时选择导演分场稿模块。',
+  dramaNeedLanguageForSubtitles: '勾选字幕模块时请至少选择一种字幕语言。',
+  dramaStartedToast: '已开始按剧增强',
   autoStartLabel: '立即开始',
   autoStartHelp: '关闭后先显示工作量估算，确认后再索引',
   chunkPresetSelectLabel: '分块窗口',

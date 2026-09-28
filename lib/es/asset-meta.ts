@@ -1,4 +1,5 @@
 import { getConfig } from '../config';
+import { dramaResultsFromAsset } from '../drama/safe-dto';
 import { publishDescriptionEmbedding } from '../metadata/description-embed';
 import type { AssetMeta, MetaPatchApply, MetaReviewMap } from '../metadata/validate';
 import { toEditorDto, type AssetMetaEditorDto } from '../metadata/validate';
@@ -244,7 +245,9 @@ export async function getAssetMetaEditorDto(
 ): Promise<AssetMetaEditorDto> {
   const asset = await getAsset(videoId);
   if (!asset) throw new MetaNotFoundError(videoId);
-  return toEditorDto(videoId, asset.title, asset.meta ?? null);
+  const dto = toEditorDto(videoId, asset.title, asset.meta ?? null);
+  const drama = dramaResultsFromAsset(asset);
+  return drama ? { ...dto, drama } : dto;
 }
 
 export interface PatchAssetMetaResult {

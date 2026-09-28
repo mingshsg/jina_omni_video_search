@@ -8,6 +8,7 @@ import {
 } from './catalogs';
 import { expandActorIds, getPerson } from './people';
 import { sanitizeExternalUrl } from './url-safety';
+import type { DramaResultsDto } from '../drama/safe-dto';
 
 export type MetaFieldSource = 'manual' | 'suggestion';
 export type MetaProvenanceProvider =
@@ -101,6 +102,12 @@ export interface AssetMetaEditorDto {
     review?: MetaReviewMap;
   };
   meta_revision: number;
+  /**
+   * Path-free drama enrichment summary (run overview + synopsis/structure/
+   * scene summaries). Owned by the drama runner, never part of the editorial
+   * PATCH. Never exposes media/`*_path`/thumbnails.
+   */
+  drama?: DramaResultsDto;
 }
 
 export class MetaValidationError extends Error {
@@ -153,7 +160,16 @@ function optionalTrimmedString(max: number) {
 
 const EVIDENCE_MAX = 500;
 
-/** Soft URL gate: never reject a PATCH because of a bad link — drop it. */
+/**
+ * Soft URL gate: never reject a PATCH because of a bad link — drop it.
+ *
+ * todo/33 R1: also *sanitizes* rather than merely validating. Both this and
+ * `softHttpUrl` feed fields that are persisted to ES `_source` and returned
+ * by the editor API, so a link carrying `user:pass@` or `?token=…` would
+ * breach the no-secrets invariant. Sanitizing (instead of rejecting) keeps
+ * the "never fail a Save over a link" property this gate was built for — the
+ * operator's other edits still land; only the credential part is removed.
+ */
 function softHttpsUrl(value: unknown): string | undefined {
   return sanitizeExternalUrl(value, {
     maxLength: 2048,
@@ -269,6 +285,7 @@ export const metaPatchBodySchema = z
         z.null(),
       ])
       .optional(),
+    group_id: z.union([z.string(), z.null()]).optional(),
     work_title: z.union([workTitleSchema, z.null()]).optional(),
     reference_urls: z
       .union([referenceUrlListSchema, z.null()])
