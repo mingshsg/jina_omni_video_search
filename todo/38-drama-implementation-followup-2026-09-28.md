@@ -27,12 +27,21 @@ Source: [`reviews/drama-implementation-followup-code-review-2026-09-28.md`](../r
 - [x] Node 22 `yarn build`: compile/typecheck/routes pass on 2026-09-28.
 - [x] `yarn test`: 83 files / 573 pass on 2026-09-28 (I1–I5, I7; Homebrew Node 25 — Node 22 unavailable in this shell, nvm has only 20.x which cannot run Vitest).
 - [x] `yarn build`: compile/typecheck/routes pass on 2026-09-28 (I1–I5, I7).
-- [ ] Read target assets mapping and verify terminal `meta.drama` `_update` plus subtitle bulk/delete-by-query live.
+- [x] Read target assets mapping and verify terminal `meta.drama` `_update` plus subtitle bulk/delete-by-query live.
+  **Verified 2026-09-28 (evening).** `yarn setup-indices` upgraded `video-assets` (no conflicts) and created `video-drama-subtitles`. Live mapping readback confirms every I1 field: `meta.drama.modules_done`, `error{code,message}`, `key_actors.role_en`, `synopsis_status`, plus durable `job.drama`. A disposable asset received a fully-populated terminal `persistDramaMeta` scripted `_update` (succeeded status, all optional fields) — accepted and persisted; asset deleted afterwards. Subtitle live check: bulk index by stable `_id` (g1 3 cues → g2 shorter/retimed → 4 docs, 2 overwritten + 1 stale + 1 new seg), `reconcileSubtitleLang` deleted exactly the 2 stale docs (count 4 → 2), `retireOldSubtitleGenerations` lang-scoped kept the previous `ko` generation while retiring `zh`. All test docs cleaned up.
 - [ ] Chinese and Korean representative episode checks, with manual evidence review and source-language boundary recorded.
 - [ ] Operational integration: run one Korean and one Thai sample through the configured ASR provider and live subtitle index; verify `lang: ko` / `lang: th` and no mismatched-stream assignment.
-- [x] Rebuild/restart app with `docker compose up -d --build app` (2026-09-28); replacement container `722d39171c08` is running with new image `sha256:38a1a39e7ccfa9ca864706801ba92d1ceef6c68779cf4fb7db5c334071329e51`, and `GET /ingest` returned HTTP 200. Worker image was not changed.
+- [x] Rebuild/restart app with `docker compose up -d --build app` (2026-09-28 **evening**, after the I1–I7 fixes); replacement container is running, `GET /ingest` returned HTTP 200. Build output chunk `78929.js` (50753 B) is byte-identical to the host build and contains the I2 reconcile (`keepSegIds` + `deleteByQuery` `must_not`/`terms`/`seg_id`), I3 (`batchFinishedWithErrors`), I4 (`job.drama`) logic. Earlier 2026-09-28 10:02 rebuild predates the afternoon fixes; the evening rebuild supersedes it. Worker image was not changed.
 - [x] Node 22 `yarn build` passed for ko/th code (2026-09-28); `yarn test --maxWorkers=4` passed 82 files / 560 tests. Unrestricted `yarn test` had one unrelated 5-second `key-scenes` timeout; that file passed alone and in the bounded full run.
 - [ ] Standalone `yarn tsc --noEmit` reports 45 existing test-file errors outside the ko/th files; the ko/th tests touched here have no reported errors. Reconcile this optional whole-tree check separately from the passing required `yarn build` gate.
 - [ ] Separate human quality round: review representative Korean and Thai transcripts and timestamps. This is not a code-development acceptance gate.
 - [ ] Restart after handoff success/failure; sequential and changed-cue retry on ES; browser SSE/outcome test against rebuilt container.
 - [ ] p95/inference cost and multi-replica ownership/progress if deployed with replicas.
+
+## Follow-up disposition (2026-09-28 evening)
+
+The drama core (P0–P3) was committed as `03932da` on `live-video-search`; the
+P4 drafts (`lib/drama/start-existing.ts`, `app/api/library/[videoId]/drama/`)
+and the unrelated suggest/group worktree changes were intentionally left out.
+Post-commit `yarn build` and `yarn test` (83 files / 573) both pass on the
+working tree.

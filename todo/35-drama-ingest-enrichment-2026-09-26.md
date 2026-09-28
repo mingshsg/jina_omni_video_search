@@ -9,10 +9,13 @@ Upstream: https://github.com/mingsorg/episode_processing
 | Phase | Status |
 | --- | --- |
 | P0 Contract / UI / mapping stub / Python spike | Done (operator: setup-indices + submodule init) |
-| P1 Subtitles + structure + drama-subtitles index | Node code present; ko/th development gates passed; live integration and human quality separate |
+| P1 Subtitles + structure + drama-subtitles index | Node code committed (`03932da`); live mapping + bulk/reconcile verified; ko/th ASR live integration and human quality still separate |
 | P2 Directors script + synopsis | Done (live EIS smoke NOT RUN) |
-| P3 Key actors + key scenes + frame GC job | Node code present; acceptance open (`todo/38` I1–I7; `todo/37` tracks earlier fixes) |
+| P3 Key actors + key scenes + frame GC job | Node code committed; live cost/latency NOT RUN (`todo/38` I1–I7 fixed and committed; `todo/37` tracks earlier fixes) |
 | P4 Search / Library consume (+ Library re-run) | Not started |
+
+Committed 2026-09-28 evening as `03932da` (drama P0–P3 core only; P4 drafts
+and unrelated suggest/group work left uncommitted).
 
 ## Decisions (2026-09-26)
 

@@ -1,7 +1,7 @@
 # Drama ingest enrichment (adopt `episode_processing`)
 
 Date: 2026-09-26  
-Status: **P0–P3 Node code present in the working tree; wider drama acceptance remains blocked by todo/36 and todo/38. The ko/th code path passes automated development gates; human transcript quality is a separate round.**  
+Status: **P0–P3 Node code committed as `03932da` on `live-video-search` (2026-09-28 evening); live mapping/terminal-update/subtitle-reconcile gates verified; wider drama acceptance remains blocked by todo/38 live/operational gates and P4. The ko/th code path passes automated development gates; human transcript quality is a separate round.**  
 Upstream ideas: [`mingsorg/episode_processing`](https://github.com/mingsorg/episode_processing)  
 Tracker: `todo/35-drama-ingest-enrichment-2026-09-26.md`  
 Chinese summary: `chn.docs/剧集入库增强规划.md`
