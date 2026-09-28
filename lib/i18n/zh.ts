@@ -25,7 +25,16 @@ export const ingestErrorsZh: Record<IngestErrorCode, string> = {
   INGEST_INVALID_MODE: '无效的导入模式。',
   INGEST_INVALID_CHUNKING:
     '无效的分块预设或窗口/重叠参数。请使用 standard、60s、30s、20s、fine、2s，或提供合法的 window_ms + overlap_ms。',
-  INGEST_INVALID_GROUP: '无效的索引分组名称（空值或超过 64 个字符）。',
+  INGEST_INVALID_GROUP:
+    '无效的索引分组名（为空或超过 64 个字符）。',
+  INGEST_DRAMA_EMPTY: '按剧处理至少需要选择一个增强模块。',
+  INGEST_DRAMA_INVALID: '剧集选项无效（语言或模块）。请检查多选项。',
+  INGEST_DRAMA_TOO_LONG:
+    '该视频超过按剧处理时长上限（默认 210 分钟；见 DRAMA_MAX_DURATION_MS）。',
+  INGEST_DRAMA_URL_NOT_SUPPORTED:
+    'URL 导入暂不支持按剧处理。请使用上传或本地路径，或之后在片库中开启。',
+  INGEST_DRAMA_NEEDS_DIRECTORS:
+    '关键演员需要同时选择导演分场稿模块（演员从本轮生成的分场稿中提取）。请在模块中加入 directors_script。',
   INGEST_BATCH_EMPTY: '本批次未找到视频文件。',
   INGEST_BATCH_TOO_LARGE: '单批文件过多，请拆成更小的批次。',
   INGEST_INTERNAL: '导入过程中发生意外错误。',

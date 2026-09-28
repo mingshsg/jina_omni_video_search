@@ -153,6 +153,53 @@ Apply via `PUT video-assets` (index name from `ES_INDEX_ASSETS`).
           "country": { "type": "keyword" },
           "tags": { "type": "keyword" },
           "tags_key": { "type": "keyword" },
+          "group_id": { "type": "keyword" },
+          "drama": {
+            "type": "object",
+            "properties": {
+              "run_id": { "type": "keyword" },
+              "show_id": { "type": "keyword" },
+              "episode_id": { "type": "keyword" },
+              "enrichment_status": { "type": "keyword" },
+              "modules": { "type": "keyword" },
+              "languages": { "type": "keyword" },
+              "structure": {
+                "type": "nested",
+                "properties": {
+                  "kind": { "type": "keyword" },
+                  "start_ms": { "type": "integer" },
+                  "end_ms": { "type": "integer" },
+                  "confidence": { "type": "float" },
+                  "source": { "type": "keyword" }
+                }
+              },
+              "synopsis_zh": { "type": "text" },
+              "synopsis_en": { "type": "text" },
+              "directors_script_zh": { "type": "text", "index": false },
+              "directors_script_en": { "type": "text", "index": false },
+              "subtitle_paths": { "type": "keyword", "index": false },
+              "key_actors": {
+                "type": "nested",
+                "properties": {
+                  "role_zh": { "type": "keyword" },
+                  "person_id": { "type": "keyword" },
+                  "thumb_path": { "type": "keyword", "index": false },
+                  "verified": { "type": "boolean" },
+                  "t_ms": { "type": "integer" }
+                }
+              },
+              "key_scenes": {
+                "type": "nested",
+                "properties": {
+                  "start_ms": { "type": "integer" },
+                  "end_ms": { "type": "integer" },
+                  "summary_zh": { "type": "text" },
+                  "summary_en": { "type": "text" },
+                  "thumb_path": { "type": "keyword", "index": false }
+                }
+              }
+            }
+          },
           "reference_urls": { "type": "keyword", "index": false },
           "review": {
             "type": "object",
@@ -389,14 +436,19 @@ Apply via `PUT video-chunks` (index name from `ES_INDEX_CHUNKS`).
 When run against a cluster with valid credentials in `.env`, the script:
 
 1. Connects to `ELASTICSEARCH_URL` with `ELASTICSEARCH_API_KEY`.
-2. For each index (`ES_INDEX_ASSETS`, `ES_INDEX_CHUNKS`):
-   - If the index **does not exist** → `indices.create` with the mapping JSON
-     above (via `lib/es/indices.ts`).
-   - If the index **already exists** → no-op (idempotent; logs `skipped`).
-3. Prints a JSON summary: `{ assets: "created"|"skipped", chunks: "created"|"skipped" }`.
+2. For each index (`ES_INDEX_ASSETS`, `ES_INDEX_CHUNKS`,
+   `ES_INDEX_DRAMA_SUBTITLES`):
+   - If the index **does not exist** → `indices.create` with the mapping
+     (via `lib/es/indices.ts`).
+   - If `video-assets` **already exists** → additive `meta.*` upgrade when
+     safe (includes `meta.drama`).
+   - Other existing indices → no-op (idempotent; logs `skipped`).
+3. Prints a JSON summary including `dramaSubtitles` and `indexDramaSubtitles`.
 
-No data is indexed. No existing mappings are modified (additive updates are a
-future concern if `SCHEMA_VERSION` bumps).
+### `video-drama-subtitles` (plan/12)
+
+Dedicated timed multilingual subtitle segments + embedding channel. See
+`lib/es/drama-subtitles-mapping.ts`. Not stored inside `meta` on assets.
 
 ---
 

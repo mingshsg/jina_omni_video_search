@@ -128,6 +128,8 @@ export type UiMessages = {
   batchFailedLabel: string;
   batchPartialErrors: string;
   batchAllDone: string;
+  batchFinishedWithErrors: string;
+  batchClearResultsLabel: string;
   clientBatchFilesRequired: string;
   clientBatchFolderRequired: string;
   urlLabel: string;
@@ -139,6 +141,25 @@ export type UiMessages = {
   titlePlaceholder: string;
   groupLabel: string;
   groupHelp: string;
+  dramaEnableLabel: string;
+  dramaEnableHelp: string;
+  dramaLanguagesLabel: string;
+  dramaLanguagesHelp: string;
+  dramaModulesLabel: string;
+  dramaModulesHelp: string;
+  dramaModuleSubtitles: string;
+  dramaModuleStructure: string;
+  dramaModuleDirectors: string;
+  dramaModuleKeyActors: string;
+  dramaModuleKeyScenes: string;
+  dramaUrlHint: string;
+  dramaPendingHint: string;
+  dramaClientNeedModules: string;
+  dramaClientNeedLanguages: string;
+  dramaStatusLabel: string;
+  dramaRetryLabel: string;
+  dramaPartialNote: string;
+  dramaFailedNote: string;
   autoStartLabel: string;
   autoStartHelp: string;
   chunkPresetSelectLabel: string;
@@ -494,6 +515,8 @@ export const uiEn: UiMessages = {
   batchFailedLabel: 'Failed',
   batchPartialErrors: 'Some files were skipped',
   batchAllDone: 'Batch finished — ready for another.',
+  batchFinishedWithErrors: 'Batch finished with failures — results retained.',
+  batchClearResultsLabel: 'Clear results',
   clientBatchFilesRequired: 'Choose one or more video files.',
   clientBatchFolderRequired: 'Enter an absolute folder path.',
   urlLabel: 'Video URL',
@@ -504,7 +527,33 @@ export const uiEn: UiMessages = {
   titleLabel: 'Title (optional)',
   titlePlaceholder: 'Display name',
   groupLabel: 'Index group',
-  groupHelp: 'Type a new name or pick an existing one (e.g. trailer, demo). Used to filter at search.',
+  groupHelp:
+    'Type a new name or pick an existing one (e.g. trailer, demo). Used to filter at search.',
+  dramaEnableLabel: 'Process as drama',
+  dramaEnableHelp:
+    'After embed finishes, optionally extract subtitles, structure (credits/recap/intro), directors script, key faces, and key scenes. Runs in Node with ffmpeg; optional Whisper API/CLI for ASR when no sidecar/embedded subs.',
+  dramaLanguagesLabel: 'Subtitle languages',
+  dramaLanguagesHelp: 'Required for Subtitles. Select the spoken language: ko transcribes Korean, th transcribes Thai. Each selection runs separately; this does not translate audio.',
+  dramaModulesLabel: 'Drama modules',
+  dramaModulesHelp:
+    'Multi-select. Enrichment runs after the video is searchable (not forced).',
+  dramaModuleSubtitles: 'Subtitles (ASR)',
+  dramaModuleStructure: 'Structure (opening/ending credits, recap, intro)',
+  dramaModuleDirectors: 'Directors script',
+  dramaModuleKeyActors: 'Key actor faces',
+  dramaModuleKeyScenes: 'Key scenes',
+  dramaUrlHint:
+    'Drama enrichment is not available for URL import yet — use Upload or Local, or enable later from the library.',
+  dramaPendingHint: 'Drama enrichment queued (after ready): {modules}',
+  dramaClientNeedModules: 'Select at least one drama module.',
+  dramaClientNeedLanguages:
+    'Select at least one subtitle language when Subtitles is enabled.',
+  dramaStatusLabel: 'Drama enrichment',
+  dramaRetryLabel: 'Retry enrichment',
+  dramaPartialNote:
+    'Enrichment finished partially — the video is searchable, but some modules failed. You can retry them.',
+  dramaFailedNote:
+    'Enrichment failed — the video is searchable. Retry the enrichment or inspect the error.',
   autoStartLabel: 'Start immediately',
   autoStartHelp: 'Off = show workload estimate and wait for confirm',
   chunkPresetSelectLabel: 'Chunk window',
@@ -594,7 +643,8 @@ export const uiEn: UiMessages = {
     'Pick from the person catalog, or type a new name and press Enter (or click away) to add them.',
   metaVideoType: 'Video type',
   metaGroup: 'Index group',
-  metaGroupHelp: 'Free-form partition name — type a new one or pick from suggestions.',
+  metaGroupHelp:
+    'Free-form partition name — type a new one or pick from suggestions.',
   metaLanguage: 'Primary language',
   metaCountry: 'Production country/region',
   metaTags: 'Tags',
@@ -879,6 +929,8 @@ export const uiZh: UiMessages = {
   batchFailedLabel: '失败',
   batchPartialErrors: '部分文件已跳过',
   batchAllDone: '本批已完成 — 可以开始下一批。',
+  batchFinishedWithErrors: '本批完成但有失败——结果已保留。',
+  batchClearResultsLabel: '清除结果',
   clientBatchFilesRequired: '请选择一个或多个视频文件。',
   clientBatchFolderRequired: '请输入绝对文件夹路径。',
   urlLabel: '视频 URL',
@@ -889,7 +941,31 @@ export const uiZh: UiMessages = {
   titleLabel: '标题（可选）',
   titlePlaceholder: '显示名称',
   groupLabel: '索引分组',
-  groupHelp: '输入新名称或选择已有分组（如 trailer、demo）。检索时可按组过滤。',
+  groupHelp:
+    '输入新名称或选择已有分组（如 trailer、demo）。检索时可按组过滤。',
+  dramaEnableLabel: '按剧处理',
+  dramaEnableHelp:
+    '嵌入完成（ready）后可选：抽取字幕、结构（片头/片尾/回顾/引子）、导演稿、关键演员脸、关键场景。用 Node + ffmpeg；无外挂/内嵌字幕时可配 Whisper API 或本地 CLI。',
+  dramaLanguagesLabel: '字幕语言',
+  dramaLanguagesHelp: '勾选「字幕」模块时必选。请选原声语言：ko 转写韩语，th 转写泰语；多选会分别处理，不会自动翻译。',
+  dramaModulesLabel: '剧集模块',
+  dramaModulesHelp: '可多选。增强在视频可检索之后运行（不强制）。',
+  dramaModuleSubtitles: '字幕（ASR）',
+  dramaModuleStructure: '结构（片头/片尾、回顾、引子）',
+  dramaModuleDirectors: '导演稿',
+  dramaModuleKeyActors: '关键演员脸',
+  dramaModuleKeyScenes: '关键场景',
+  dramaUrlHint:
+    'URL 导入暂不支持按剧处理 — 请用上传或本地路径，或之后在片库开启。',
+  dramaPendingHint: '已排队按剧增强（ready 之后）：{modules}',
+  dramaClientNeedModules: '请至少选择一个剧集模块。',
+  dramaClientNeedLanguages: '勾选字幕模块时请至少选择一种字幕语言。',
+  dramaStatusLabel: '按剧增强',
+  dramaRetryLabel: '重试增强',
+  dramaPartialNote:
+    '增强部分完成——视频已可检索，但部分模块失败，可以重试。',
+  dramaFailedNote:
+    '增强失败——视频已可检索，可重试增强或查看错误。',
   autoStartLabel: '立即开始',
   autoStartHelp: '关闭后先显示工作量估算，确认后再索引',
   chunkPresetSelectLabel: '分块窗口',

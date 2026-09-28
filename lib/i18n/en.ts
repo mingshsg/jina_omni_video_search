@@ -25,7 +25,18 @@ export const ingestErrorsEn: Record<IngestErrorCode, string> = {
   INGEST_INVALID_MODE: 'Invalid import mode.',
   INGEST_INVALID_CHUNKING:
     'Invalid chunk preset or window/overlap values. Use standard, 60s, 30s, 20s, fine, 2s — or valid window_ms + overlap_ms.',
-  INGEST_INVALID_GROUP: 'Invalid index group name (empty or longer than 64 characters).',
+  INGEST_INVALID_GROUP:
+    'Invalid index group name (empty or longer than 64 characters).',
+  INGEST_DRAMA_EMPTY:
+    'Process as drama requires at least one enrichment module.',
+  INGEST_DRAMA_INVALID:
+    'Invalid drama options (languages or modules). Check the multi-select values.',
+  INGEST_DRAMA_TOO_LONG:
+    'This video exceeds the drama enrichment duration limit (default 210 minutes; see DRAMA_MAX_DURATION_MS).',
+  INGEST_DRAMA_URL_NOT_SUPPORTED:
+    'Drama enrichment is not available for URL import yet. Use upload or local path, or enable it later from the library.',
+  INGEST_DRAMA_NEEDS_DIRECTORS:
+    'Key actors requires the directors script module in the same request (it reads cast roles from this run\u2019s script). Add directors_script to modules.',
   INGEST_BATCH_EMPTY: 'No video files found for this batch.',
   INGEST_BATCH_TOO_LARGE: 'Too many files in one batch. Split into smaller batches.',
   INGEST_INTERNAL: 'An unexpected error occurred during import.',

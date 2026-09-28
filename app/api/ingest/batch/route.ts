@@ -17,6 +17,18 @@ import {
   resolveIngestGroupId,
 } from '@/lib/ingest/group-request';
 import { IngestError, toIngestError } from '@/lib/ingest/errors';
+import {
+  ingestGroupIdField,
+  parseGroupIdFromFormData,
+  resolveIngestGroupId,
+} from '@/lib/ingest/group-request';
+import {
+  ingestDramaField,
+  parseDramaFromFormData,
+  resolveDramaOptions,
+  type DramaRequestOptions,
+} from '@/lib/ingest/drama-request';
+import { acceptDramaForIngest } from '@/lib/ingest/drama-accept';
 import { createIngestJob, type IngestJob } from '@/lib/ingest/job-store';
 import {
   prepareJobEstimate,
@@ -40,6 +52,7 @@ const folderBodySchema = z
     auto_start: z.boolean().optional().default(true),
     ...ingestChunkingFields,
     ...ingestGroupIdField,
+    ...ingestDramaField,
   })
   .superRefine((data, ctx) => {
     const hasW = data.window_ms !== undefined;
@@ -106,9 +119,15 @@ async function acceptLocalFileJob(opts: {
   autoStart: boolean;
   cfg: ReturnType<typeof getConfig>;
   groupId?: string;
+  dramaOptions?: DramaRequestOptions;
 }): Promise<IngestJob> {
   const local = await importFromLocalPath(opts.sourcePath, opts.cfg);
   const mediaPath = await copyLocalToOriginals(local.mediaPath, opts.cfg);
+  const drama = acceptDramaForIngest({
+    mode: 'local',
+    durationMs: local.probe.duration_ms,
+    options: opts.dramaOptions,
+  });
   const job = createIngestJob({
     mode: 'local',
     mediaPath,
@@ -117,6 +136,7 @@ async function acceptLocalFileJob(opts: {
     autoStart: opts.autoStart,
     chunking: opts.chunking,
     groupId: opts.groupId,
+    drama,
   });
   await prepareJobEstimate(job);
   startPipelineAsync(job);
@@ -129,6 +149,7 @@ async function acceptUploadFileJob(opts: {
   autoStart: boolean;
   cfg: ReturnType<typeof getConfig>;
   groupId?: string;
+  dramaOptions?: DramaRequestOptions;
 }): Promise<IngestJob> {
   const webStream = opts.file.stream();
   const nodeStream = Readable.fromWeb(
@@ -139,6 +160,11 @@ async function acceptUploadFileJob(opts: {
     opts.file.name,
     opts.cfg,
   );
+  const drama = acceptDramaForIngest({
+    mode: 'upload',
+    durationMs: result.probe.duration_ms,
+    options: opts.dramaOptions,
+  });
   const job = createIngestJob({
     mode: 'upload',
     mediaPath: result.mediaPath,
@@ -147,6 +173,7 @@ async function acceptUploadFileJob(opts: {
     autoStart: opts.autoStart,
     chunking: opts.chunking,
     groupId: opts.groupId,
+    drama,
   });
   await prepareJobEstimate(job);
   startPipelineAsync(job);
@@ -217,10 +244,21 @@ async function handleFolderBatch(
           i.path.includes('min_ms') ||
           i.message.includes('window_ms'),
       );
-      const groupIssue = parsed.error.issues.some((i) => i.path.includes('group_id'));
+      const groupIssue = parsed.error.issues.some((i) =>
+        i.path.includes('group_id'),
+      );
+      const dramaIssue = parsed.error.issues.some((i) =>
+        i.path.includes('drama'),
+      );
       return errorResponse(
         new IngestError(
-          chunkIssue ? 'INGEST_INVALID_CHUNKING' : groupIssue ? 'INGEST_INVALID_GROUP' : 'INGEST_INVALID_MODE',
+          chunkIssue
+            ? 'INGEST_INVALID_CHUNKING'
+            : groupIssue
+              ? 'INGEST_INVALID_GROUP'
+              : dramaIssue
+                ? 'INGEST_DRAMA_INVALID'
+                : 'INGEST_INVALID_MODE',
         ),
         locale,
         400,
@@ -238,6 +276,7 @@ async function handleFolderBatch(
     min_ms: body.min_ms,
   });
   const groupId = resolveIngestGroupId(body.group_id);
+  const sharedDrama = resolveDramaOptions(body.drama);
 
   const files = await listVideoFilesInImportFolder(body.path, cfg);
   const jobs: IngestJob[] = [];
@@ -251,6 +290,7 @@ async function handleFolderBatch(
         autoStart: body.auto_start,
         cfg,
         groupId,
+        dramaOptions: sharedDrama,
       });
       jobs.push(job);
     } catch (err) {
@@ -280,6 +320,7 @@ async function handleUploadBatch(
   const chunking = resolveJobChunking(chunkFields);
   const autoStart = parseAutoStart(form.get('auto_start'));
   const groupId = parseGroupIdFromFormData(form);
+  const sharedDrama = parseDramaFromFormData(form);
 
   const collected: File[] = [];
   for (const key of ['files', 'file']) {
@@ -314,6 +355,7 @@ async function handleUploadBatch(
         autoStart,
         cfg,
         groupId,
+        dramaOptions: sharedDrama,
       });
       jobs.push(job);
     } catch (err) {

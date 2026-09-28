@@ -6,6 +6,26 @@ loses an action item.
 
 ## Current — project level
 
+- [`drama-implementation-followup-code-review-2026-09-28.md`](./drama-implementation-followup-code-review-2026-09-28.md)
+  — **Follow-up fixes still need repair.** Strict asset mapping omits terminal
+  drama fields; retry can retain stale subtitle cues; failed enrichment still
+  shows success and batch results auto-clear; marker failure is not durable.
+  Node 22 tests (546) and build pass; live/browser gates remain open.
+  → [`todo/38`](../todo/38-drama-implementation-followup-2026-09-28.md)
+
+- [`drama-system-adoption-recheck-2026-09-28.md`](./drama-system-adoption-recheck-2026-09-28.md)
+  — **Improved but not acceptance-ready.** Rechecks `todo/36` fixes; retry
+  duplicates subtitle generations, audit failures can publish synopsis,
+  the ready-to-drama handoff is not fully durable, and partial/failed
+  enrichment still gets a success UI. 526 tests and build pass; live gates
+  remain open. → [`todo/37`](../todo/37-drama-system-adoption-recheck-2026-09-28.md)
+
+- [`drama-episode-processing-adoption-code-review-2026-09-27.md`](./drama-episode-processing-adoption-code-review-2026-09-27.md)
+  — **Drama adoption is structurally sound but not acceptance-ready.**
+  Partial runs report success; subtitle/director coverage is truncated;
+  audit, face verification, timing, and recovery need stronger gates.
+  → [`todo/36`](../todo/36-drama-adoption-review-2026-09-27.md)
+
 - [`project-level-review-2026-09-23.md`](./project-level-review-2026-09-23.md)
   — **repository as a whole.** `next@14.2.35` carries a critical
   unauthenticated RCE (image optimizer route on by default, no 14.x patch
@@ -17,9 +37,11 @@ loses an action item.
 ## Current — hybrid metadata search
 
 - [`suggest-imdb-and-source-boundary-code-review-2026-09-24.md`](./suggest-imdb-and-source-boundary-code-review-2026-09-24.md)
-  — **Suggest source and URL safety.** The historical review identified
-  credential-bearing URLs and uncited draft handling; the current disposition
-  and remaining live/browser gates are in [`todo/33`](../todo/33-suggest-imdb-and-source-boundary-2026-09-24.md).
+  — **IMDb removed from the app allowlist and Agent policy.** Two P1s remain:
+  generic Reader calls lack a visible domain block, and raw source URLs can
+  persist credentials or tokens. Uncited
+  auto-fill, research-link labeling, and canonical actor aliases need fixes.
+  → [`todo/33`](../todo/33-suggest-imdb-and-source-boundary-2026-09-24.md)
 
 - [`suggest-metadata-editor-session-review-2026-09-23.md`](./suggest-metadata-editor-session-review-2026-09-23.md)
   — **`reference_urls`, todo/30 S6 citation relaxation, "Known as" alias

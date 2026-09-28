@@ -136,6 +136,7 @@ describe('diffMappingProperties', () => {
           country: { type: 'keyword' },
           tags: { type: 'keyword' },
           tags_key: { type: 'keyword' },
+          group_id: { type: 'keyword' },
           reference_urls: { type: 'keyword', index: false },
           group_id: { type: 'keyword' },
           work_title: {
@@ -180,11 +181,16 @@ describe('diffMappingProperties', () => {
     };
     // Fill review children from desired so we only test the type omission
     const desiredMeta = desired.meta as {
-      properties: { review: { properties: Record<string, unknown> } };
+      properties: {
+        review: { properties: Record<string, unknown> };
+        drama: Record<string, unknown>;
+      };
     };
     (
       existing.meta.properties.review as { properties: Record<string, unknown> }
     ).properties = desiredMeta.properties.review.properties;
+    (existing.meta.properties as Record<string, unknown>).drama =
+      desiredMeta.properties.drama;
 
     const diff = diffMappingProperties(desired, existing);
     expect(diff.conflicts).toHaveLength(0);

@@ -10,6 +10,11 @@ import {
 import type { SourceMode } from './sources';
 import type { UrlProvenance } from './url-sanitize';
 import type { ChunkPreset, ChunkingConfig } from './variant';
+import {
+  type DramaJobState,
+  isDramaLanguage,
+  isDramaModule,
+} from './drama-options';
 
 /** Terminal + active statuses from docs/api-contract.md. */
 export type JobStatus =
@@ -66,6 +71,8 @@ export interface JobProgressEvent {
   window_error?: WindowErrorInfo;
   error?: JobErrorInfo;
   ts: string;
+  /** Follow-on drama enrichment (plan/12); omitted when not requested. */
+  drama?: DramaJobState;
 }
 
 export type JobEventName =
@@ -116,8 +123,17 @@ export interface IngestJob {
   chunking: ChunkingConfig;
   /** Prevent double pipeline starts. */
   pipelineRunning: boolean;
-  /** Seeded into editorial metadata only when the asset is first created. */
+  /**
+   * Optional organizational group — seeded onto `meta.group_id` on first
+   * asset create only (never patched on subsequent ingest updates).
+   */
   groupId?: string;
+  /**
+   * Optional drama enrichment requested at ingest (runs after embed ready).
+   * Terminal + running records persist to `meta.drama` (persistDramaMeta);
+   * hydrateFromAsset restores them after restart (R7).
+   */
+  drama?: DramaJobState;
 }
 
 const jobs = new Map<string, IngestJob>();
@@ -195,6 +211,7 @@ export function toProgressEvent(job: IngestJob): JobProgressEvent {
     throughput_windows_per_min: job.throughputWindowsPerMin ?? null,
     message: job.message,
     error: job.error,
+    drama: job.drama,
     ts: nowIso(),
   };
 }
@@ -271,6 +288,24 @@ function jobToAssetDoc(job: IngestJob): VideoAssetDocument {
       started_at: job.startedAt,
       updated_at: job.updatedAt,
       completed_at: job.completedAt,
+      // I4: durable drama request/status — persisted with every base write
+      // (create + partial patch) so a restart recovers the request even
+      // when meta.drama was never written (handoff marker failure).
+      drama: job.drama
+        ? {
+            status: job.drama.status,
+            languages: [...job.drama.languages],
+            modules: [...job.drama.modules],
+            modules_done: [...job.drama.modules_done],
+            ...(job.drama.run_id ? { run_id: job.drama.run_id } : {}),
+            ...(job.drama.error
+              ? {
+                  error_code: job.drama.error.code,
+                  error_message: job.drama.error.message,
+                }
+              : {}),
+          }
+        : undefined,
     },
     error: job.error
       ? `${job.error.code}: ${job.error.message}`
@@ -282,12 +317,17 @@ function jobToAssetDoc(job: IngestJob): VideoAssetDocument {
     created_at: job.createdAt,
     updated_at: job.updatedAt,
   };
+  // Seed organizational group on first create only — createAssetIfAbsent
+  // ignores this when the document already exists, so later persistJob
+  // patches never overwrite editorial meta.
   if (job.groupId) {
     doc.meta = {
       group_id: job.groupId,
       revision: 1,
       updated_at: job.createdAt,
-      review: { group_id: { source: 'manual', confirmed: true } },
+      review: {
+        group_id: { source: 'manual', confirmed: true },
+      },
     };
   }
   return doc;
@@ -311,7 +351,10 @@ export function createIngestJob(input: {
   autoStart?: boolean;
   videoId?: string;
   chunking: ChunkingConfig;
+  /** Catalog group id — seeds meta.group_id on first asset create. */
   groupId?: string;
+  /** Initial drama follow-on state (plan/12); omit when not requested. */
+  drama?: DramaJobState;
 }): IngestJob {
   const id = randomUUID();
   const videoId = input.videoId ?? randomUUID();
@@ -343,6 +386,7 @@ export function createIngestJob(input: {
     chunking: input.chunking,
     pipelineRunning: false,
     groupId: input.groupId,
+    drama: input.drama,
   };
   jobs.set(id, job);
   videoToJob.set(videoId, id);
@@ -377,8 +421,125 @@ export async function resolveIngestJob(
   return hydrated;
 }
 
-function hydrateFromAsset(asset: VideoAssetDocument): IngestJob {
-  const status = asset.status as JobStatus;
+/**
+ * `meta.drama` is written by persistDramaMeta outside the editorial
+ * AssetMeta type — read it through a narrow extension, not `any`.
+ */
+interface AssetWithDramaMeta extends VideoAssetDocument {
+  meta?: VideoAssetDocument['meta'] & { drama?: unknown };
+}
+
+/**
+ * Restore drama follow-on state from the durable `meta.drama` record
+ * (written by persistDramaMeta) so progress stays visible after a process
+ * restart and interrupted work can be retried (R7). A `running` record
+ * means the process died mid-run — surface it as `pending` so it is
+ * retryable instead of stuck.
+ */
+/**
+ * Fallback when `meta.drama` was never written (I4): restore the drama
+ * request/status from the durable `job.drama` record, which rides on
+ * every base persist (create + partial patch). This is the exact branch
+ * the handoff was meant to cover — marker write failed, ready persisted.
+ * A `running` record means the process died mid-handoff/run — surface it
+ * as retryable `pending`.
+ */
+function hydrateDramaRequest(
+  asset: VideoAssetDocument,
+): DramaJobState | undefined {
+  const raw = asset.job.drama;
+  if (!raw || typeof raw !== 'object') return undefined;
+  const status = (raw as { status?: unknown }).status;
+  if (
+    status !== 'succeeded' &&
+    status !== 'partial' &&
+    status !== 'failed' &&
+    status !== 'running' &&
+    status !== 'pending' &&
+    status !== 'skipped'
+  ) {
+    return undefined;
+  }
+  const modules = Array.isArray(raw.modules)
+    ? raw.modules.filter((m): m is DramaJobState['modules'][number] =>
+        typeof m === 'string' && isDramaModule(m),
+      )
+    : [];
+  if (modules.length === 0) return undefined;
+  const languages = Array.isArray(raw.languages)
+    ? raw.languages.filter((l): l is DramaJobState['languages'][number] =>
+        typeof l === 'string' && isDramaLanguage(l),
+      )
+    : [];
+  const modulesDone = Array.isArray(raw.modules_done)
+    ? raw.modules_done.filter((m): m is DramaJobState['modules'][number] =>
+        typeof m === 'string' && isDramaModule(m),
+      )
+    : [];
+  return {
+    status: status === 'running' ? 'pending' : status,
+    languages,
+    modules,
+    modules_done: modulesDone,
+    run_id: typeof raw.run_id === 'string' ? raw.run_id : undefined,
+    error:
+      typeof raw.error_message === 'string'
+        ? {
+            code:
+              typeof raw.error_code === 'string'
+                ? raw.error_code.slice(0, 80)
+                : 'DRAMA_ENRICHMENT_ERROR',
+            message: raw.error_message.slice(0, 800),
+          }
+        : undefined,
+  };
+}
+
+function hydrateDramaState(asset: VideoAssetDocument): DramaJobState | undefined {
+  const raw = (asset as AssetWithDramaMeta).meta?.drama;
+  if (!raw || typeof raw !== 'object') return undefined;
+  const d = raw as Record<string, unknown>;
+  const status = d.enrichment_status;
+  if (
+    status !== 'succeeded' &&
+    status !== 'partial' &&
+    status !== 'failed' &&
+    status !== 'running' &&
+    status !== 'pending'
+  ) {
+    return undefined;
+  }
+  const modules = Array.isArray(d.modules)
+    ? d.modules.filter((m): m is DramaJobState['modules'][number] =>
+        typeof m === 'string' && isDramaModule(m),
+      )
+    : [];
+  if (modules.length === 0) return undefined;
+  const languages = Array.isArray(d.languages)
+    ? d.languages.filter((l): l is DramaJobState['languages'][number] =>
+        typeof l === 'string' && isDramaLanguage(l),
+      )
+    : [];
+  const modulesDone = Array.isArray(d.modules_done)
+    ? d.modules_done.filter((m): m is DramaJobState['modules'][number] =>
+        typeof m === 'string' && isDramaModule(m),
+      )
+    : [];
+  const err = d.error as { message?: unknown } | undefined;
+  return {
+    status: status === 'running' ? 'pending' : status,
+    languages,
+    modules,
+    modules_done: modulesDone,
+    run_id: typeof d.run_id === 'string' ? d.run_id : undefined,
+    error:
+      err && typeof err.message === 'string'
+        ? { code: 'DRAMA_ENRICHMENT_ERROR', message: err.message.slice(0, 800) }
+        : undefined,
+  };
+}
+
+function hydrateFromAsset(asset: VideoAssetDocument): IngestJob {  const status = asset.status as JobStatus;
   const stage = (asset.job.stage || 'failed') as JobStage;
   const firstVariant = asset.variants[0];
   const chunking: ChunkingConfig = firstVariant
@@ -438,6 +599,9 @@ function hydrateFromAsset(asset: VideoAssetDocument): IngestJob {
       ? { code: 'PIPELINE_FATAL', message: asset.error }
       : undefined,
     message: 'Hydrated from Elasticsearch after process restart (no auto-resume)',
+    // Prefer the rich terminal record; fall back to the durable request
+    // record when meta.drama was never written (I4 handoff-marker failure).
+    drama: hydrateDramaState(asset) ?? hydrateDramaRequest(asset),
   };
 }
 
@@ -466,6 +630,7 @@ type JobPatch = Partial<{
   playbackPath: string;
   variants: AssetVariantDoc[];
   pipelineRunning: boolean;
+  drama: DramaJobState;
 }>;
 
 /** Patch job fields, emit progress, optionally persist. */

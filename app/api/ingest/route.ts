@@ -17,7 +17,14 @@ import {
   ingestChunkingFields,
   resolveJobChunking,
 } from '@/lib/ingest/chunking-request';
-import { ingestGroupIdField, resolveIngestGroupId } from '@/lib/ingest/group-request';
+import {
+  ingestGroupIdField,
+  resolveIngestGroupId,
+} from '@/lib/ingest/group-request';
+import {
+  ingestDramaField,
+} from '@/lib/ingest/drama-request';
+import { acceptDramaForIngest } from '@/lib/ingest/drama-accept';
 import { ingestErrorMessage, resolveLocale } from '@/lib/i18n';
 
 export const runtime = 'nodejs';
@@ -30,6 +37,7 @@ const bodySchema = z.discriminatedUnion('mode', [
     auto_start: z.boolean().optional().default(true),
     ...ingestChunkingFields,
     ...ingestGroupIdField,
+    ...ingestDramaField,
   }),
   z.object({
     mode: z.literal('local'),
@@ -38,6 +46,7 @@ const bodySchema = z.discriminatedUnion('mode', [
     auto_start: z.boolean().optional().default(true),
     ...ingestChunkingFields,
     ...ingestGroupIdField,
+    ...ingestDramaField,
   }),
 ]).superRefine((data, ctx) => {
   const hasW = data.window_ms !== undefined;
@@ -80,6 +89,11 @@ function statusForCode(code: IngestError['code']): number {
     case 'INGEST_INVALID_MODE':
     case 'INGEST_INVALID_CHUNKING':
     case 'INGEST_INVALID_GROUP':
+    case 'INGEST_DRAMA_EMPTY':
+    case 'INGEST_DRAMA_INVALID':
+    case 'INGEST_DRAMA_TOO_LONG':
+    case 'INGEST_DRAMA_URL_NOT_SUPPORTED':
+    case 'INGEST_DRAMA_NEEDS_DIRECTORS':
       return 400;
     default:
       return 400;
@@ -106,10 +120,21 @@ export async function POST(request: Request) {
           i.path.includes('min_ms') ||
           i.message.includes('window_ms'),
       );
-      const groupIssue = parsed.error.issues.some((i) => i.path.includes('group_id'));
+      const groupIssue = parsed.error.issues.some((i) =>
+        i.path.includes('group_id'),
+      );
+      const dramaIssue = parsed.error.issues.some((i) =>
+        i.path.includes('drama'),
+      );
       return errorResponse(
         new IngestError(
-          chunkIssue ? 'INGEST_INVALID_CHUNKING' : groupIssue ? 'INGEST_INVALID_GROUP' : 'INGEST_INVALID_MODE',
+          chunkIssue
+            ? 'INGEST_INVALID_CHUNKING'
+            : groupIssue
+              ? 'INGEST_INVALID_GROUP'
+              : dramaIssue
+                ? 'INGEST_DRAMA_INVALID'
+                : 'INGEST_INVALID_MODE',
         ),
         locale,
         400,
@@ -130,6 +155,12 @@ export async function POST(request: Request) {
     const groupId = resolveIngestGroupId(body.group_id);
 
     if (body.mode === 'url') {
+      // Reject drama before download (OQ-4: URL drama later via Library).
+      acceptDramaForIngest({
+        mode: 'url',
+        durationMs: 1,
+        raw: body.drama,
+      });
       const result = await importFromUrl(body.source, cfg);
       const job = createIngestJob({
         mode: 'url',
@@ -148,6 +179,11 @@ export async function POST(request: Request) {
 
     const local = await importFromLocalPath(body.source, cfg);
     const mediaPath = await copyLocalToOriginals(local.mediaPath, cfg);
+    const drama = acceptDramaForIngest({
+      mode: 'local',
+      durationMs: local.probe.duration_ms,
+      raw: body.drama,
+    });
     const job = createIngestJob({
       mode: 'local',
       mediaPath,
@@ -156,6 +192,7 @@ export async function POST(request: Request) {
       autoStart: body.auto_start,
       chunking,
       groupId,
+      drama,
     });
     await prepareJobEstimate(job);
     startPipelineAsync(job);

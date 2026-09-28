@@ -20,6 +20,7 @@ export function ingestAcceptResponse(job: IngestJob) {
     },
     provenance: job.provenance,
     stage: snap.stage,
+    drama: job.drama,
   };
 }
 

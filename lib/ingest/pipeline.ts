@@ -30,6 +30,7 @@ import {
   type WorkloadEstimate,
   type WindowErrorInfo,
 } from './job-store';
+import { startDramaEnrichmentAsync, prepareDramaHandoff } from '../drama/runner';
 
 function mediaRoot(cfg: AppConfig): string {
   return path.resolve(cfg.MEDIA_ROOT);
@@ -449,6 +450,25 @@ export async function runIngestPipeline(job: IngestJob): Promise<void> {
         ? `Ready with ${successful.length} chunks, ${windowErrors.length} window failures; ${throughput.toFixed(2)} windows/min`
         : `Ready: ${successful.length} chunks; ${throughput.toFixed(2)} windows/min`;
 
+    // Optional drama follow-on (plan/12): never blocks or reverts `ready`.
+    // The running marker is persisted BEFORE base `ready` (F3) so a crash
+    // after ready always leaves a recoverable marker in `meta.drama`.
+    // A marker failure is visible (failed drama + message) and retryable
+    // via the retry route — base `ready` is still emitted.
+    if (job.drama) {
+      try {
+        await prepareDramaHandoff(job);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        job.drama = {
+          ...job.drama,
+          status: 'failed',
+          modules_done: [],
+          error: { code: 'DRAMA_HANDOFF_ERROR', message: msg.slice(0, 800) },
+        };
+      }
+    }
+
     await updateJob(
       job,
       {
@@ -481,6 +501,10 @@ export async function runIngestPipeline(job: IngestJob): Promise<void> {
         extra: { throughput_windows_per_min: throughput, message: summary },
       },
     );
+
+    if (job.drama && job.drama.status !== 'failed') {
+      startDramaEnrichmentAsync(job);
+    }
   } catch (err) {
     const fatal = safeErrorMessage(err);
     await updateJob(

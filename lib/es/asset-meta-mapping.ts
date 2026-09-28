@@ -69,6 +69,80 @@ export function videoAssetsMetaMappingProperties(
         tags_key: { type: 'keyword' },
         group_id: { type: 'keyword' },
         /**
+         * Organizational index partition (selected at ingest, editable later).
+         * Hard filter at search — not a content facet and not copied to
+         * search_text.
+         */
+        group_id: { type: 'keyword' },
+        /**
+         * Drama enrichment summary on the asset (plan/12). Timed subtitle
+         * segments + embeddings live in ES_INDEX_DRAMA_SUBTITLES, not here.
+         */
+        drama: {
+          type: 'object',
+          properties: {
+            run_id: { type: 'keyword' },
+            show_id: { type: 'keyword' },
+            episode_id: { type: 'keyword' },
+            enrichment_status: { type: 'keyword' },
+            modules: { type: 'keyword' },
+            languages: { type: 'keyword' },
+            structure: {
+              type: 'nested',
+              properties: {
+                kind: { type: 'keyword' },
+                start_ms: { type: 'integer' },
+                end_ms: { type: 'integer' },
+                confidence: { type: 'float' },
+                source: { type: 'keyword' },
+              },
+            },
+            synopsis_zh: { type: 'text' },
+            synopsis_en: { type: 'text' },
+            /** F2 evidence gate: `audited` vs `provisional` synopsis. */
+            synopsis_status: { type: 'keyword' },            directors_script_zh: { type: 'text', index: false },
+            directors_script_en: { type: 'text', index: false },
+            directors_script_zh_path: { type: 'keyword', index: false },
+            directors_script_en_path: { type: 'keyword', index: false },
+            directors_script_raw_path: { type: 'keyword', index: false },
+            subtitle_paths: { type: 'keyword', index: false },
+            /**
+             * I1: every field persistDramaMeta writes must be mapped —
+             * strict dynamic rejects unknown fields on terminal update.
+             */
+            modules_done: { type: 'keyword' },
+            error: {
+              type: 'object',
+              properties: {
+                code: { type: 'keyword' },
+                message: { type: 'text', index: false },
+              },
+            },
+            key_actors: {
+              type: 'nested',
+              properties: {
+                role_zh: { type: 'keyword' },
+                /** I1: was missing while the payload may send it. */
+                role_en: { type: 'keyword' },
+                person_id: { type: 'keyword' },
+                thumb_path: { type: 'keyword', index: false },
+                verified: { type: 'boolean' },
+                t_ms: { type: 'integer' },
+              },
+            },
+            key_scenes: {
+              type: 'nested',
+              properties: {
+                start_ms: { type: 'integer' },
+                end_ms: { type: 'integer' },
+                summary_zh: { type: 'text' },
+                summary_en: { type: 'text' },
+                thumb_path: { type: 'keyword', index: false },
+              },
+            },
+          },
+        },
+        /**
          * Reference/source page links (Wikipedia, IMDb, …). Stored but not
          * used for filtering/aggregation — `index: false` avoids wasted
          * keyword doc_values on freeform URLs while still allowing

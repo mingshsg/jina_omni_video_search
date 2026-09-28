@@ -5,6 +5,7 @@ import {
   EuiButton,
   EuiCallOut,
   EuiCheckbox,
+  EuiComboBox,
   type EuiComboBoxOptionOption,
   EuiFieldText,
   EuiFilePicker,
@@ -30,8 +31,14 @@ import {
 import { useLocale } from '@/lib/i18n/locale-context';
 
 const CreatableGroupCombo = dynamic(
-  () => import('@/components/CreatableGroupCombo').then((m) => m.CreatableGroupCombo),
-  { ssr: false, loading: () => <EuiFieldText disabled /> },
+  () =>
+    import('@/components/CreatableGroupCombo').then(
+      (m) => m.CreatableGroupCombo,
+    ),
+  {
+    ssr: false,
+    loading: () => <EuiFieldText disabled />,
+  },
 );
 
 type ImportScope = 'single' | 'batch';
@@ -59,7 +66,25 @@ type ProgressSnapshot = {
   throughput_windows_per_min?: number | null;
   message?: string;
   error?: { code: string; message: string };
+  /** Follow-on drama enrichment (R9): base `ready` is not the end. */
+  drama?: {
+    status: string;
+    modules_done?: string[];
+    error?: { code: string; message: string };
+  } | null;
 };
+
+/** Drama follow-on still running — the SSE stream must stay open (R9). */
+function isDramaActive(snapshot: ProgressSnapshot): boolean {
+  const s = snapshot.drama?.status;
+  return s === 'pending' || s === 'running';
+}
+
+/** I3: green success only for clean outcomes — never for partial/failed. */
+function isDramaSuccess(snapshot: ProgressSnapshot): boolean {
+  const s = snapshot.drama?.status;
+  return s === undefined || s === null || s === 'succeeded' || s === 'skipped';
+}
 
 type BatchJobRow = {
   job_id: string;
@@ -72,6 +97,7 @@ type BatchItemError = {
   source: string;
   code: string;
   message: string;
+  job_id?: string;
 };
 
 /** Brief success toast before clearing progress so the next import can start. */
@@ -86,11 +112,22 @@ export default function IngestPage() {
   const [localPath, setLocalPath] = useState('');
   const [folderPath, setFolderPath] = useState('');
   const [title, setTitle] = useState('');
-  const [selectedGroup, setSelectedGroup] = useState<EuiComboBoxOptionOption[]>([]);
-  const [groupOptions, setGroupOptions] = useState<EuiComboBoxOptionOption[]>([]);
+  const [selectedGroup, setSelectedGroup] = useState<EuiComboBoxOptionOption[]>(
+    [],
+  );
+  const [groupOptions, setGroupOptions] = useState<EuiComboBoxOptionOption[]>(
+    [],
+  );
   const [chunkPreset, setChunkPreset] =
     useState<ImportChunkPreset>('2s');
   const [autoStart, setAutoStart] = useState(true);
+  const [dramaEnabled, setDramaEnabled] = useState(false);
+  const [dramaLanguages, setDramaLanguages] = useState<
+    EuiComboBoxOptionOption[]
+  >([]);
+  const [dramaModules, setDramaModules] = useState<EuiComboBoxOptionOption[]>(
+    [],
+  );
   const [file, setFile] = useState<File | null>(null);
   const [batchFiles, setBatchFiles] = useState<File[]>([]);
   const [filePickerKey, setFilePickerKey] = useState(0);
@@ -113,6 +150,10 @@ export default function IngestPage() {
   const batchDoneRef = useRef(0);
   const batchFailedRef = useRef(0);
   const batchTotalRef = useRef(0);
+  // I3: once any batch item fails (base or drama), results stay until an
+  // explicit reset — the finished banner must not auto-clear them.
+  const batchRetainRef = useRef(false);
+  const [batchRetainResults, setBatchRetainResults] = useState(false);
 
   const closeStream = useCallback(() => {
     if (esRef.current) {
@@ -164,6 +205,8 @@ export default function IngestPage() {
     batchDoneRef.current = 0;
     batchFailedRef.current = 0;
     batchTotalRef.current = 0;
+    batchRetainRef.current = false;
+    setBatchRetainResults(false);
     setClientError(null);
     setApiError(null);
     setSubmitting(false);
@@ -173,27 +216,83 @@ export default function IngestPage() {
     void (async () => {
       try {
         const res = await fetch(`/api/metadata/catalogs?locale=${locale}`);
-        const data = (await res.json()) as { groups?: Array<{ id: string; label: string }> };
-        if (res.ok && data.groups) {
-          setGroupOptions(data.groups.map((g) => ({ label: g.label, value: g.id })));
+        const data = (await res.json()) as {
+          groups?: Array<{ id: string; label: string }>;
+        };
+        if (res.ok && data.groups?.length) {
+          setGroupOptions(
+            data.groups.map((g) => ({ label: g.label, value: g.id })),
+          );
         }
       } catch {
-        // Free-form input remains available if the catalog is unavailable.
+        /* keep empty — operator can still type a new name */
       }
     })();
   }, [locale]);
 
-  const groupId = selectedGroup[0]
-    ? String(selectedGroup[0].value ?? selectedGroup[0].label).trim()
-    : '';
-  const onCreateGroup = useCallback((raw: string) => {
-    const id = raw.trim().replace(/\s+/g, ' ');
-    if (!id || id.length > 64) return false;
-    const option = { label: id, value: id };
-    setGroupOptions((prev) => prev.some((entry) => entry.value === id) ? prev : [...prev, option]);
-    setSelectedGroup([option]);
-    return true;
-  }, []);
+  const dramaAllowed =
+    scope === 'batch' || mode === 'upload' || mode === 'local';
+
+  const dramaLanguageOptions: EuiComboBoxOptionOption[] = [
+    { label: 'zh', value: 'zh' },
+    { label: 'en', value: 'en' },
+    { label: 'ko', value: 'ko' },
+    { label: 'th', value: 'th' },
+  ];
+
+  const dramaModuleOptions: EuiComboBoxOptionOption[] = [
+    { label: t.dramaModuleSubtitles, value: 'subtitles' },
+    { label: t.dramaModuleStructure, value: 'structure' },
+    { label: t.dramaModuleDirectors, value: 'directors_script' },
+    { label: t.dramaModuleKeyActors, value: 'key_actors' },
+    { label: t.dramaModuleKeyScenes, value: 'key_scenes' },
+  ];
+
+  const appendDramaToFormData = (fd: FormData) => {
+    if (!dramaEnabled || !dramaAllowed) return;
+    fd.append('drama_enabled', 'true');
+    fd.append(
+      'drama_languages',
+      JSON.stringify(dramaLanguages.map((o) => String(o.value ?? o.label))),
+    );
+    fd.append(
+      'drama_modules',
+      JSON.stringify(dramaModules.map((o) => String(o.value ?? o.label))),
+    );
+  };
+
+  const dramaJsonPayload = () => {
+    if (!dramaEnabled || !dramaAllowed) return undefined;
+    return {
+      enabled: true as const,
+      languages: dramaLanguages.map((o) => String(o.value ?? o.label)),
+      modules: dramaModules.map((o) => String(o.value ?? o.label)),
+    };
+  };
+
+  const groupId =
+    selectedGroup[0] != null
+      ? String(selectedGroup[0].value ?? selectedGroup[0].label).trim()
+      : '';
+
+  const onCreateGroup = useCallback(
+    (searchValue: string) => {
+      const normalized = searchValue.trim().replace(/\s+/g, ' ');
+      if (!normalized || normalized.length > 64) return false;
+      const opt: EuiComboBoxOptionOption = {
+        label: normalized,
+        value: normalized,
+      };
+      setGroupOptions((prev) =>
+        prev.some((o) => String(o.value ?? o.label) === normalized)
+          ? prev
+          : [...prev, opt],
+      );
+      setSelectedGroup([opt]);
+      return true;
+    },
+    [],
+  );
 
   useEffect(
     () => () => {
@@ -216,7 +315,18 @@ export default function IngestPage() {
           const data = JSON.parse(String(raw.data)) as ProgressSnapshot;
           setProgress(data);
           if (data.status === 'ready') {
+            // R9: base `ready` fires before the drama follow-on starts.
+            // Keep listening while drama is pending/running; the server
+            // keeps emitting drama progress on the same stream.
+            if (isDramaActive(data)) return;
             closeStream();
+            // F4: a partial/failed enrichment is NOT a success — keep the
+            // terminal outcome and the retry action visible instead of
+            // auto-resetting the form.
+            const dramaOutcome = data.drama?.status;
+            if (dramaOutcome === 'partial' || dramaOutcome === 'failed') {
+              return;
+            }
             const label = displayTitleRef.current || data.video_id;
             clearSuccessResetTimer();
             successResetRef.current = setTimeout(() => {
@@ -255,9 +365,14 @@ export default function IngestPage() {
     const finished = batchDoneRef.current + batchFailedRef.current;
     if (batchTotalRef.current > 0 && finished >= batchTotalRef.current) {
       setBatchFinishedBanner(true);
-      setTimeout(() => {
-        resetBatchForm();
-      }, SUCCESS_RESET_MS);
+      // I3: auto-clear only a fully clean batch. Any failure (base or
+      // drama) or skipped-file errors retain rows + errors until the
+      // operator explicitly clears or retries.
+      if (!batchRetainRef.current && batchFailedRef.current === 0) {
+        setTimeout(() => {
+          resetBatchForm();
+        }, SUCCESS_RESET_MS);
+      }
     }
   }, [resetBatchForm]);
 
@@ -282,8 +397,35 @@ export default function IngestPage() {
             ),
           );
           if (data.status === 'ready') {
+            // R9: keep batch rows until drama reaches a terminal state.
+            if (isDramaActive(data)) return;
             es.close();
             batchStreamsRef.current.delete(row.job_id);
+            // F4: partial/failed enrichment is not a batch success — keep
+            // the row with its outcome + retry, record a visible error,
+            // and count it as failed.
+            const dramaOutcome = data.drama?.status;
+            if (dramaOutcome === 'partial' || dramaOutcome === 'failed') {
+              batchFailedRef.current += 1;
+              setBatchFailedCount(batchFailedRef.current);
+              // I3: retain partial/failed rows until explicit reset or retry.
+              batchRetainRef.current = true;
+              setBatchRetainResults(true);
+              const detail =
+                data.drama?.error?.message ??
+                `drama ${dramaOutcome}: ${(data.drama?.modules_done ?? []).join(', ')}`;
+              setBatchErrors((prev) => [
+                ...prev.filter((e) => e.job_id !== row.job_id),
+                {
+                  source: row.title,
+                  job_id: row.job_id,
+                  code: data.drama?.error?.code ?? 'DRAMA_ENRICHMENT_PARTIAL',
+                  message: detail,
+                },
+              ]);
+              maybeFinishBatch();
+              return;
+            }
             setTimeout(() => {
               setBatchRows((prev) =>
                 prev.filter((r) => r.job_id !== row.job_id),
@@ -297,6 +439,9 @@ export default function IngestPage() {
             batchStreamsRef.current.delete(row.job_id);
             batchFailedRef.current += 1;
             setBatchFailedCount(batchFailedRef.current);
+            // I3: retain failed rows until explicit reset or retry.
+            batchRetainRef.current = true;
+            setBatchRetainResults(true);
             maybeFinishBatch();
           }
         } catch {
@@ -319,6 +464,20 @@ export default function IngestPage() {
     [maybeFinishBatch],
   );
 
+  const validateDramaClient = (): boolean => {
+    if (!dramaEnabled || !dramaAllowed) return true;
+    if (dramaModules.length === 0) {
+      setClientError(t.dramaClientNeedModules);
+      return false;
+    }
+    const mods = dramaModules.map((o) => String(o.value ?? o.label));
+    if (mods.includes('subtitles') && dramaLanguages.length === 0) {
+      setClientError(t.dramaClientNeedLanguages);
+      return false;
+    }
+    return true;
+  };
+
   const validateSingleClient = (): boolean => {
     setClientError(null);
     if (mode === 'url') {
@@ -336,7 +495,7 @@ export default function IngestPage() {
       setClientError(t.clientUploadRequired);
       return false;
     }
-    return true;
+    return validateDramaClient();
   };
 
   const validateBatchClient = (): boolean => {
@@ -350,7 +509,7 @@ export default function IngestPage() {
       setClientError(t.clientBatchFolderRequired);
       return false;
     }
-    return true;
+    return validateDramaClient();
   };
 
   const resolveDisplayTitle = (): string => {
@@ -389,6 +548,7 @@ export default function IngestPage() {
         fd.append('auto_start', autoStart ? 'true' : 'false');
         fd.append('chunk_preset', chunkPreset);
         if (groupId) fd.append('group_id', groupId);
+        appendDramaToFormData(fd);
         res = await fetch('/api/ingest/upload', {
           method: 'POST',
           headers: { 'Accept-Language': locale },
@@ -408,6 +568,7 @@ export default function IngestPage() {
             auto_start: autoStart,
             chunk_preset: chunkPreset,
             group_id: groupId || undefined,
+            drama: dramaJsonPayload(),
           }),
         });
       }
@@ -463,6 +624,7 @@ export default function IngestPage() {
         fd.append('auto_start', autoStart ? 'true' : 'false');
         fd.append('chunk_preset', chunkPreset);
         if (groupId) fd.append('group_id', groupId);
+        appendDramaToFormData(fd);
         res = await fetch('/api/ingest/batch', {
           method: 'POST',
           headers: { 'Accept-Language': locale },
@@ -481,6 +643,7 @@ export default function IngestPage() {
             auto_start: autoStart,
             chunk_preset: chunkPreset,
             group_id: groupId || undefined,
+            drama: dramaJsonPayload(),
           }),
         });
       }
@@ -504,6 +667,11 @@ export default function IngestPage() {
 
       const jobs = data.jobs ?? [];
       setBatchErrors(data.errors ?? []);
+      if ((data.errors ?? []).length > 0) {
+        // I3: skipped-file errors are retained like other failures.
+        batchRetainRef.current = true;
+        setBatchRetainResults(true);
+      }
       batchTotalRef.current = jobs.length;
       const rows: BatchJobRow[] = jobs.map((j) => ({
         job_id: j.job_id,
@@ -558,6 +726,65 @@ export default function IngestPage() {
       setApiError(err instanceof Error ? err.message : t.ingestFailed);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // F4: retry a terminal partial/failed drama enrichment and reattach the
+  // stream so the new run's progress is visible. A 409 means another run
+  // is active — its message is shown, nothing is restarted.
+  const retryDrama = async () => {
+    if (!jobId) return;
+    setSubmitting(true);
+    setApiError(null);
+    try {
+      const res = await fetch(
+        `/api/jobs/${encodeURIComponent(jobId)}/retry`,
+        {
+          method: 'POST',
+          headers: { 'Accept-Language': locale },
+        },
+      );
+      const data = (await res.json()) as {
+        error?: { message: string };
+      };
+      if (!res.ok) throw new Error(data.error?.message ?? t.ingestFailed);
+      attachStream(jobId);
+    } catch (err) {
+      setApiError(err instanceof Error ? err.message : t.ingestFailed);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const retryBatchRow = async (row: BatchJobRow) => {
+    try {
+      const res = await fetch(
+        `/api/jobs/${encodeURIComponent(row.job_id)}/retry`,
+        {
+          method: 'POST',
+          headers: { 'Accept-Language': locale },
+        },
+      );
+      const data = (await res.json()) as {
+        error?: { message: string };
+      };
+      if (!res.ok) throw new Error(data.error?.message ?? t.ingestFailed);
+      // Un-count the earlier failure; the reattached stream recounts the
+      // new terminal outcome, and the stale error entry is dropped.
+      batchFailedRef.current = Math.max(0, batchFailedRef.current - 1);
+      setBatchFailedCount(batchFailedRef.current);
+      setBatchErrors((prev) => prev.filter((e) => e.job_id !== row.job_id));
+      attachBatchStream(row);
+    } catch (err) {
+      setBatchErrors((prev) => [
+        ...prev.filter((e) => e.job_id !== row.job_id),
+        {
+          source: row.title,
+          job_id: row.job_id,
+          code: 'DRAMA_RETRY_FAILED',
+          message: err instanceof Error ? err.message : t.ingestFailed,
+        },
+      ]);
     }
   };
 
@@ -624,11 +851,23 @@ export default function IngestPage() {
       {batchFinishedBanner && !batchBusy && (
         <>
           <EuiCallOut
-            color="success"
+            color={batchRetainResults ? 'warning' : 'success'}
             size="s"
-            title={t.batchAllDone}
+            title={
+              batchRetainResults
+                ? t.batchFinishedWithErrors
+                : t.batchAllDone
+            }
             onDismiss={() => setBatchFinishedBanner(false)}
           />
+          {batchRetainResults && (
+            <>
+              <EuiSpacer size="s" />
+              <EuiButton size="s" onClick={() => resetBatchForm()}>
+                {t.batchClearResultsLabel}
+              </EuiButton>
+            </>
+          )}
           <EuiSpacer size="m" />
         </>
       )}
@@ -778,6 +1017,69 @@ export default function IngestPage() {
         </EuiFormRow>
 
         <EuiFormRow
+          label={t.groupLabel}
+          helpText={t.groupHelp}
+        >
+          <CreatableGroupCombo
+            placeholder={t.groupLabel}
+            options={groupOptions}
+            selectedOptions={selectedGroup}
+            onChange={setSelectedGroup}
+            onCreateOption={onCreateGroup}
+            isDisabled={formBusy}
+            aria-label={t.groupLabel}
+          />
+        </EuiFormRow>
+
+        {dramaAllowed ? (
+          <>
+            <EuiFormRow helpText={t.dramaEnableHelp}>
+              <EuiCheckbox
+                id="drama-enable"
+                label={t.dramaEnableLabel}
+                checked={dramaEnabled}
+                onChange={(e) => setDramaEnabled(e.target.checked)}
+                disabled={formBusy}
+              />
+            </EuiFormRow>
+            {dramaEnabled && (
+              <>
+                <EuiFormRow
+                  label={t.dramaLanguagesLabel}
+                  helpText={t.dramaLanguagesHelp}
+                >
+                  <EuiComboBox
+                    options={dramaLanguageOptions}
+                    selectedOptions={dramaLanguages}
+                    onChange={setDramaLanguages}
+                    isDisabled={formBusy}
+                    aria-label={t.dramaLanguagesLabel}
+                  />
+                </EuiFormRow>
+                <EuiFormRow
+                  label={t.dramaModulesLabel}
+                  helpText={t.dramaModulesHelp}
+                >
+                  <EuiComboBox
+                    options={dramaModuleOptions}
+                    selectedOptions={dramaModules}
+                    onChange={setDramaModules}
+                    isDisabled={formBusy}
+                    aria-label={t.dramaModulesLabel}
+                  />
+                </EuiFormRow>
+              </>
+            )}
+          </>
+        ) : (
+          <EuiFormRow>
+            <EuiText size="s" color="subdued">
+              <p>{t.dramaUrlHint}</p>
+            </EuiText>
+          </EuiFormRow>
+        )}
+
+        <EuiFormRow
           label={t.chunkPresetSelectLabel}
           helpText={t.chunkPresetHelp}
         >
@@ -916,6 +1218,19 @@ export default function IngestPage() {
                   {progress.error.code}: {progress.error.message}
                 </p>
               )}
+              {progress.drama && (
+                <p>
+                  {t.dramaStatusLabel}: <strong>{progress.drama.status}</strong>
+                  {progress.drama.modules_done &&
+                    progress.drama.modules_done.length > 0 &&
+                    ` · ${progress.drama.modules_done.join(', ')}`}
+                </p>
+              )}
+              {progress.drama?.error && (
+                <p style={{ color: '#BD271E' }}>
+                  {progress.drama.error.code}: {progress.drama.error.message}
+                </p>
+              )}
             </EuiText>
             <EuiSpacer size="s" />
             <EuiProgress
@@ -930,12 +1245,39 @@ export default function IngestPage() {
                     : 'primary'
               }
             />
-            {progress.status === 'ready' && (
-              <>
-                <EuiSpacer size="s" />
-                <EuiCallOut color="success" size="s" title={t.ingestSuccess} />
-              </>
-            )}
+            {progress.status === 'ready' &&
+              !isDramaActive(progress) &&
+              isDramaSuccess(progress) && (
+                <>
+                  <EuiSpacer size="s" />
+                  <EuiCallOut color="success" size="s" title={t.ingestSuccess} />
+                </>
+              )}
+            {progress.status === 'ready' &&
+              (progress.drama?.status === 'partial' ||
+                progress.drama?.status === 'failed') && (
+                <>
+                  <EuiSpacer size="s" />
+                  <EuiCallOut
+                    color={
+                      progress.drama?.status === 'partial' ? 'warning' : 'danger'
+                    }
+                    size="s"
+                    title={
+                      progress.drama?.status === 'partial'
+                        ? t.dramaPartialNote
+                        : t.dramaFailedNote
+                    }
+                  />
+                  <EuiSpacer size="s" />
+                  <EuiButton
+                    onClick={() => void retryDrama()}
+                    isLoading={submitting}
+                  >
+                    {t.dramaRetryLabel}
+                  </EuiButton>
+                </>
+              )}
             {progress.status === 'failed' && (
               <>
                 <EuiSpacer size="s" />
@@ -1012,6 +1354,12 @@ export default function IngestPage() {
                           {t.stageLabel}: {row.progress.stage} ·{' '}
                           {row.progress.windows_done}/
                           {row.progress.windows_total}
+                          {row.progress.drama && (
+                            <>
+                              {' '}· {t.dramaStatusLabel}:{' '}
+                              {row.progress.drama.status}
+                            </>
+                          )}
                         </EuiText>
                       </EuiFlexItem>
                       <EuiFlexItem grow={false}>
@@ -1051,6 +1399,26 @@ export default function IngestPage() {
                           {row.progress.error.message}
                         </p>
                       </EuiText>
+                    )}
+                    {row.progress.drama?.error && (
+                      <EuiText size="xs" color="danger">
+                        <p>
+                          {row.progress.drama.error.code}:{' '}
+                          {row.progress.drama.error.message}
+                        </p>
+                      </EuiText>
+                    )}
+                    {(row.progress.drama?.status === 'partial' ||
+                      row.progress.drama?.status === 'failed') && (
+                      <>
+                        <EuiSpacer size="xs" />
+                        <EuiButton
+                          size="s"
+                          onClick={() => void retryBatchRow(row)}
+                        >
+                          {t.dramaRetryLabel}
+                        </EuiButton>
+                      </>
                     )}
                   </EuiPanel>
                 </EuiFlexItem>

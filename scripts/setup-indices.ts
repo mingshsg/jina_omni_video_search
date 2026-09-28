@@ -1,7 +1,8 @@
 /**
  * Idempotent Elasticsearch index setup (NFR-6).
- * Creates video-assets and video-chunks if missing; upgrades asset mapping
- * with new `meta.*` properties when the index already exists.
+ * Creates video-assets, video-chunks, and video-drama-subtitles if missing;
+ * upgrades asset mapping with new `meta.*` properties when the index already
+ * exists.
  */
 import { loadDotenv } from './load-dotenv';
 
@@ -12,7 +13,9 @@ import { ensureIndices } from '../lib/es/indices';
 async function main(): Promise<void> {
   const result = await ensureIndices();
   const unchanged =
-    result.assets === 'skipped' && result.chunks === 'skipped';
+    result.assets === 'skipped' &&
+    result.chunks === 'skipped' &&
+    result.dramaSubtitles === 'skipped';
   const summary = {
     ...result,
     message: unchanged

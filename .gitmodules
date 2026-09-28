@@ -1,0 +1,3 @@
+[submodule "vendor/episode_processing"]
+	path = vendor/episode_processing
+	url = https://github.com/mingsorg/episode_processing.git

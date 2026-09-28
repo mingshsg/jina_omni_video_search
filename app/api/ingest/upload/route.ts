@@ -14,6 +14,8 @@ import {
   resolveJobChunking,
 } from '@/lib/ingest/chunking-request';
 import { parseGroupIdFromFormData } from '@/lib/ingest/group-request';
+import { parseDramaFromFormData } from '@/lib/ingest/drama-request';
+import { acceptDramaForIngest } from '@/lib/ingest/drama-accept';
 import { ingestErrorMessage, resolveLocale } from '@/lib/i18n';
 
 export const runtime = 'nodejs';
@@ -58,6 +60,7 @@ export async function POST(request: Request) {
 
     const chunking = resolveJobChunking(parseChunkingFromFormData(form));
     const groupId = parseGroupIdFromFormData(form);
+    const dramaOpts = parseDramaFromFormData(form);
 
     const webStream = file.stream();
     const nodeStream = Readable.fromWeb(
@@ -75,6 +78,12 @@ export async function POST(request: Request) {
         ? titleField.trim()
         : undefined;
 
+    const drama = acceptDramaForIngest({
+      mode: 'upload',
+      durationMs: result.probe.duration_ms,
+      options: dramaOpts,
+    });
+
     const job = createIngestJob({
       mode: 'upload',
       mediaPath: result.mediaPath,
@@ -83,6 +92,7 @@ export async function POST(request: Request) {
       autoStart: parseAutoStart(form.get('auto_start')),
       chunking,
       groupId,
+      drama,
     });
     await prepareJobEstimate(job);
     startPipelineAsync(job);
@@ -93,7 +103,9 @@ export async function POST(request: Request) {
     const status =
       ingestErr.code === 'INGEST_UPLOAD_SIZE_EXCEEDED'
         ? 413
-        : ingestErr.code === 'INGEST_INVALID_CHUNKING'
+        : ingestErr.code === 'INGEST_INVALID_CHUNKING' ||
+            ingestErr.code === 'INGEST_INVALID_GROUP' ||
+            ingestErr.code.startsWith('INGEST_DRAMA_')
           ? 400
           : 400;
     return errorResponse(ingestErr, locale, status);

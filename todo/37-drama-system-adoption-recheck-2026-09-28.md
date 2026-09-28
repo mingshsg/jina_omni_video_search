@@ -1,0 +1,35 @@
+# todo/37 — Drama system adoption recheck (2026-09-28)
+
+Source: [`reviews/drama-system-adoption-recheck-2026-09-28.md`](../reviews/drama-system-adoption-recheck-2026-09-28.md). This tracker supersedes the acceptance wording in `todo/36`; keep its closed implementation history and open R10–R12 there.
+
+## P1 — before drama acceptance or new feature plans
+
+- [ ] **F1 Retry ownership and subtitle generations:** guard active per-video drama runs, make repeated/concurrent retry safe, and ensure a new run does not leave duplicate visible subtitle cues. Test sequential and concurrent retries against the ES write contract.
+  **Fixed 2026-09-28.** Single-process per-video lease (`tryAcquireDramaRun`, non-reentrant) in `lib/drama/runner.ts`, released in `finally`; retry route returns 409 `DRAMA_RUN_ACTIVE` when a run is active (check→acquire has no `await` between, so atomic on one process). Stable run IDs (`openDramaWorkspace`, validated by `isSafeDramaRunId`) are kept across retries, so subtitle bulk `_id`s overwrite instead of duplicating; `retireOldSubtitleGenerations` (delete_by_query excluding the current run) runs at terminal success only when this run indexed subtitles. Cross-replica overlap remains explicitly open. Tests: sequential stable-runId, concurrent no-overlap, lease unit, `_id`/retire-query contracts.
+- [ ] **F2 Evidence gate:** require supported audit for accepted synopsis or persist provisional output separately; treat skipped, unparseable and transport failures honestly. Audit visual claims against frames or narrow claims to available evidence. Cover every auditor outcome.
+  **Fixed 2026-09-28.** `synopsis_status: audited|provisional` on `meta.drama` (+ mapping keyword): `audited` only on a parsed `supported` verdict; skipped/failed-call/unparseable persist the synopsis as `provisional`, which P4 consumers must treat as review-needed. Negative verdicts still veto (no synopsis persisted). The auditor now also receives up to 8 evenly-sampled window stills, so visual/action claims are checked, not just dialogue/timing. Tests: skipped→provisional, supported→audited (runner level), stills-attached evidence, plus existing veto tests. This supersedes the `todo/36` R4 scoping note (skipped no longer silently accepted).
+- [ ] **F3 Durable handoff:** persist requested drama state atomically with/before base ready; do not ignore failure to record the run marker. Test restart before start, during run and after terminal write. Shared progress/ownership for multi-replica acceptance remains open.
+  **Fixed 2026-09-28 (single process).** New `prepareDramaHandoff` (workspace + `running` marker in `meta.drama`) runs in the pipeline BEFORE base-`ready` persistence, so any crash after ready leaves a recoverable marker; marker failure marks drama `failed` with `DRAMA_HANDOFF_ERROR` (visible, retryable) without reverting base `ready`. Restart-during-run and restart-after-terminal were already covered by hydrate tests; handoff-marker write/failure/reuse now tested. Multi-replica shared ownership still open.
+- [ ] **F4 Outcome UI:** show distinct base-ready vs drama-success/partial/failure, keep terminal errors and retry visible, and count batch outcomes by enrichment status. Browser-test SSE close/reconnect and reset timing.
+  **Fixed 2026-09-28 (code; browser run still owed).** Single panel: partial → warning callout, failed → danger callout, each with a working Retry button; no auto-reset on partial/failed; success callout only for clean outcomes. Batch: partial/failed rows stay visible with drama error + per-row Retry, are recorded in the error list, and count as failed. Retry surfaces 409 (run active) messages. New `dramaRetryLabel/dramaPartialNote/dramaFailedNote` EN/ZH. Verified via `yarn build` typecheck (no component tests repo-wide); real browser/container SSE run still owed below.
+
+## P2
+
+- [x] **F5 Successful coverage:** calculate sampled ranges/seconds from successful director windows, show gaps and define publication threshold for mixed-success scripts.
+  **Fixed 2026-09-28.** `coverageSec` sums successful windows only; `coverageRanges`/`coverageGaps` recorded on the result, named in the cover, and written to `directors_usage.json` with the explicit policy (`publish-successful-slices-with-gaps`; all-error still throws). Runner progress shows gap counts. Mixed-success test added.
+- [x] **F6 Empty key results:** mark zero actor/scene outputs as empty/review-needed or failed; do not put empty selected content in `modules_done`. Qualify still-only scene fallback.
+  **Fixed 2026-09-28.** Zero committed actors or zero surviving stills now throw (module fails → partial, never hollow `succeeded`). `parseSceneCandidates` returns `{candidates, source}`; `extractKeyScenes` returns `selection: script|uniform-fallback`, persisted to `key_scenes.json` and surfaced in runner progress. Tests updated + empty-failure tests added.
+- [ ] **F7 Existing R10–R12:** schedule age-gated frame GC, keep EIS timeout active through stream consumption, and close scene fallback/empty handling. See `todo/36`.
+  **Fixed 2026-09-28.** GC: own just-finished run bypasses the age guard (`ignoreAgeGuard`, lease-held so safe) + a guarded sweep reaps aged crash orphans each terminal run (R10). EIS: every `reader.read()` races the remaining deadline with `reader.cancel()` on timeout (R11), covered by a stalled-stream test. R12 scene fallback is F6 above.
+
+## Acceptance still owed
+
+**Follow-up disposition (2026-09-28):** F1–F4 and F7 were reopened after the code follow-up review. The single-process lease, provisional status, pre-ready marker, warning/retry controls, own-run frame cleanup, stream timeout and empty-result fixes remain useful. They do not close stale same-run subtitles (`todo/38` I2), incomplete audit scope (I5), marker-write failure after restart (I4), the contradictory success/batch reset UI (I3), or unscheduled orphan cleanup (I7). The strict mapping/payload mismatch is a new P1 (`todo/38` I1).
+
+- [x] `yarn test` — 82 files / 546 pass on 2026-09-28 (F1–F7).
+- [x] `yarn build` — compile/typecheck/routes pass on 2026-09-28 (F1–F7).
+- [ ] Live `yarn setup-indices` and real subtitle bulk/mapping check (incl. new `synopsis_status` keyword and subtitle `delete_by_query`).
+- [ ] One representative Chinese or Korean episode E2E with manual timing, coverage, claims, faces, scenes, and editor review.
+- [ ] Retry/restart test on a running or realistic ES instance (sequential + concurrent retry, restart at handoff points); browser test against rebuilt container (SSE reconnect, partial/failed callouts, per-row retry, reset timing).
+- [ ] Representative p95 and inference cost measurement (note: audit now attaches up to 8 stills — measure its cost); multi-replica run ownership/progress acceptance if deployed that way.
+- [ ] P4 search/library consumption remains unbuilt (`todo/35`); do not present enrichment artifacts as searchable until implemented and relevance-tested. P4 consumers must honor `synopsis_status` (`provisional` = review-needed).

@@ -188,7 +188,7 @@ On `complete`, SSE (and the job snapshot) report:
 JSON body (discriminated by `mode`):
 
 ```json
-{ "mode": "url", "source": "https://example.com/a.mp4", "title": "optional", "auto_start": true, "chunk_preset": "30s" }
+{ "mode": "url", "source": "https://example.com/a.mp4", "title": "optional", "auto_start": true, "chunk_preset": "30s", "group_id": "demo" }
 ```
 
 ```json
@@ -200,7 +200,8 @@ JSON body (discriminated by `mode`):
 | `auto_start` | `true` | If `false`, job stops at `awaiting_confirm` until confirm |
 | `chunk_preset` | env `CHUNK_PRESET` | Named window: `standard` (64s/4s), `60s` (60s/4s), `30s` (30s/4s), `20s` (20s/2s), `fine` (10s/2s), `2s` (2s/1s). Hashes into `variant_id` so presets coexist. |
 | `window_ms` + `overlap_ms` | — | Optional free-form alternative (both required together); optional `min_ms`. Labels as `custom` unless `chunk_preset` is also set. |
-| `group_id` | — | Optional free-form group (≤ 64 characters). Seeds `meta.group_id` only on first asset create; search can hard-filter by group. Also accepted by upload and batch ingest. |
+| `group_id` | — | Optional free-form name (≤ 64 chars). Seeds `meta.group_id` on first asset create for search hard-filters. Empty omitted; over-long → `INGEST_INVALID_GROUP`. Suggested starters: `trailer`, `demo`. |
+| `drama` | — | Optional `{ enabled, languages?, modules? }`. When `enabled: true`, queues follow-on drama enrichment **after** embed `ready` (plan/12). `modules`: `subtitles` \| `structure` \| `directors_script` \| `key_actors` \| `key_scenes` (non-empty). `languages`: `zh` \| `en` \| `ko` \| `th` (required if `subtitles` selected). Select the spoken language: `ko` requests Korean transcription, `th` requests Thai transcription. Multiple selections run separately; no translation or automatic language detection is implied. **v1:** URL mode → `INGEST_DRAMA_URL_NOT_SUPPORTED` (use upload/local; Library later). Duration over `DRAMA_MAX_DURATION_MS` (default 210 min) → `INGEST_DRAMA_TOO_LONG`. Empty modules → `INGEST_DRAMA_EMPTY`. |
 
 **200 response:**
 
@@ -236,7 +237,11 @@ JSON body (discriminated by `mode`):
 
 `multipart/form-data`: field `file` (required), `title` (optional),
 `auto_start` (`"true"` / `"false"`, default true), optional `chunk_preset`
-(same names as JSON ingest) or `window_ms` + `overlap_ms` (+ optional `min_ms`).
+(same names as JSON ingest) or `window_ms` + `overlap_ms` (+ optional `min_ms`),
+optional `group_id` (same catalog as JSON ingest), optional drama fields as
+form parts: `drama_enabled` (`true`/`false`), `drama_languages` and
+`drama_modules` (JSON array or comma-separated; same enums as JSON `drama`).
+URL-equivalent rejection codes apply via upload/local/batch only.
 
 Response shape matches JSON ingest (without `provenance`).
 
@@ -366,7 +371,7 @@ AND across fields; **ANY** within each array. Cap 20 values per array. Missing m
 | `primary_language` | Pinned BCP-47 tags (case-insensitive; stored canonical) |
 | `country` | ISO alpha-2 from the 20-option catalog |
 | `tags` | Normalized to `meta.tags_key` |
-| `group_id` | Exact organizational group filter on `meta.group_id` |
+| `group_id` | Organizational index group (`meta.group_id`; free-form ≤ 64 chars; suggested: `trailer` / `demo`) |
 
 Overflow (>10,000 matching assets): **422** `FILTER_SCOPE_TOO_LARGE`. Empty eligibility returns zero hits before embedding.
 
@@ -929,7 +934,7 @@ Pinned catalogs for the Library editor (and later search facets).
 
 Query: `?locale=en|zh&q=` (optional people autocomplete).
 
-**200:** `{ "video_types", "primary_languages", "countries":[{code,label}], "people":[{id,display,aliases}] }`.
+**200:** `{ "video_types", "primary_languages", "countries":[{code,label}], "groups":[{id,label}], "people":[{id,display,aliases}] }`.
 
 ### `POST /api/metadata/catalogs/people`
 

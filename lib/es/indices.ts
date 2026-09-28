@@ -1,10 +1,43 @@
 import { getConfig } from '../config';
+import { getDramaEnv } from '../drama/env';
 import { getEsClient } from './client';
 import { videoAssetsMetaMappingProperties } from './asset-meta-mapping';
+import { dramaSubtitlesMapping } from './drama-subtitles-mapping';
 import {
   diffMappingProperties,
   MappingUpgradeConflictError,
 } from './mapping-diff';
+
+/**
+ * `job` object properties for video-assets. Shared by create and upgrade
+ * (I4): the durable drama request/status record lives here so a restart
+ * can recover even when `meta.drama` was never written (e.g. handoff
+ * marker failure).
+ */
+export function videoAssetsJobMappingProperties(): Record<string, unknown> {
+  return {
+    job_id: { type: 'keyword' },
+    stage: { type: 'keyword' },
+    progress_pct: { type: 'float' },
+    windows_total: { type: 'integer' },
+    windows_done: { type: 'integer' },
+    started_at: { type: 'date' },
+    updated_at: { type: 'date' },
+    completed_at: { type: 'date' },
+    drama: {
+      type: 'object',
+      properties: {
+        status: { type: 'keyword' },
+        languages: { type: 'keyword' },
+        modules: { type: 'keyword' },
+        modules_done: { type: 'keyword' },
+        run_id: { type: 'keyword', index: false },
+        error_code: { type: 'keyword', index: false },
+        error_message: { type: 'text', index: false },
+      },
+    },
+  };
+}
 
 /** Body passed to `indices.create` (index name supplied by caller). */
 type IndexCreateBody = {
@@ -81,16 +114,7 @@ export function videoAssetsMapping(): IndexCreateBody {
         status: { type: 'keyword' },
         job: {
           type: 'object',
-          properties: {
-            job_id: { type: 'keyword' },
-            stage: { type: 'keyword' },
-            progress_pct: { type: 'float' },
-            windows_total: { type: 'integer' },
-            windows_done: { type: 'integer' },
-            started_at: { type: 'date' },
-            updated_at: { type: 'date' },
-            completed_at: { type: 'date' },
-          },
+          properties: videoAssetsJobMappingProperties(),
         },
         error: { type: 'text', index: false },
         created_at: { type: 'date' },
@@ -161,8 +185,10 @@ export type IndexEnsureAction = 'created' | 'skipped' | 'upgraded';
 export interface EnsureIndicesResult {
   assets: IndexEnsureAction;
   chunks: IndexEnsureAction;
+  dramaSubtitles: IndexEnsureAction;
   indexAssets: string;
   indexChunks: string;
+  indexDramaSubtitles: string;
   /** Present when assets mapping was compared / upgraded. */
   assetsMapping?: {
     addedProperties: string[];
@@ -186,8 +212,9 @@ async function ensureIndex(
 
 /**
  * Idempotently add *missing* properties under an existing strict mapping.
- * Recursively compares desired `meta.*` children. Incompatible types,
- * analyzers, or copy_to targets fail with MappingUpgradeConflictError.
+ * Recursively compares desired `meta.*` children plus the durable
+ * `job.drama` request record (I4). Incompatible types, analyzers, or
+ * copy_to targets fail with MappingUpgradeConflictError.
  */
 export async function upgradeVideoAssetsMapping(): Promise<{
   action: 'upgraded' | 'skipped';
@@ -220,31 +247,56 @@ export async function upgradeVideoAssetsMapping(): Promise<{
   );
   const diff = diffMappingProperties(desired, props);
 
-  if (diff.conflicts.length > 0) {
-    throw new MappingUpgradeConflictError(diff.conflicts);
+  // I4: the same upgrade covers the durable drama request record under
+  // `job.drama` (the create body shares this source via
+  // videoAssetsJobMappingProperties).
+  const jobExisting = isRecord(props.job)
+    ? (props.job.properties as Record<string, unknown> | undefined)
+    : undefined;
+  const jobDramaDesired = videoAssetsJobMappingProperties()
+    .drama as Record<string, unknown>;
+  const jobDiff = diffMappingProperties(
+    { drama: jobDramaDesired },
+    jobExisting ?? {},
+    'job',
+  );
+
+  const conflicts = [...diff.conflicts, ...jobDiff.conflicts];
+  if (conflicts.length > 0) {
+    throw new MappingUpgradeConflictError(conflicts);
   }
 
-  if (diff.addedPaths.length === 0) {
+  const addedProperties = [...diff.addedPaths, ...jobDiff.addedPaths];
+  const alreadyPresent = [...diff.alreadyPresent, ...jobDiff.alreadyPresent];
+  if (addedProperties.length === 0) {
     return {
       action: 'skipped',
       addedProperties: [],
-      alreadyPresent: diff.alreadyPresent,
+      alreadyPresent,
       conflicts: [],
     };
   }
 
+  const toPut: Record<string, unknown> = { ...diff.toPut };
+  if (Object.keys(jobDiff.toPut).length > 0) {
+    toPut.job = { properties: jobDiff.toPut };
+  }
   await client.indices.putMapping({
     index: indexName,
     // Mapping fragment is validated against the create body; ES client typings
     // for MappingProperty are a large closed union we do not reconstruct here.
-    properties: diff.toPut as never,
+    properties: toPut as never,
   });
   return {
     action: 'upgraded',
-    addedProperties: diff.addedPaths,
-    alreadyPresent: diff.alreadyPresent,
+    addedProperties,
+    alreadyPresent,
     conflicts: [],
   };
+}
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
 /**
@@ -253,8 +305,16 @@ export async function upgradeVideoAssetsMapping(): Promise<{
  */
 export async function ensureIndices(): Promise<EnsureIndicesResult> {
   const cfg = getConfig();
+  const dramaEnv = getDramaEnv();
   let assets = await ensureIndex(cfg.ES_INDEX_ASSETS, videoAssetsMapping());
   const chunks = await ensureIndex(cfg.ES_INDEX_CHUNKS, videoChunksMapping());
+  const dramaSubtitles = await ensureIndex(
+    dramaEnv.ES_INDEX_DRAMA_SUBTITLES,
+    dramaSubtitlesMapping({
+      inferenceId: cfg.EMBED_INFERENCE_ID || undefined,
+      dims: cfg.EMBED_DIMS,
+    }),
+  );
 
   let assetsMapping: EnsureIndicesResult['assetsMapping'];
   if (assets === 'skipped') {
@@ -279,8 +339,10 @@ export async function ensureIndices(): Promise<EnsureIndicesResult> {
   return {
     assets,
     chunks,
+    dramaSubtitles,
     indexAssets: cfg.ES_INDEX_ASSETS,
     indexChunks: cfg.ES_INDEX_CHUNKS,
+    indexDramaSubtitles: dramaEnv.ES_INDEX_DRAMA_SUBTITLES,
     assetsMapping,
   };
 }

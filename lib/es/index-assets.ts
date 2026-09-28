@@ -26,6 +26,17 @@ export interface AssetVariantDoc {
   error?: string;
 }
 
+/** Durable drama request/status record on the asset job (I4, matches mapping). */
+export interface AssetJobDramaDoc {
+  status: string;
+  languages: string[];
+  modules: string[];
+  modules_done?: string[];
+  run_id?: string;
+  error_code?: string;
+  error_message?: string;
+}
+
 /** Job progress object on video-assets (matches mapping). */
 export interface AssetJobDoc {
   job_id: string;
@@ -36,6 +47,7 @@ export interface AssetJobDoc {
   started_at?: string;
   updated_at: string;
   completed_at?: string;
+  drama?: AssetJobDramaDoc;
 }
 
 /** Full video-assets document. */
@@ -61,7 +73,7 @@ export interface VideoAssetDocument {
   error?: string;
   created_at: string;
   updated_at: string;
-  /** Editorial metadata — owned by PATCH /meta, never by ingest. */
+  /** Editorial metadata — owned by PATCH /meta; ingest may seed `group_id` on first create only. */
   meta?: AssetMeta;
 }
 
