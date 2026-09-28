@@ -64,6 +64,13 @@ describe('videoAssetsMetaMappingProperties Phase 3.5 fields', () => {
     expect(embMeta.properties.state).toEqual({ type: 'keyword' });
     expect(embMeta.properties.dims).toEqual({ type: 'integer' });
   });
+
+  it('declares group_id as keyword under meta', () => {
+    const meta = videoAssetsMetaMappingProperties().meta as {
+      properties: Record<string, unknown>;
+    };
+    expect(meta.properties.group_id).toEqual({ type: 'keyword' });
+  });
 });
 
 describe('videoAssetsMetaMappingProperties item 4 semantic_text mirror fields', () => {

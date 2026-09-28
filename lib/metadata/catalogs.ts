@@ -22,6 +22,50 @@ export type VideoType = (typeof VIDEO_TYPES)[number];
 export const VIDEO_TYPE_SET: ReadonlySet<string> = new Set(VIDEO_TYPES);
 
 /**
+ * Organizational index groups — free-form names selected at ingest,
+ * hard-filtered at search. Distinct from content facets (`video_type`, tags).
+ *
+ * Starter suggestions (not a closed catalog): `trailer` (legacy 10 s / fine
+ * chunks) and `demo` (legacy 2 s chunks). Operators may type any new name.
+ */
+export const SUGGESTED_ASSET_GROUPS = [
+  { id: 'trailer', name_en: 'trailer', name_zh: 'trailer（预告 / 10s）' },
+  { id: 'demo', name_en: 'demo', name_zh: 'demo（演示 / 2s）' },
+] as const;
+
+export const SUGGESTED_ASSET_GROUP_IDS = SUGGESTED_ASSET_GROUPS.map((g) => g.id);
+
+/** @deprecated Prefer SUGGESTED_ASSET_GROUPS — groups are free-form now. */
+export const ASSET_GROUPS = SUGGESTED_ASSET_GROUPS;
+
+/** @deprecated Groups are free-form; kept empty for any stale Set checks. */
+export const ASSET_GROUP_ID_SET: ReadonlySet<string> = new Set(
+  SUGGESTED_ASSET_GROUP_IDS,
+);
+
+export function groupLabel(
+  id: string,
+  locale: 'en' | 'zh' = 'en',
+): string {
+  const row = SUGGESTED_ASSET_GROUPS.find((g) => g.id === id);
+  if (!row) return id;
+  return locale === 'zh' ? row.name_zh : row.name_en;
+}
+
+/**
+ * Normalize a free-form group name for storage / filter equality.
+ * NFKC + trim + collapse spaces; empty → null.
+ */
+export function normalizeGroupId(raw: string): string | null {
+  const t = raw
+    .normalize('NFKC')
+    .trim()
+    .replace(/\s+/g, ' ');
+  if (!t) return null;
+  return t;
+}
+
+/**
  * MVP production country/region catalog — ISO-3166-1 alpha-2 codes.
  * Exactly 20 options; HK/TW are region choices. Store the code only.
  */
@@ -104,6 +148,8 @@ export const META_BOUNDS = {
   tagsMax: 30,
   actorIdMaxLen: 100,
   tagMaxLen: 64,
+  /** Free-form organizational group name (`meta.group_id`). */
+  groupIdMaxLen: 64,
   yearMin: 1800,
   yearMax: 2100,
   facetArrayMax: 20,
