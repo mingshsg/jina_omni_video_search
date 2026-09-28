@@ -173,4 +173,42 @@ describe('I4 marker-failure recovery through asset state', () => {
     const job = await resolveIngestJob('job-req-running');
     expect(job?.drama?.status).toBe('pending');
   });
+
+  it('restores the P4 per-run policy from the job record', async () => {
+    findAssetByJobIdMock.mockResolvedValueOnce(
+      assetWithDrama(
+        'job-p4',
+        undefined,
+        {
+          status: 'pending',
+          languages: ['zh'],
+          modules: ['subtitles'],
+          modules_done: [],
+          subtitle_source: 'existing_only',
+          director_coverage: 'sampled',
+        },
+      ),
+    );
+    const job = await resolveIngestJob('job-p4');
+    expect(job?.drama?.subtitleSource).toBe('existing_only');
+    expect(job?.drama?.directorCoverage).toBe('sampled');
+  });
+
+  it('defaults the P4 policy for pre-P4 job records', async () => {
+    findAssetByJobIdMock.mockResolvedValueOnce(
+      assetWithDrama(
+        'job-pre-p4',
+        undefined,
+        {
+          status: 'pending',
+          languages: ['zh'],
+          modules: ['subtitles'],
+          modules_done: [],
+        },
+      ),
+    );
+    const job = await resolveIngestJob('job-pre-p4');
+    expect(job?.drama?.subtitleSource).toBe('auto');
+    expect(job?.drama?.directorCoverage).toBe('sampled');
+  });
 });

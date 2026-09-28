@@ -30,6 +30,8 @@ describe('resolveDramaOptions', () => {
       enabled: true,
       languages: ['zh', 'en'],
       modules: ['subtitles', 'structure'],
+      subtitleSource: 'auto',
+      directorCoverage: 'sampled',
     });
   });
 
@@ -42,6 +44,8 @@ describe('resolveDramaOptions', () => {
       enabled: true,
       languages: ['ko', 'th'],
       modules: ['subtitles'],
+      subtitleSource: 'auto',
+      directorCoverage: 'sampled',
     });
   });
 
@@ -110,6 +114,8 @@ describe('resolveDramaOptions', () => {
       enabled: true,
       languages: [],
       modules: ['key_actors', 'directors_script'],
+      subtitleSource: 'auto',
+      directorCoverage: 'sampled',
     });
   });
 
@@ -124,7 +130,78 @@ describe('resolveDramaOptions', () => {
       enabled: true,
       languages: ['zh', 'en'],
       modules: ['structure'],
+      subtitleSource: 'auto',
+      directorCoverage: 'sampled',
     });
+  });
+
+  // P4: per-run subtitle_source / director_coverage parsing.
+  it('defaults subtitle_source to auto and director_coverage to sampled', () => {
+    const opts = resolveDramaOptions({
+      enabled: true,
+      languages: ['zh'],
+      modules: ['subtitles'],
+    });
+    expect(opts?.subtitleSource).toBe('auto');
+    expect(opts?.directorCoverage).toBe('sampled');
+  });
+
+  it('accepts explicit valid subtitle_source values', () => {
+    expect(
+      resolveDramaOptions({
+        enabled: true,
+        languages: ['zh'],
+        modules: ['subtitles'],
+        subtitle_source: 'existing_only',
+      })?.subtitleSource,
+    ).toBe('existing_only');
+    expect(
+      resolveDramaOptions({
+        enabled: true,
+        languages: ['zh'],
+        modules: ['subtitles'],
+        subtitle_source: 'force_asr',
+      })?.subtitleSource,
+    ).toBe('force_asr');
+  });
+
+  it('accepts explicit director_coverage sampled', () => {
+    expect(
+      resolveDramaOptions({
+        enabled: true,
+        languages: ['zh'],
+        modules: ['subtitles'],
+        director_coverage: 'sampled',
+      })?.directorCoverage,
+    ).toBe('sampled');
+  });
+
+  it('rejects an unknown subtitle_source', () => {
+    try {
+      resolveDramaOptions({
+        enabled: true,
+        languages: ['zh'],
+        modules: ['subtitles'],
+        subtitle_source: 'whatever',
+      });
+      expect.fail('expected throw');
+    } catch (e) {
+      expect((e as IngestError).code).toBe('INGEST_DRAMA_INVALID');
+    }
+  });
+
+  it('rejects director_coverage full (not implemented)', () => {
+    try {
+      resolveDramaOptions({
+        enabled: true,
+        languages: ['zh'],
+        modules: ['subtitles'],
+        director_coverage: 'full',
+      });
+      expect.fail('expected throw');
+    } catch (e) {
+      expect((e as IngestError).code).toBe('INGEST_DRAMA_INVALID');
+    }
   });
 });
 
@@ -135,6 +212,8 @@ describe('assertDramaModeAllowed', () => {
         enabled: true,
         languages: ['zh'],
         modules: ['structure'],
+        subtitleSource: 'auto',
+        directorCoverage: 'sampled',
       }),
     ).toThrow(IngestError);
   });
@@ -144,6 +223,8 @@ describe('assertDramaModeAllowed', () => {
       enabled: true as const,
       languages: ['zh' as const],
       modules: ['structure' as const],
+      subtitleSource: 'auto' as const,
+      directorCoverage: 'sampled' as const,
     };
     expect(() => assertDramaModeAllowed('local', opts)).not.toThrow();
     expect(() => assertDramaModeAllowed('upload', opts)).not.toThrow();
@@ -182,6 +263,8 @@ describe('parseDramaFromFormData', () => {
       enabled: true,
       languages: ['zh', 'en'],
       modules: ['subtitles', 'key_scenes'],
+      subtitleSource: 'auto',
+      directorCoverage: 'sampled',
     });
   });
 
@@ -194,6 +277,8 @@ describe('parseDramaFromFormData', () => {
       enabled: true,
       languages: ['zh'],
       modules: ['structure', 'directors_script'],
+      subtitleSource: 'auto',
+      directorCoverage: 'sampled',
     });
   });
 
@@ -203,6 +288,37 @@ describe('parseDramaFromFormData', () => {
     form.set('drama_languages', JSON.stringify(['ko', 'th']));
     form.set('drama_modules', JSON.stringify(['subtitles']));
     expect(parseDramaFromFormData(form)?.languages).toEqual(['ko', 'th']);
+  });
+
+  // P4: per-run policy fields from form data (single CSV-ish values).
+  it('parses drama_subtitle_source and drama_director_coverage from form', () => {
+    const form = new FormData();
+    form.set('drama_enabled', 'true');
+    form.set('drama_languages', 'zh');
+    form.set('drama_modules', 'subtitles');
+    form.set('drama_subtitle_source', 'existing_only');
+    form.set('drama_director_coverage', 'sampled');
+    const opts = parseDramaFromFormData(form);
+    expect(opts?.subtitleSource).toBe('existing_only');
+    expect(opts?.directorCoverage).toBe('sampled');
+  });
+
+  it('rejects an invalid drama_subtitle_source from form', () => {
+    const form = new FormData();
+    form.set('drama_enabled', 'true');
+    form.set('drama_languages', 'zh');
+    form.set('drama_modules', 'subtitles');
+    form.set('drama_subtitle_source', 'full_auto');
+    expect(() => parseDramaFromFormData(form)).toThrow(IngestError);
+  });
+
+  it('rejects an invalid drama_director_coverage from form', () => {
+    const form = new FormData();
+    form.set('drama_enabled', 'true');
+    form.set('drama_languages', 'zh');
+    form.set('drama_modules', 'subtitles');
+    form.set('drama_director_coverage', 'full');
+    expect(() => parseDramaFromFormData(form)).toThrow(IngestError);
   });
 
   it('returns undefined when drama_enabled is false', () => {

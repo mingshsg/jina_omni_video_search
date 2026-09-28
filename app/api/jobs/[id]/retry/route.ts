@@ -79,6 +79,9 @@ export async function POST(
       modules: prev.drama.modules,
       modules_done: [],
       run_id: prev.drama.run_id,
+      // P4: keep the original per-run policy on drama-only retry.
+      subtitleSource: prev.drama.subtitleSource,
+      directorCoverage: prev.drama.directorCoverage,
     };
     prev.pipelineRunning = false;
     // The runner acquires the lease and releases it in `finally`.
@@ -108,6 +111,9 @@ export async function POST(
             modules: prev.drama.modules,
             modules_done: [],
             run_id: prev.drama.run_id,
+            // P4: keep the original per-run policy on base retry too.
+            subtitleSource: prev.drama.subtitleSource,
+            directorCoverage: prev.drama.directorCoverage,
           }
         : undefined,
   });

@@ -131,6 +131,9 @@ describe('drama mapping/payload contract (I1)', () => {
       'modules',
       'modules_done',
       'run_id',
+      // P4: per-run policy persisted for retry parity.
+      'subtitle_source',
+      'director_coverage',
       'error_code',
       'error_message',
     ]) {

@@ -22,10 +22,37 @@ export type DramaEnrichmentStatus =
   | 'failed'
   | 'skipped';
 
+/**
+ * Per-run subtitle resolution policy (plan/12 P4).
+ * - `auto`: matching sidecar → matching embedded stream → configured ASR.
+ * - `existing_only`: sidecar/embedded only; never call ASR. Missing
+ *   language-tagged source fails that language visibly.
+ * - `force_asr`: skip sidecar/embedded; require ASR for every language.
+ */
+export const DRAMA_SUBTITLE_SOURCES = [
+  'auto',
+  'existing_only',
+  'force_asr',
+] as const;
+export type DramaSubtitleSource = (typeof DRAMA_SUBTITLE_SOURCES)[number];
+
+/**
+ * Director coverage policy (plan/12 P4). Only `sampled` is offered: full
+ * coverage generation/audit is not implemented, so "full episode" is never
+ * selectable. `sampled` caps windows at DRAMA_DIRECTORS_MAX_WINDOWS and
+ * names gaps on mixed-success runs.
+ */
+export const DRAMA_DIRECTOR_COVERAGES = ['sampled'] as const;
+export type DramaDirectorCoverage = (typeof DRAMA_DIRECTOR_COVERAGES)[number];
+
 export interface DramaRequestOptions {
   enabled: true;
   languages: DramaLanguage[];
   modules: DramaModule[];
+  /** Subtitle resolution policy; `auto` when omitted (matches P1). */
+  subtitleSource: DramaSubtitleSource;
+  /** Director coverage; `sampled` when omitted. */
+  directorCoverage: DramaDirectorCoverage;
 }
 
 export interface DramaJobState {
@@ -35,6 +62,10 @@ export interface DramaJobState {
   modules_done: DramaModule[];
   run_id?: string;
   error?: { code: string; message: string };
+  /** Per-run subtitle resolution policy (P4); persisted for retry parity. */
+  subtitleSource: DramaSubtitleSource;
+  /** Per-run director coverage (P4). */
+  directorCoverage: DramaDirectorCoverage;
 }
 
 export function isDramaLanguage(v: string): v is DramaLanguage {
@@ -43,4 +74,14 @@ export function isDramaLanguage(v: string): v is DramaLanguage {
 
 export function isDramaModule(v: string): v is DramaModule {
   return (DRAMA_MODULES as readonly string[]).includes(v);
+}
+
+export function isDramaSubtitleSource(v: string): v is DramaSubtitleSource {
+  return (DRAMA_SUBTITLE_SOURCES as readonly string[]).includes(v);
+}
+
+export function isDramaDirectorCoverage(
+  v: string,
+): v is DramaDirectorCoverage {
+  return (DRAMA_DIRECTOR_COVERAGES as readonly string[]).includes(v);
 }

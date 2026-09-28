@@ -8,12 +8,16 @@ import { IngestError } from './errors';
 import {
   DRAMA_LANGUAGES,
   DRAMA_MODULES,
+  type DramaDirectorCoverage,
   type DramaJobState,
   type DramaLanguage,
   type DramaModule,
   type DramaRequestOptions,
+  type DramaSubtitleSource,
+  isDramaDirectorCoverage,
   isDramaLanguage,
   isDramaModule,
+  isDramaSubtitleSource,
 } from './drama-options';
 
 export type { DramaRequestOptions, DramaJobState };
@@ -23,6 +27,10 @@ const dramaBodySchema = z
     enabled: z.boolean(),
     languages: z.array(z.string()).optional(),
     modules: z.array(z.string()).optional(),
+    /** Per-run subtitle policy (P4): auto | existing_only | force_asr. */
+    subtitle_source: z.string().optional(),
+    /** Per-run director coverage (P4): sampled (only supported mode). */
+    director_coverage: z.string().optional(),
   })
   .optional();
 
@@ -71,6 +79,30 @@ function parseModuleList(raw: unknown): DramaModule[] {
 }
 
 /**
+ * Resolve per-run subtitle source: `auto` when omitted, any other value
+ * outside the catalog is invalid (P4).
+ */
+function parseSubtitleSource(raw: unknown): DramaSubtitleSource {
+  if (raw === undefined || raw === '') return 'auto';
+  if (typeof raw !== 'string' || !isDramaSubtitleSource(raw.trim())) {
+    throw new IngestError('INGEST_DRAMA_INVALID');
+  }
+  return raw.trim() as DramaSubtitleSource;
+}
+
+/**
+ * Resolve per-run director coverage: `sampled` when omitted. Anything else
+ * (including `full`) is rejected — full coverage is not implemented (P4).
+ */
+function parseDirectorCoverage(raw: unknown): DramaDirectorCoverage {
+  if (raw === undefined || raw === '') return 'sampled';
+  if (typeof raw !== 'string' || !isDramaDirectorCoverage(raw.trim())) {
+    throw new IngestError('INGEST_DRAMA_INVALID');
+  }
+  return raw.trim() as DramaDirectorCoverage;
+}
+
+/**
  * Resolve drama options from a parsed JSON body field.
  * Returns undefined when omitted or `enabled: false`.
  */
@@ -92,7 +124,13 @@ export function resolveDramaOptions(
     // selection always fails at runtime, so reject it at accept time.
     throw new IngestError('INGEST_DRAMA_NEEDS_DIRECTORS');
   }
-  return { enabled: true, languages, modules };
+  return {
+    enabled: true,
+    languages,
+    modules,
+    subtitleSource: parseSubtitleSource(raw.subtitle_source),
+    directorCoverage: parseDirectorCoverage(raw.director_coverage),
+  };
 }
 
 /** URL ingest cannot enable drama in v1 (OQ-4). */
@@ -159,7 +197,21 @@ export function parseDramaFromFormData(
     enabled: true,
     languages,
     modules,
+    subtitle_source: readOptionalFormString(form, 'drama_subtitle_source'),
+    director_coverage: readOptionalFormString(
+      form,
+      'drama_director_coverage',
+    ),
   });
+}
+
+/** Read a single-valued optional text field, or undefined when absent. */
+function readOptionalFormString(
+  form: FormData,
+  key: string,
+): string | undefined {
+  const raw = form.get(key);
+  return typeof raw === 'string' && raw.trim() ? raw.trim() : undefined;
 }
 
 /** Initial in-memory drama job state after accept. */
@@ -171,6 +223,8 @@ export function initialDramaJobState(
     languages: opts.languages,
     modules: opts.modules,
     modules_done: [],
+    subtitleSource: opts.subtitleSource,
+    directorCoverage: opts.directorCoverage,
   };
 }
 

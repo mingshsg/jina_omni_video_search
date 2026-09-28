@@ -32,6 +32,10 @@ export function videoAssetsJobMappingProperties(): Record<string, unknown> {
         modules: { type: 'keyword' },
         modules_done: { type: 'keyword' },
         run_id: { type: 'keyword', index: false },
+        // P4: per-run policy persisted for retry parity. `index:false` —
+        // stored for hydration, never queried.
+        subtitle_source: { type: 'keyword', index: false },
+        director_coverage: { type: 'keyword', index: false },
         error_code: { type: 'keyword', index: false },
         error_message: { type: 'text', index: false },
       },

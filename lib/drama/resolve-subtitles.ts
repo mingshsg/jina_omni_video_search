@@ -1,9 +1,16 @@
 /**
  * Resolve SRT for one language: sidecar → embedded → optional ASR.
+ * Per-run policy (P4) controls which sources are allowed:
+ * - `existing_only`: sidecar → embedded only; never ASR.
+ * - `force_asr`: skip sidecar/embedded; ASR only.
+ * - `auto` (default): sidecar → embedded → ASR.
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import type { DramaLanguage } from '../ingest/drama-options';
+import type {
+  DramaLanguage,
+  DramaSubtitleSource,
+} from '../ingest/drama-options';
 import { getDramaEnv } from './env';
 import { extractDramaAudio } from './extract-audio';
 import { extractEmbeddedSrtForLanguage, findSidecarSrt } from './extract-subs';
@@ -96,54 +103,65 @@ export async function resolveSubtitlesForLanguage(opts: {
   audioDir: string;
   /** Kept for callers that probe embedded availability per language. */
   allowEmbedded?: boolean;
+  /** Per-run subtitle policy (P4); `auto` when omitted. */
+  subtitleSource?: DramaSubtitleSource;
 }): Promise<ResolvedSubtitles> {
   const outSrtPath = path.join(opts.subtitlesDir, `${opts.lang}.srt`);
+  const source = opts.subtitleSource ?? 'auto';
 
-  const sidecar = findSidecarSrt(opts.videoPath, opts.lang);
-  if (sidecar) {
-    fs.copyFileSync(sidecar, outSrtPath);
-    const cues = parseSrt(fs.readFileSync(outSrtPath, 'utf8'));
-    if (cues.length > 0) {
-      return {
-        lang: opts.lang,
-        srtPath: outSrtPath,
-        cues,
-        origin: 'sidecar',
-      };
-    }
-  }
-
-  if (opts.allowEmbedded !== false) {
-    // R8: only a stream whose language tag matches `lang` may be used.
-    // An untagged/mismatched first stream is never assigned to the
-    // requested language — fall through to ASR or the error below.
-    const embedded = await extractEmbeddedSrtForLanguage({
-      videoPath: opts.videoPath,
-      lang: opts.lang,
-      outSrtPath,
-    });
-    if (embedded) {
+  if (source !== 'force_asr') {
+    const sidecar = findSidecarSrt(opts.videoPath, opts.lang);
+    if (sidecar) {
+      fs.copyFileSync(sidecar, outSrtPath);
       const cues = parseSrt(fs.readFileSync(outSrtPath, 'utf8'));
       if (cues.length > 0) {
         return {
           lang: opts.lang,
           srtPath: outSrtPath,
           cues,
-          origin: 'embedded',
+          origin: 'sidecar',
         };
+      }
+    }
+
+    if (opts.allowEmbedded !== false) {
+      // R8: only a stream whose language tag matches `lang` may be used.
+      // An untagged/mismatched first stream is never assigned to the
+      // requested language — fall through to ASR or the error below.
+      const embedded = await extractEmbeddedSrtForLanguage({
+        videoPath: opts.videoPath,
+        lang: opts.lang,
+        outSrtPath,
+      });
+      if (embedded) {
+        const cues = parseSrt(fs.readFileSync(outSrtPath, 'utf8'));
+        if (cues.length > 0) {
+          return {
+            lang: opts.lang,
+            srtPath: outSrtPath,
+            cues,
+            origin: 'embedded',
+          };
+        }
       }
     }
   }
 
-  const asr = await tryAsr({
-    videoPath: opts.videoPath,
-    lang: opts.lang,
-    audioDir: opts.audioDir,
-    outSrtPath,
-  });
-  if (asr) return asr;
+  if (source !== 'existing_only') {
+    const asr = await tryAsr({
+      videoPath: opts.videoPath,
+      lang: opts.lang,
+      audioDir: opts.audioDir,
+      outSrtPath,
+    });
+    if (asr) return asr;
+  }
 
   throw new Error(
-    `No subtitles for ${opts.lang}: no sidecar/embedded stream, and ASR is not configured (set DRAMA_ASR_API_KEY or DRAMA_WHISPER_BIN)`,
+    source === 'existing_only'
+      ? `No subtitles for ${opts.lang}: no matching sidecar or embedded stream (existing_only — ASR skipped)`
+      : source === 'force_asr'
+        ? `No subtitles for ${opts.lang}: ASR is not configured or failed (force_asr — sidecar/embedded skipped; set DRAMA_ASR_API_KEY or DRAMA_WHISPER_BIN)`
+        : `No subtitles for ${opts.lang}: no sidecar/embedded stream, and ASR is not configured (set DRAMA_ASR_API_KEY or DRAMA_WHISPER_BIN)`,
   );
 }

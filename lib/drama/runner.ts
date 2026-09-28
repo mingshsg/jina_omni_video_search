@@ -256,6 +256,9 @@ export async function runDramaEnrichment(job: IngestJob): Promise<void> {
             lang,
             subtitlesDir: ws.subtitlesDir,
             audioDir: ws.audioDir,
+            // P4: per-run subtitle policy — old jobs without the field
+            // fall back to the default `auto` inside the resolver.
+            subtitleSource: job.drama?.subtitleSource,
           });
           subtitlePaths.push(resolved.srtPath);
           const subResult = await indexDramaSubtitles({

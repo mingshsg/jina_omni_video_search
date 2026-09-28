@@ -12,8 +12,10 @@ import type { UrlProvenance } from './url-sanitize';
 import type { ChunkPreset, ChunkingConfig } from './variant';
 import {
   type DramaJobState,
+  isDramaDirectorCoverage,
   isDramaLanguage,
   isDramaModule,
+  isDramaSubtitleSource,
 } from './drama-options';
 
 /** Terminal + active statuses from docs/api-contract.md. */
@@ -297,6 +299,10 @@ function jobToAssetDoc(job: IngestJob): VideoAssetDocument {
             languages: [...job.drama.languages],
             modules: [...job.drama.modules],
             modules_done: [...job.drama.modules_done],
+            // P4: persist per-run policy so a retry keeps the same
+            // subtitle source / director coverage.
+            subtitle_source: job.drama.subtitleSource,
+            director_coverage: job.drama.directorCoverage,
             ...(job.drama.run_id ? { run_id: job.drama.run_id } : {}),
             ...(job.drama.error
               ? {
@@ -444,6 +450,30 @@ interface AssetWithDramaMeta extends VideoAssetDocument {
  * A `running` record means the process died mid-handoff/run — surface it
  * as retryable `pending`.
  */
+/**
+ * P4 per-run policy recovery: `job.drama.subtitle_source` /
+ * `director_coverage` ride the durable record; pre-P4 records (or
+ * `meta.drama`-first precedence) fall back to the defaults.
+ */
+function hydrateDramaPolicy(raw: unknown): {
+  subtitleSource: DramaJobState['subtitleSource'];
+  directorCoverage: DramaJobState['directorCoverage'];
+} {
+  const d = (raw ?? {}) as Record<string, unknown>;
+  return {
+    subtitleSource:
+      typeof d.subtitle_source === 'string' &&
+      isDramaSubtitleSource(d.subtitle_source)
+        ? d.subtitle_source
+        : 'auto',
+    directorCoverage:
+      typeof d.director_coverage === 'string' &&
+      isDramaDirectorCoverage(d.director_coverage)
+        ? d.director_coverage
+        : 'sampled',
+  };
+}
+
 function hydrateDramaRequest(
   asset: VideoAssetDocument,
 ): DramaJobState | undefined {
@@ -476,12 +506,15 @@ function hydrateDramaRequest(
         typeof m === 'string' && isDramaModule(m),
       )
     : [];
+  const policy = hydrateDramaPolicy(raw);
   return {
     status: status === 'running' ? 'pending' : status,
     languages,
     modules,
     modules_done: modulesDone,
     run_id: typeof raw.run_id === 'string' ? raw.run_id : undefined,
+    subtitleSource: policy.subtitleSource,
+    directorCoverage: policy.directorCoverage,
     error:
       typeof raw.error_message === 'string'
         ? {
@@ -526,12 +559,15 @@ function hydrateDramaState(asset: VideoAssetDocument): DramaJobState | undefined
       )
     : [];
   const err = d.error as { message?: unknown } | undefined;
+  const policy = hydrateDramaPolicy(d);
   return {
     status: status === 'running' ? 'pending' : status,
     languages,
     modules,
     modules_done: modulesDone,
     run_id: typeof d.run_id === 'string' ? d.run_id : undefined,
+    subtitleSource: policy.subtitleSource,
+    directorCoverage: policy.directorCoverage,
     error:
       err && typeof err.message === 'string'
         ? { code: 'DRAMA_ENRICHMENT_ERROR', message: err.message.slice(0, 800) }
