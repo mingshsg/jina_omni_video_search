@@ -36,6 +36,13 @@ loses an action item.
 
 ## Current — hybrid metadata search
 
+- [`group-search-followup-code-review-2026-09-30.md`](./group-search-followup-code-review-2026-09-30.md)
+  — **Five local Group commits are not push-ready.** The older-asset Variant
+  path, unresolved availability, draft-query request gate, and shared actor
+  catalog error behavior need repair. Node 22 tests (653) and build pass;
+  live/browser gates remain open.
+  → [`todo/40`](../todo/40-group-search-followup-2026-09-30.md)
+
 - [`group-search-and-backfill-code-review-2026-09-29.md`](./group-search-and-backfill-code-review-2026-09-29.md)
   — **Group search is wired but not acceptance-ready.** Variant/Group mismatch
   can silently exclude results; selection bounds and catalog failures need
