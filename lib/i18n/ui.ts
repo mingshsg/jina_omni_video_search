@@ -32,6 +32,22 @@ export type UiMessages = {
   videoFilterAll: string;
   groupFilterLabel: string;
   groupFilterAll: string;
+  /** G2 — selection bound copy; `{count}` is the cap. */
+  groupFilterLimitHint: string;
+  /** G3 — catalog load states. */
+  groupFilterLoading: string;
+  groupFilterPartial: string;
+  groupFilterUnavailable: string;
+  groupFilterRetry: string;
+  groupFilterStaleOption: string;
+  /** G1 — variant/group compatibility. `{variants}` is a comma-joined list. */
+  groupFilterVariantNone: string;
+  groupFilterVariantSuggest: string;
+  groupFilterVariantSwitch: string;
+  groupFilterVariantUnknown: string;
+  /** G5 — searchable catalog lookup. `{name}` is the typed group name. */
+  groupFilterSearchPlaceholder: string;
+  groupFilterSearchNoMatch: string;
   resultsTitle: string;
   playerTitle: string;
   timelineTitle: string;
@@ -436,6 +452,24 @@ export const uiEn: UiMessages = {
   videoFilterAll: 'All videos',
   groupFilterLabel: 'Group',
   groupFilterAll: 'All groups',
+  groupFilterLimitHint: 'Up to {count} groups — clear one to choose another.',
+  groupFilterLoading: 'Loading groups…',
+  groupFilterPartial:
+    'Showing the top groups only — type an exact group name to find an older one.',
+  groupFilterUnavailable:
+    'Could not load groups — All groups still works. Retry to see the stored group list.',
+  groupFilterRetry: 'Retry',
+  groupFilterStaleOption:
+    'This group was not found in the current catalog; the value is preserved so the search filter still applies.',
+  groupFilterVariantNone:
+    'No ready video in the selected group(s) for this variant.',
+  groupFilterVariantSuggest:
+    'No ready video in this variant for the selected group(s). They are indexed under: {variants}',
+  groupFilterVariantSwitch: 'Switch to',
+  groupFilterVariantUnknown:
+    'The group catalog was incomplete, so this empty result may be a catalog gap rather than a true mismatch.',
+  groupFilterSearchPlaceholder: 'Type an exact group name to look it up',
+  groupFilterSearchNoMatch: 'No stored group matches “{name}”.',
   resultsTitle: 'Results',
   playerTitle: 'Player',
   timelineTitle: 'Matches on this video',
@@ -881,6 +915,23 @@ export const uiZh: UiMessages = {
   videoFilterAll: '全部视频',
   groupFilterLabel: '分组',
   groupFilterAll: '全部分组',
+  groupFilterLimitHint: '最多选择 {count} 个分组——请先清除一个再选择其他。',
+  groupFilterLoading: '正在加载分组…',
+  groupFilterPartial:
+    '仅显示最常用的分组——可输入完整分组名以查找较早的分组。',
+  groupFilterUnavailable:
+    '无法加载分组——「全部分组」仍可使用。可重试以查看已存分组列表。',
+  groupFilterRetry: '重试',
+  groupFilterStaleOption:
+    '当前目录中未找到该分组；已保留所选值，筛选条件依然生效。',
+  groupFilterVariantNone: '所选分组在当前变体下没有就绪视频。',
+  groupFilterVariantSuggest:
+    '所选分组在当前变体下没有就绪视频。它们已索引于：{variants}',
+  groupFilterVariantSwitch: '切换至',
+  groupFilterVariantUnknown:
+    '分组目录不完整，因此这次空结果可能是目录缺口，而非真正的变体不匹配。',
+  groupFilterSearchPlaceholder: '输入完整分组名进行查找',
+  groupFilterSearchNoMatch: '没有匹配“{name}”的已存分组。',
   resultsTitle: '结果',
   playerTitle: '播放器',
   timelineTitle: '当前视频匹配片段',

@@ -77,6 +77,23 @@ describe('parseSearchFilters', () => {
       parseSearchFilters({ group_id: ['x'.repeat(65)] }),
     ).toThrow(/group_id|at most 64/i);
   });
+
+  // G2 (todo/39): the control caps at 20 selected groups to match this bound.
+  // The 21st selection must be blocked client-side; if it ever reaches the
+  // server it is a 400, which this test pins as the contract the UI mirrors.
+  it('accepts 20 group ids and rejects 21 at the schema bound', () => {
+    const twenty = Array.from({ length: 20 }, (_, i) => `group-${i}`);
+    expect(searchFiltersSchema.safeParse({ group_id: twenty }).success).toBe(true);
+    expect(parseSearchFilters({ group_id: twenty })?.group_id).toHaveLength(20);
+
+    const twentyOne = [...twenty, 'group-20'];
+    expect(searchFiltersSchema.safeParse({ group_id: twentyOne }).success).toBe(
+      false,
+    );
+    expect(() => parseSearchFilters({ group_id: twentyOne })).toThrow(
+      SearchFilterError,
+    );
+  });
 });
 
 describe('interpretEligibleTotal', () => {

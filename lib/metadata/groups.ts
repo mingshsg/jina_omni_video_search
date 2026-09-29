@@ -12,6 +12,27 @@ import {
 
 export type GroupCatalogEntry = { id: string; label: string };
 
+/**
+ * `ok` — every distinct stored group is in `entries`.
+ * `partial` — the terms aggregation truncated (more than
+ *   {@link GROUP_CATALOG_TERMS_SIZE} distinct groups).
+ * `unavailable` — the Elasticsearch query failed; only starter suggestions.
+ */
+export type GroupCatalogStatus = 'ok' | 'partial' | 'unavailable';
+
+export interface GroupCatalogResult {
+  entries: GroupCatalogEntry[];
+  status: GroupCatalogStatus;
+  /** Distinct stored groups retrieved (suggestions excluded). */
+  total_groups: number;
+  truncated: boolean;
+  /** Sanitized failure detail, present only when `status === 'unavailable'`. */
+  error?: string;
+}
+
+/** Top-N distinct stored groups enumerated in one request. */
+export const GROUP_CATALOG_TERMS_SIZE = 200;
+
 /** Validate / normalize a free-form group name; throws on over-length. */
 export function parseFreeformGroupId(raw: string): string {
   const id = normalizeGroupId(raw);
@@ -27,16 +48,19 @@ export function parseFreeformGroupId(raw: string): string {
 }
 
 /**
- * Suggested starters + distinct `meta.group_id` values already in the index.
- * Fail soft on aggregation errors (return suggestions only).
+ * Suggested starters + distinct `meta.group_id` values already in the index,
+ * with an explicit completeness status. Never throws: an Elasticsearch
+ * failure returns `status: 'unavailable'` with the starter suggestions so a
+ * caller can still render All and offer a retry (todo/39 G3).
  */
-export async function listGroupCatalogEntries(
+export async function listGroupCatalogResult(
   locale: 'en' | 'zh' = 'en',
-): Promise<GroupCatalogEntry[]> {
+): Promise<GroupCatalogResult> {
   const byId = new Map<string, string>();
   for (const g of SUGGESTED_ASSET_GROUPS) {
     byId.set(g.id, groupLabel(g.id, locale));
   }
+  const suggestions = [...byId.entries()].map(([id, label]) => ({ id, label }));
 
   try {
     const client = getEsClient();
@@ -44,28 +68,68 @@ export async function listGroupCatalogEntries(
     const res = await client.search({
       index: cfg.ES_INDEX_ASSETS,
       size: 0,
+      track_total_hits: false,
       query: { exists: { field: 'meta.group_id' } },
       aggs: {
         groups: {
-          terms: { field: 'meta.group_id', size: 200 },
+          terms: { field: 'meta.group_id', size: GROUP_CATALOG_TERMS_SIZE },
         },
+        distinct_groups: { cardinality: { field: 'meta.group_id' } },
       },
     });
-    const buckets = (
-      res.aggregations as
-        | { groups?: { buckets?: Array<{ key: string | number }> } }
-        | undefined
-    )?.groups?.buckets;
-    for (const b of buckets ?? []) {
+    const aggregations = res.aggregations as
+      | {
+          groups?: {
+            buckets?: Array<{ key: string | number }>;
+            sum_other_doc_count?: number;
+          };
+          distinct_groups?: { value?: number };
+        }
+      | undefined;
+    const buckets = aggregations?.groups?.buckets ?? [];
+    for (const b of buckets) {
       const id = String(b.key);
       if (!id || byId.has(id)) continue;
       byId.set(id, id);
     }
-  } catch {
-    /* suggestions only */
-  }
 
-  return [...byId.entries()].map(([id, label]) => ({ id, label }));
+    const returned = buckets.length;
+    const other = aggregations?.groups?.sum_other_doc_count ?? 0;
+    const distinct = Math.max(
+      typeof aggregations?.distinct_groups?.value === 'number'
+        ? aggregations.distinct_groups.value
+        : returned,
+      returned,
+    );
+    const truncated = other > 0 || distinct > returned;
+
+    return {
+      entries: [...byId.entries()].map(([id, label]) => ({ id, label })),
+      status: truncated ? 'partial' : 'ok',
+      total_groups: distinct,
+      truncated,
+    };
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : 'Group enumeration failed';
+    return {
+      entries: suggestions,
+      status: 'unavailable',
+      total_groups: 0,
+      truncated: false,
+      error: message.replace(/ApiKey\s+\S+/gi, 'ApiKey [redacted]'),
+    };
+  }
+}
+
+/**
+ * Back-compat wrapper returning only the entries. Prefer
+ * {@link listGroupCatalogResult} when the caller can surface completeness.
+ */
+export async function listGroupCatalogEntries(
+  locale: 'en' | 'zh' = 'en',
+): Promise<GroupCatalogEntry[]> {
+  return (await listGroupCatalogResult(locale)).entries;
 }
 
 /**

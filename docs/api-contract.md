@@ -940,11 +940,40 @@ an explicit `media_language` maps onto the pinned catalog.
 
 ### `GET /api/metadata/catalogs`
 
-Pinned catalogs for the Library editor (and later search facets).
+Pinned catalogs for the Library editor and search facets.
 
 Query: `?locale=en|zh&q=` (optional people autocomplete).
 
-**200:** `{ "video_types", "primary_languages", "countries":[{code,label}], "groups":[{id,label}], "people":[{id,display,aliases}] }`.
+**200:** `{ "video_types", "primary_languages", "countries":[{code,label}], "groups":[{id,label}], "groups_status": "ok"|"partial"|"unavailable", "groups_total": number, "groups_truncated": boolean, "groups_error"?: string, "people":[{id,display,aliases}], "people_status": "ok"|"unavailable", "people_error"?: string }`.
+
+`groups_status: "partial"` means the group terms aggregation truncated (more
+than 200 distinct stored groups); `groups_status: "unavailable"` means ES
+enumeration failed and `groups` holds only starter suggestions. A
+person-catalog failure degrades only `people` (→ `[]`, `people_status:
+"unavailable"`) and never fails the response — `groups` and the pinned
+catalogs are unaffected (todo/39 G3). The route never returns 500 for a
+group or people catalog failure.
+
+### `GET /api/metadata/group-availability`
+
+Group → ready-variant availability for the search Group control, backed by a
+`video-assets` terms aggregation rather than `/api/library`'s newest 200
+assets (todo/39 G1/G5).
+
+Query:
+- `locale=en|zh`
+- `include=<groupId>` (repeatable) — ids that must stay in the response even
+  when the terms aggregation truncated (the user's current selection).
+- `q=<exact group name>` — exact lookup so a group outside the top-N stays
+  selectable.
+
+**200:** `{ "status": "ok"|"partial"|"unavailable", "groups": [{ id, label, suggested, indexed_assets, ready_variant_ids: string[] }], "total_groups": number, "truncated": boolean, "error"?: string }`.
+
+`ready_variant_ids` are the variants with at least one `ready` asset in that
+group and are what the control offers as an explicit switch when the current
+variant has none. Always 200: `unavailable` (ES failure; only starter
+suggestions, `error` redacted) is a client-visible state with a retry, never a
+silent empty list.
 
 ### `POST /api/metadata/catalogs/people`
 

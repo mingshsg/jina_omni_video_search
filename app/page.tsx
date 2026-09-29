@@ -844,6 +844,9 @@ export default function SearchPage() {
         <EuiFlexItem grow={2} style={{ minWidth: 200 }}>
           <SearchGroupFilter
             selectedIds={facets.group_id}
+            variantId={variantId}
+            knownVariantIds={variantIds}
+            onSelectVariant={(id) => setVariantId(id)}
             onChange={(ids) => {
               const next = { ...facets, group_id: ids };
               setFacets(next);
