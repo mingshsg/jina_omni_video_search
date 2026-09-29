@@ -12,7 +12,7 @@ describe('facetsToApiFilters', () => {
       year_from: '1960',
       year_to: '1965',
       country: 'US',
-      group_id: 'demo',
+      group_id: ['demo', 'trailer'],
     };
     const result = facetsToApiFilters(facets);
     expect(result).toEqual({
@@ -21,9 +21,13 @@ describe('facetsToApiFilters', () => {
         year_from: 1960,
         year_to: 1965,
         country: ['US'],
-        group_id: ['demo'],
+        group_id: ['demo', 'trailer'],
       },
     });
+  });
+
+  it('sends no group filter for the default All selection', () => {
+    expect(facetsToApiFilters(EMPTY_FACETS)).toEqual({ ok: true });
   });
 
   it('does not silently drop a non-integer year', () => {

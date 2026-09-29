@@ -10,7 +10,6 @@ import {
   EuiFormRow,
   EuiSelect,
 } from '@elastic/eui';
-import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocale } from '@/lib/i18n/locale-context';
 import {
@@ -18,14 +17,6 @@ import {
   facetsToApiFilters,
   type SearchFacetState,
 } from '@/lib/metadata/facets-ui';
-
-const CreatableGroupCombo = dynamic(
-  () =>
-    import('@/components/CreatableGroupCombo').then(
-      (m) => m.CreatableGroupCombo,
-    ),
-  { ssr: false },
-);
 
 export {
   EMPTY_FACETS,
@@ -38,7 +29,6 @@ type Catalogs = {
   video_types: string[];
   primary_languages: string[];
   countries: Array<{ code: string; label: string }>;
-  groups: Array<{ id: string; label: string }>;
   people: Array<{ id: string; display: string }>;
 };
 
@@ -53,9 +43,6 @@ export function SearchFacets({ value, onChange }: Props) {
   const [actorOptions, setActorOptions] = useState<EuiComboBoxOptionOption[]>(
     [],
   );
-  const [groupOptions, setGroupOptions] = useState<EuiComboBoxOptionOption[]>(
-    [],
-  );
 
   useEffect(() => {
     void (async () => {
@@ -66,12 +53,6 @@ export function SearchFacets({ value, onChange }: Props) {
           setCatalogs(data);
           setActorOptions(
             data.people.map((p) => ({ label: p.display, value: p.id })),
-          );
-          setGroupOptions(
-            (data.groups ?? []).map((g) => ({
-              label: g.label,
-              value: g.id,
-            })),
           );
         }
       } catch {
@@ -143,48 +124,6 @@ export function SearchFacets({ value, onChange }: Props) {
             ]}
             value={value.country}
             onChange={(e) => onChange({ ...value, country: e.target.value })}
-          />
-        </EuiFormRow>
-      </EuiFlexItem>
-      <EuiFlexItem grow={false} style={{ minWidth: 160 }}>
-        <EuiFormRow label={t.metaGroup} helpText={t.metaGroupHelp}>
-          <CreatableGroupCombo
-            compressed
-            placeholder={t.metaGroup}
-            options={groupOptions}
-            selectedOptions={
-              value.group_id
-                ? [
-                    {
-                      label:
-                        groupOptions.find(
-                          (o) => String(o.value) === value.group_id,
-                        )?.label ?? value.group_id,
-                      value: value.group_id,
-                    },
-                  ]
-                : []
-            }
-            onChange={(opts) => {
-              const next = opts[0];
-              onChange({
-                ...value,
-                group_id: next ? String(next.value ?? next.label) : '',
-              });
-            }}
-            onCreateOption={(searchValue) => {
-              const normalized = searchValue.trim().replace(/\s+/g, ' ');
-              if (!normalized || normalized.length > 64) return false;
-              const opt = { label: normalized, value: normalized };
-              setGroupOptions((prev) =>
-                prev.some((o) => String(o.value) === normalized)
-                  ? prev
-                  : [...prev, opt],
-              );
-              onChange({ ...value, group_id: normalized });
-              return true;
-            }}
-            aria-label={t.metaGroup}
           />
         </EuiFormRow>
       </EuiFlexItem>

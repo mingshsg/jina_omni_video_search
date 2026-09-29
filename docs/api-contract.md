@@ -373,6 +373,11 @@ AND across fields; **ANY** within each array. Cap 20 values per array. Missing m
 | `tags` | Normalized to `meta.tags_key` |
 | `group_id` | Organizational index group (`meta.group_id`; free-form ≤ 64 chars; suggested: `trailer` / `demo`) |
 
+The main Search form shows Group beside Variant and Video. Its default **All
+groups** selection omits `filters.group_id` and includes ungrouped assets.
+Selecting one or more groups sends their IDs in `filters.group_id`; matches
+from any selected group are eligible.
+
 Overflow (>10,000 matching assets): **422** `FILTER_SCOPE_TOO_LARGE`. Empty eligibility returns zero hits before embedding.
 
 Response `meta.filters` echoes the normalized filters; `meta.filter` reports `{ eligible_assets, enumeration_ms, filters_applied }` when facets ran.

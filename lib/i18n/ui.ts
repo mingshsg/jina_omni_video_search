@@ -30,6 +30,8 @@ export type UiMessages = {
   topKHelp: string;
   videoFilterLabel: string;
   videoFilterAll: string;
+  groupFilterLabel: string;
+  groupFilterAll: string;
   resultsTitle: string;
   playerTitle: string;
   timelineTitle: string;
@@ -432,6 +434,8 @@ export const uiEn: UiMessages = {
   topKHelp: 'Result groups',
   videoFilterLabel: 'Video',
   videoFilterAll: 'All videos',
+  groupFilterLabel: 'Group',
+  groupFilterAll: 'All groups',
   resultsTitle: 'Results',
   playerTitle: 'Player',
   timelineTitle: 'Matches on this video',
@@ -875,6 +879,8 @@ export const uiZh: UiMessages = {
   topKHelp: '结果组数',
   videoFilterLabel: '视频',
   videoFilterAll: '全部视频',
+  groupFilterLabel: '分组',
+  groupFilterAll: '全部分组',
   resultsTitle: '结果',
   playerTitle: '播放器',
   timelineTitle: '当前视频匹配片段',

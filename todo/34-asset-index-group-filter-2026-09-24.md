@@ -59,6 +59,14 @@ Code committed **b6388f6** (ingest side, 2026-09-29) and **8d291c2**
 
 ## Checklist
 
+- [x] User request 2026-09-29: put Group beside Variant and Video as an
+      always-visible search control. Empty selection means **All groups** by
+      default, including ungrouped videos; selected groups are sent as the
+      existing `filters.group_id` array. Multiple groups may be selected.
+      Remove the duplicate control from advanced facets and include Group in
+      Reset filters. `yarn test --maxWorkers=4` passed 88 files / 616 tests
+      on `codex/search-group-primary`; `yarn build` also passed. Rebuilt-browser
+      acceptance is pending at this entry.
 - [x] Free-form validation + search filter
 - [x] Ingest creatable UI (committed `b6388f6`)
 - [x] SearchFacets / EditMetadataFlyout creatable UI + `group_id` filter wiring

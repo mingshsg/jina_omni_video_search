@@ -1,5 +1,6 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import {
   EuiAccordion,
   EuiBadge,
@@ -57,6 +58,11 @@ import {
   type ParseChip,
   type RejectedEntry,
 } from '@/lib/metadata/parse-chips';
+
+const SearchGroupFilter = dynamic(
+  () => import('@/components/SearchGroupFilter').then((m) => m.SearchGroupFilter),
+  { ssr: false },
+);
 
 type Modality = 'visual' | 'audio' | 'all' | 'description';
 // Per-hit provenance badge — distinct from the top-level Modality selector.
@@ -698,7 +704,7 @@ export default function SearchPage() {
   };
 
   const filtersDirty =
-    facetsActiveCount > 0 || suppressExtracted.length > 0;
+    facetsActiveCount > 0 || facets.group_id.length > 0 || suppressExtracted.length > 0;
 
   return (
     <AppShell pageTitle={t.appTitle} pageDescription={t.appSubtitle}>
@@ -834,6 +840,18 @@ export default function SearchPage() {
               aria-label={t.videoFilterLabel}
             />
           </EuiFormRow>
+        </EuiFlexItem>
+        <EuiFlexItem grow={2} style={{ minWidth: 200 }}>
+          <SearchGroupFilter
+            selectedIds={facets.group_id}
+            onChange={(ids) => {
+              const next = { ...facets, group_id: ids };
+              setFacets(next);
+              if (query.trim() && variantId) {
+                void runSearch({ facetsOverride: next });
+              }
+            }}
+          />
         </EuiFlexItem>
         <EuiFlexItem grow={false} style={{ width: 120 }}>
           <EuiFormRow label={t.topKLabel} helpText={t.topKHelp}>
