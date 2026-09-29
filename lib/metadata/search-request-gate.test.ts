@@ -1,48 +1,126 @@
 import { describe, expect, it } from 'vitest';
 import {
+  createFilterRerunScheduler,
+  FILTER_RERUN_DEBOUNCE_MS,
   SearchRequestGate,
   shouldRerunOnFilterChange,
+  type FilterChangeTrigger,
 } from './search-request-gate';
 
-describe('shouldRerunOnFilterChange (G4)', () => {
+const submittedCat: FilterChangeTrigger = {
+  submittedQuery: 'cat',
+  query: 'cat',
+  variantId: 'v',
+};
+
+describe('shouldRerunOnFilterChange (R3)', () => {
   it('does not run before the first explicit Search', () => {
     expect(
-      shouldRerunOnFilterChange({ submitted: false, query: 'cat', variantId: 'v' }),
+      shouldRerunOnFilterChange({ submittedQuery: null, query: 'cat', variantId: 'v' }),
     ).toBe(false);
   });
 
-  it('re-runs a previously submitted query on a filter change', () => {
+  it('re-runs the last submitted query when the draft still matches it', () => {
+    expect(shouldRerunOnFilterChange(submittedCat)).toBe(true);
+  });
+
+  it('does not submit a changed draft (the R3 defect)', () => {
+    // Searched "cat", typed "dog" but did not submit, then changed a filter.
     expect(
-      shouldRerunOnFilterChange({ submitted: true, query: 'cat', variantId: 'v' }),
+      shouldRerunOnFilterChange({
+        submittedQuery: 'cat',
+        query: 'dog',
+        variantId: 'v',
+      }),
+    ).toBe(false);
+  });
+
+  it('requires a submitted query and a variant', () => {
+    expect(
+      shouldRerunOnFilterChange({ submittedQuery: '   ', query: '   ', variantId: 'v' }),
+    ).toBe(false);
+    expect(
+      shouldRerunOnFilterChange({ submittedQuery: 'cat', query: 'cat', variantId: '' }),
+    ).toBe(false);
+  });
+
+  it('ignores surrounding whitespace when comparing the draft', () => {
+    expect(
+      shouldRerunOnFilterChange({
+        submittedQuery: 'cat',
+        query: '  cat  ',
+        variantId: 'v',
+      }),
     ).toBe(true);
   });
+});
 
-  it('requires text and a variant after submission', () => {
-    expect(
-      shouldRerunOnFilterChange({ submitted: true, query: '   ', variantId: 'v' }),
-    ).toBe(false);
-    expect(
-      shouldRerunOnFilterChange({ submitted: true, query: 'cat', variantId: '' }),
-    ).toBe(false);
+describe('createFilterRerunScheduler (R3 request count)', () => {
+  it('spends zero requests before the first Search', () => {
+    const scheduler = createFilterRerunScheduler();
+    for (const _ of ['demo', 'trailer', 'demo,trailer']) {
+      expect(
+        scheduler.onFilterChange({ submittedQuery: null, query: 'cat', variantId: 'v' }),
+      ).toEqual({ action: 'none' });
+    }
+    // No timer was ever armed, so firing is a no-op.
+    expect(scheduler.onTimerFired()).toEqual({ action: 'none' });
   });
 
-  it('models rapid selections as one request per control change, none before submit', () => {
-    let requests = 0;
+  it('coalesces three rapid selections into one request', () => {
+    const scheduler = createFilterRerunScheduler();
     const selections = ['demo', 'trailer', 'demo,trailer'];
-
+    let timers = 0;
     for (const _ of selections) {
-      if (shouldRerunOnFilterChange({ submitted: false, query: 'cat', variantId: 'v' })) {
-        requests += 1;
+      const decision = scheduler.onFilterChange(submittedCat);
+      if (decision.action === 'schedule') {
+        timers += 1;
+        expect(decision.delayMs).toBe(FILTER_RERUN_DEBOUNCE_MS);
       }
     }
-    expect(requests).toBe(0);
+    // Only the first click in the burst arms a timer; the other two coalesce.
+    expect(timers).toBe(1);
+    expect(scheduler.onTimerFired()).toEqual({ action: 'rerun', query: 'cat' });
+  });
 
-    for (const _ of selections) {
-      if (shouldRerunOnFilterChange({ submitted: true, query: 'cat', variantId: 'v' })) {
-        requests += 1;
-      }
-    }
-    expect(requests).toBe(selections.length);
+  it('starts a fresh burst for the same query after a deliberate later change', () => {
+    const scheduler = createFilterRerunScheduler();
+    scheduler.onFilterChange(submittedCat);
+    expect(scheduler.onTimerFired()).toEqual({ action: 'rerun', query: 'cat' });
+    // A later change is a new burst and refreshes the results again.
+    expect(scheduler.onFilterChange(submittedCat)).toEqual({
+      action: 'schedule',
+      query: 'cat',
+      delayMs: FILTER_RERUN_DEBOUNCE_MS,
+    });
+    expect(scheduler.onTimerFired()).toEqual({ action: 'rerun', query: 'cat' });
+  });
+
+  it('does not schedule for a changed draft and re-runs once the draft is submitted', () => {
+    const scheduler = createFilterRerunScheduler();
+    expect(
+      scheduler.onFilterChange({ submittedQuery: 'cat', query: 'dog', variantId: 'v' }),
+    ).toEqual({ action: 'none' });
+    expect(scheduler.onTimerFired()).toEqual({ action: 'none' });
+    // The caller submits "dog"; a click now schedules that submitted query.
+    expect(
+      scheduler.onFilterChange({ submittedQuery: 'dog', query: 'dog', variantId: 'v' }),
+    ).toMatchObject({ action: 'schedule', query: 'dog' });
+    expect(scheduler.onTimerFired()).toEqual({ action: 'rerun', query: 'dog' });
+  });
+
+  it('a timer fire without a pending schedule is a no-op', () => {
+    const scheduler = createFilterRerunScheduler();
+    expect(scheduler.onTimerFired()).toEqual({ action: 'none' });
+  });
+
+  it('a re-schedule replaces the pending query rather than queueing two runs', () => {
+    const scheduler = createFilterRerunScheduler();
+    scheduler.onFilterChange(submittedCat);
+    scheduler.onFilterChange({ submittedQuery: 'dog', query: 'dog', variantId: 'v' });
+    // Firing once yields the latest scheduled query; a second fire is empty.
+    expect(scheduler.onTimerFired()).toEqual({ action: 'rerun', query: 'dog' });
+    expect(scheduler.onTimerFired()).toEqual({ action: 'none' });
   });
 });
 

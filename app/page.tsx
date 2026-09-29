@@ -58,7 +58,10 @@ import {
   type ParseChip,
   type RejectedEntry,
 } from '@/lib/metadata/parse-chips';
-import { shouldRerunOnFilterChange } from '@/lib/metadata/search-request-gate';
+import {
+  createFilterRerunScheduler,
+  shouldRerunOnFilterChange,
+} from '@/lib/metadata/search-request-gate';
 
 const SearchGroupFilter = dynamic(
   () => import('@/components/SearchGroupFilter').then((m) => m.SearchGroupFilter),
@@ -240,10 +243,24 @@ export default function SearchPage() {
   // (plan/05-parse-chip-state-model.md decision 3). `null` means "no search
   // submitted yet" and must not itself count as a change.
   const lastSubmittedQueryRef = useRef<string | null>(null);
-  // G4 (todo/39): whether the user has explicitly run a search at least once.
-  // Filter changes before that only update UI state — a control click must not
-  // spend a query embedding or a search request on an unsubmitted draft.
-  const searchSubmittedRef = useRef(false);
+  // G4 (todo/39, corrected by todo/40 R3): filter changes re-run only the last
+  // *submitted query text* — never the current draft — through a bounded
+  // debounce so rapid selections coalesce into one request. The scheduler is
+  // pure (lib/metadata/search-request-gate.ts); this ref holds the component's
+  // timer handle.
+  const filterRerunRef = useRef(createFilterRerunScheduler());
+  const filterRerunTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Fire-time snapshots so the debounced rerun re-checks what is actually
+  // current, not the stale closure the click captured.
+  const queryRef = useRef('');
+  const variantRef = useRef('');
+  const pendingFacetsRef = useRef<SearchFacetState | null>(null);
+  useEffect(() => {
+    queryRef.current = query;
+  }, [query]);
+  useEffect(() => {
+    variantRef.current = variantId;
+  }, [variantId]);
   // Monotonic request sequence so an out-of-order response from an older
   // request (e.g. two quick chip clicks) never overwrites a newer one.
   const requestSeqRef = useRef(0);
@@ -377,9 +394,6 @@ export default function SearchPage() {
     }
     const q = query.trim();
     if (!q) return;
-    // An explicit Search (button, Enter, or a chip/filter action after one)
-    // marks the draft as submitted for G4's rerun gate.
-    searchSubmittedRef.current = true;
     const queryChanged =
       lastSubmittedQueryRef.current !== null &&
       lastSubmittedQueryRef.current !== q;
@@ -855,18 +869,53 @@ export default function SearchPage() {
             variantId={variantId}
             knownVariantIds={variantIds}
             onSelectVariant={(id) => setVariantId(id)}
+            // R1: fold server-confirmed ready variants into the selector so an
+            // explicit switch targets an option this page can render.
+            onReadyVariantsChange={(ids) =>
+              setVariantIds((prev) => {
+                const next = [...prev];
+                for (const id of ids) {
+                  if (!next.includes(id)) next.push(id);
+                }
+                return next.length === prev.length ? prev : next;
+              })
+            }
             onChange={(ids) => {
               const next = { ...facets, group_id: ids };
               setFacets(next);
-              if (
-                shouldRerunOnFilterChange({
-                  submitted: searchSubmittedRef.current,
-                  query,
-                  variantId,
-                })
-              ) {
-                void runSearch({ facetsOverride: next });
+              // Remember the burst's latest selection so the single rerun uses
+              // the final state, not the first click's closure.
+              pendingFacetsRef.current = next;
+              // R3: re-run only the last submitted query, never the draft. The
+              // scheduler coalesces the burst into one scheduled rerun.
+              const decision = filterRerunRef.current.onFilterChange({
+                submittedQuery: lastSubmittedQueryRef.current,
+                query,
+                variantId,
+              });
+              if (decision.action !== 'schedule') return;
+              if (filterRerunTimerRef.current !== null) {
+                clearTimeout(filterRerunTimerRef.current);
               }
+              filterRerunTimerRef.current = setTimeout(() => {
+                filterRerunTimerRef.current = null;
+                const fired = filterRerunRef.current.onTimerFired();
+                if (fired.action !== 'rerun') return;
+                const override = pendingFacetsRef.current;
+                if (!override) return;
+                pendingFacetsRef.current = null;
+                // Re-check at fire time: a new unsubmitted draft must not run.
+                if (
+                  !shouldRerunOnFilterChange({
+                    submittedQuery: lastSubmittedQueryRef.current,
+                    query: queryRef.current,
+                    variantId: variantRef.current,
+                  })
+                ) {
+                  return;
+                }
+                void runSearch({ facetsOverride: override });
+              }, decision.delayMs);
             }}
           />
         </EuiFlexItem>
