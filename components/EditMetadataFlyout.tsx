@@ -27,8 +27,17 @@ import {
   EuiTitle,
   EuiCallOut,
 } from '@elastic/eui';
+import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocale } from '@/lib/i18n/locale-context';
+
+const CreatableGroupCombo = dynamic(
+  () =>
+    import('@/components/CreatableGroupCombo').then(
+      (m) => m.CreatableGroupCombo,
+    ),
+  { ssr: false },
+);
 
 type MetaReviewEntry = {
   source?: 'manual' | 'suggestion';
@@ -61,6 +70,7 @@ type MetaDto = {
       native?: { lang: string; name: string };
     };
     reference_urls?: string[];
+    group_id?: string;
     review?: {
       description?: MetaReviewEntry;
       abstract?: MetaReviewEntry;
@@ -72,6 +82,7 @@ type MetaDto = {
       tags?: MetaReviewEntry;
       work_title?: MetaReviewEntry;
       reference_urls?: MetaReviewEntry;
+      group_id?: MetaReviewEntry;
     };
   };
 };
@@ -80,6 +91,7 @@ type Catalogs = {
   video_types: string[];
   primary_languages: string[];
   countries: Array<{ code: string; label: string }>;
+  groups: Array<{ id: string; label: string }>;
   people: Array<{ id: string; display: string; aliases: string[] }>;
 };
 
@@ -260,6 +272,12 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
   const [abstract, setAbstract] = useState('');
   const [year, setYear] = useState<string>('');
   const [videoType, setVideoType] = useState('');
+  const [selectedGroup, setSelectedGroup] = useState<EuiComboBoxOptionOption[]>(
+    [],
+  );
+  const [groupOptions, setGroupOptions] = useState<EuiComboBoxOptionOption[]>(
+    [],
+  );
   const [language, setLanguage] = useState('');
   const [country, setCountry] = useState('');
   const [tagsText, setTagsText] = useState('');
@@ -373,6 +391,11 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
     setAbstract(data.meta.abstract ?? '');
     setYear(data.meta.year != null ? String(data.meta.year) : '');
     setVideoType(data.meta.video_type ?? '');
+    setSelectedGroup(
+      data.meta.group_id
+        ? [{ label: data.meta.group_id, value: data.meta.group_id }]
+        : [],
+    );
     setLanguage(data.meta.primary_language ?? '');
     setCountry(data.meta.country ?? '');
     setTagsText((data.meta.tags ?? []).join(', '));
@@ -466,6 +489,12 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
       setCatalogs(catData);
       setActorOptions(
         catData.people.map((p) => ({ label: p.display, value: p.id })),
+      );
+      setGroupOptions(
+        (catData.groups ?? []).map((g) => ({
+          label: g.label,
+          value: g.id,
+        })),
       );
       applyDto(metaData, catData.people);
     } catch (err) {
@@ -1300,6 +1329,16 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
       takeSource('video_type');
     }
 
+    const nextGroup =
+      selectedGroup[0] != null
+        ? String(selectedGroup[0].value ?? selectedGroup[0].label).trim() ||
+          null
+        : null;
+    const baseGroup = baseline.group_id ?? null;
+    if (nextGroup !== baseGroup) {
+      body.group_id = nextGroup;
+    }
+
     const nextLang = language === '' ? null : language;
     const baseLang = baseline.primary_language ?? null;
     if (nextLang !== baseLang) {
@@ -1359,6 +1398,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
       'tags',
       'work_title',
       'reference_urls',
+      'group_id',
     ] as const;
     if (!editableKeys.some((k) => body[k] !== undefined)) {
       setError(t.metaSaveError);
@@ -1960,6 +2000,33 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
                 <EuiSpacer size="m" />
               </>
             )}
+            <EuiFormRow
+              label={t.metaGroup}
+              helpText={t.metaGroupHelp}
+              fullWidth
+            >
+              <CreatableGroupCombo
+                placeholder={t.metaGroup}
+                options={groupOptions}
+                selectedOptions={selectedGroup}
+                onChange={setSelectedGroup}
+                onCreateOption={(searchValue) => {
+                  const normalized = searchValue.trim().replace(/\s+/g, ' ');
+                  if (!normalized || normalized.length > 64) return false;
+                  const opt = { label: normalized, value: normalized };
+                  setGroupOptions((prev) =>
+                    prev.some((o) => String(o.value ?? o.label) === normalized)
+                      ? prev
+                      : [...prev, opt],
+                  );
+                  setSelectedGroup([opt]);
+                  return true;
+                }}
+                compressed
+                fullWidth
+                aria-label={t.metaGroup}
+              />
+            </EuiFormRow>
             <EuiFormRow
               label={t.metaVideoType}
               helpText={evidenceHelp('video_type')}

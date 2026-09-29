@@ -10,6 +10,7 @@ import {
   PRIMARY_LANGUAGES,
   VIDEO_TYPE_SET,
   canonicalizePrimaryLanguage,
+  normalizeGroupId,
 } from './catalogs';
 import { getPerson } from './people';
 import { normalizeTagKey } from './validate';
@@ -53,6 +54,7 @@ export const searchFiltersSchema = z
     primary_language: stringArray(META_BOUNDS.facetArrayMax, 32),
     country: stringArray(META_BOUNDS.facetArrayMax, 8),
     tags: stringArray(META_BOUNDS.facetArrayMax, META_BOUNDS.tagMaxLen),
+    group_id: stringArray(META_BOUNDS.facetArrayMax, 64),
   })
   .strict()
   // Bug fix: image search (app/api/search/image/route.ts) embeds this same
@@ -76,6 +78,7 @@ export interface NormalizedSearchFilters {
   primary_language?: string[];
   country?: string[];
   tags_key?: string[];
+  group_id?: string[];
 }
 
 /** True when the request selected at least one facet. */
@@ -90,7 +93,8 @@ export function hasActiveFilters(
     (filters.video_type?.length ?? 0) > 0 ||
     (filters.primary_language?.length ?? 0) > 0 ||
     (filters.country?.length ?? 0) > 0 ||
-    (filters.tags_key?.length ?? 0) > 0
+    (filters.tags_key?.length ?? 0) > 0 ||
+    (filters.group_id?.length ?? 0) > 0
   );
 }
 
@@ -196,6 +200,31 @@ export function parseSearchFilters(raw: unknown): NormalizedSearchFilters | null
     out.tags_key = keys;
   }
 
+  if (f.group_id?.length) {
+    const ids = [
+      ...new Set(
+        f.group_id
+          .map((g) => normalizeGroupId(g))
+          .filter((g): g is string => Boolean(g)),
+      ),
+    ];
+    if (ids.length === 0) {
+      throw new SearchFilterError(
+        'SEARCH_INVALID_REQUEST',
+        'group_id must contain at least one non-empty value',
+      );
+    }
+    for (const id of ids) {
+      if (id.length > META_BOUNDS.groupIdMaxLen) {
+        throw new SearchFilterError(
+          'SEARCH_INVALID_REQUEST',
+          `group_id exceeds ${META_BOUNDS.groupIdMaxLen} characters`,
+        );
+      }
+    }
+    out.group_id = ids;
+  }
+
   return hasActiveFilters(out) ? out : null;
 }
 
@@ -249,6 +278,9 @@ export function buildAssetEligibilityFilters(
   }
   if (filters.tags_key?.length) {
     clauses.push({ terms: { 'meta.tags_key': filters.tags_key } });
+  }
+  if (filters.group_id?.length) {
+    clauses.push({ terms: { 'meta.group_id': filters.group_id } });
   }
 
   return clauses;

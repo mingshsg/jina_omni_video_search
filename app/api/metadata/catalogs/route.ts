@@ -5,13 +5,14 @@ import {
   VIDEO_TYPES,
   countryLabel,
 } from '@/lib/metadata/catalogs';
+import { listGroupCatalogEntries } from '@/lib/metadata/groups';
 import { loadPeopleCatalog, searchPeople } from '@/lib/metadata/people';
 
 export const runtime = 'nodejs';
 
 /**
  * GET /api/metadata/catalogs
- * Shared catalogs for Library editor (+ future search facets).
+ * Shared catalogs for Library editor + search facets + ingest.
  * Query: ?q= (people autocomplete) &locale=en|zh
  */
 export async function GET(request: Request) {
@@ -30,6 +31,8 @@ export async function GET(request: Request) {
   const locale = url.searchParams.get('locale') === 'zh' ? 'zh' : 'en';
   const q = url.searchParams.get('q') ?? '';
 
+  const groups = await listGroupCatalogEntries(locale);
+
   return NextResponse.json({
     video_types: [...VIDEO_TYPES],
     primary_languages: [...PRIMARY_LANGUAGES],
@@ -37,6 +40,7 @@ export async function GET(request: Request) {
       code: c.code,
       label: countryLabel(c.code, locale),
     })),
+    groups,
     people: searchPeople(q, locale, q ? 20 : 50),
   });
 }

@@ -12,11 +12,17 @@ describe('facetsToApiFilters', () => {
       year_from: '1960',
       year_to: '1965',
       country: 'US',
+      group_id: 'demo',
     };
     const result = facetsToApiFilters(facets);
     expect(result).toEqual({
       ok: true,
-      filters: { year_from: 1960, year_to: 1965, country: ['US'] },
+      filters: {
+        year_from: 1960,
+        year_to: 1965,
+        country: ['US'],
+        group_id: ['demo'],
+      },
     });
   });
 

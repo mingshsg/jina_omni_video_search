@@ -39,7 +39,7 @@ describe('parseSearchFilters', () => {
     expect(parseSearchFilters({})).toBeNull();
   });
 
-  it('normalizes country, language, tags and validates catalogs', () => {
+  it('normalizes country, language, tags, group and validates catalogs', () => {
     const f = parseSearchFilters({
       year_from: 1960,
       year_to: 1965,
@@ -48,6 +48,7 @@ describe('parseSearchFilters', () => {
       primary_language: ['zh-hans'],
       video_type: ['trailer'],
       tags: ['Fashion'],
+      group_id: ['  my set  '],
     });
     expect(f).toEqual({
       year_from: 1960,
@@ -57,6 +58,7 @@ describe('parseSearchFilters', () => {
       primary_language: ['zh-Hans'],
       video_type: ['trailer'],
       tags_key: ['fashion'],
+      group_id: ['my set'],
     });
     expect(hasActiveFilters(f)).toBe(true);
   });
@@ -71,6 +73,9 @@ describe('parseSearchFilters', () => {
     expect(() => parseSearchFilters({ country: ['XX'] })).toThrow(
       /Country\/region/,
     );
+    expect(() =>
+      parseSearchFilters({ group_id: ['x'.repeat(65)] }),
+    ).toThrow(/group_id|at most 64/i);
   });
 });
 
@@ -131,12 +136,14 @@ describe('eligibility filter builders', () => {
         year_to: 1965,
         actor_ids: ['person:a', 'person:b'],
         country: ['US', 'KR'],
+        group_id: ['demo'],
       },
       null,
     );
     expect(clauses[0]).toHaveProperty('nested');
     expect(JSON.stringify(clauses)).toContain('meta.actor_ids');
     expect(JSON.stringify(clauses)).toContain('meta.year');
+    expect(JSON.stringify(clauses)).toContain('meta.group_id');
   });
 
   it('builds chunk filters with optional ID allow-list', () => {

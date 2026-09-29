@@ -9,6 +9,7 @@ export type SearchFacetState = {
   primary_language: string;
   actor_ids: Array<{ label: string; value?: string | number | string[] | null }>;
   tags: string;
+  group_id: string;
 };
 
 export const EMPTY_FACETS: SearchFacetState = {
@@ -19,6 +20,7 @@ export const EMPTY_FACETS: SearchFacetState = {
   primary_language: '',
   actor_ids: [],
   tags: '',
+  group_id: '',
 };
 
 export type FacetsToApiResult =
@@ -65,6 +67,7 @@ export function facetsToApiFilters(
   if (facets.country) out.country = [facets.country];
   if (facets.video_type) out.video_type = [facets.video_type];
   if (facets.primary_language) out.primary_language = [facets.primary_language];
+  if (facets.group_id) out.group_id = [facets.group_id];
   if (facets.actor_ids.length) {
     out.actor_ids = facets.actor_ids.map((o) => String(o.value));
   }
