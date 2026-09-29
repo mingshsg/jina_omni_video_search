@@ -36,6 +36,12 @@ Code committed **b6388f6** (ingest side, 2026-09-29) and **8d291c2**
   including one with no inference. Preserve per-video manual confirmation and
   the existing-group guard. The API accepts a selected `group_id` and retains
   `expected_group_id` for legacy callers.
+- Browser smoke 2026-09-29 against the rebuilt Drama app (`db97b58`): opened
+  the Library action for an ungrouped video; `demo` was preselected, clearing
+  it showed `trailer`/`demo`, and entering `drama` created a selected custom
+  option that enabled confirmation. Confirmation was **not** submitted; no
+  existing video was modified. The guarded live-write acceptance below remains
+  **NOT RUN**.
 - `yarn setup-indices` verified 2026-09-29: reports `"conflicts": []` and
   "All indices already exist — mapping already current."; read back
   `GET video-assets/_mapping` → `meta.group_id` is `{"type":"keyword"}` and
