@@ -30,6 +30,7 @@ import {
 import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocale } from '@/lib/i18n/locale-context';
+import { peopleCatalogUnavailable } from '@/lib/metadata/catalogs-status';
 
 const CreatableGroupCombo = dynamic(
   () =>
@@ -93,6 +94,8 @@ type Catalogs = {
   countries: Array<{ code: string; label: string }>;
   groups: Array<{ id: string; label: string }>;
   people: Array<{ id: string; display: string; aliases: string[] }>;
+  /** todo/40 R4 — `unavailable` means the empty `people` is a failure. */
+  people_status?: 'ok' | 'unavailable';
 };
 
 type SuggestField = {
@@ -294,6 +297,9 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
   const [actorOptions, setActorOptions] = useState<EuiComboBoxOptionOption[]>(
     [],
   );
+  // todo/40 R4: a person-catalog failure must be visible, not a silently empty
+  // actor list. `people_status: 'unavailable'` is the explicit signal.
+  const [actorsUnavailable, setActorsUnavailable] = useState(false);
   const [actorCandidates, setActorCandidates] = useState<SuggestActorCandidate[]>([]);
   // Pending text in each selected actor's "add a known name" input, keyed by
   // catalog person id. Local-only until the operator submits it.
@@ -465,6 +471,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
     setLoading(true);
     setError(null);
     setConflict(null);
+    let metaLoadFailed = false;
     try {
       const [metaRes, catRes] = await Promise.all([
         fetch(`/api/library/${encodeURIComponent(videoId)}`, {
@@ -481,12 +488,16 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
         error?: { message: string };
       };
       if (!metaRes.ok) {
+        metaLoadFailed = true;
         throw new Error(metaData.error?.message ?? t.metaLoadError);
       }
       if (!catRes.ok) {
+        // Only the actor catalog failed — surface it, keep the metadata form.
+        setActorsUnavailable(true);
         throw new Error(catData.error?.message ?? t.metaLoadError);
       }
       setCatalogs(catData);
+      setActorsUnavailable(peopleCatalogUnavailable(catData));
       setActorOptions(
         catData.people.map((p) => ({ label: p.display, value: p.id })),
       );
@@ -498,7 +509,12 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
       );
       applyDto(metaData, catData.people);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t.metaLoadError);
+      // A network failure that also reached the metadata request is a metadata
+      // load failure; a catalogs-only failure keeps the form usable and just
+      // flags the actor catalog (todo/40 R4).
+      if (metaLoadFailed) {
+        setError(err instanceof Error ? err.message : t.metaLoadError);
+      }
     } finally {
       setLoading(false);
     }
@@ -528,7 +544,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
           `/api/metadata/catalogs?locale=${locale}&q=${encodeURIComponent(searchValue)}`,
         );
         const data = (await res.json()) as Catalogs;
-        if (res.ok) {
+        if (res.ok && !peopleCatalogUnavailable(data)) {
           setActorOptions(
             data.people.map((p) => ({ label: p.display, value: p.id })),
           );
@@ -1721,7 +1737,11 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
             {renderPendingSuggestion('year')}
             <EuiFormRow
               label={t.metaActors}
-              helpText={evidenceHelp('actors') ?? t.metaActorsHelp}
+              helpText={
+                actorsUnavailable
+                  ? `${evidenceHelp('actors') ?? t.metaActorsHelp} ${t.metaActorsUnavailable}`
+                  : evidenceHelp('actors') ?? t.metaActorsHelp
+              }
               fullWidth
             >
               <EuiComboBox

@@ -8,7 +8,17 @@
  * - Group enumeration reports its own `groups_status` / `groups_truncated`
  *   so a partial or unavailable group catalog is distinguishable from a
  *   complete one.
+ *
+ * todo/40 R4: the failure field is a **fixed public code** rather than the raw
+ * exception text. `loadPeople`'s throw is handed to an optional `log` callback
+ * (sanitized for a redacted credential) so diagnostics stay server-side and
+ * never reach an API response (hard invariant 4).
  */
+import {
+  GROUP_CATALOG_UNAVAILABLE,
+  PEOPLE_CATALOG_UNAVAILABLE,
+  sanitizeCatalogError,
+} from './catalog-errors';
 import type { PersonSummary } from './people';
 
 export type CatalogsPayload = {
@@ -34,17 +44,24 @@ export function buildCatalogsPayload(params: {
     status: 'ok' | 'partial' | 'unavailable';
     total_groups: number;
     truncated: boolean;
+    /** Sanitized detail for server-side logging only — never returned. */
     error?: string;
   };
   loadPeople: () => PersonSummary[];
+  /**
+   * Optional server-side log sink for a person-catalog failure. Receives a
+   * credential-redacted message; the response only ever carries the fixed
+   * {@link PEOPLE_CATALOG_UNAVAILABLE} code (todo/40 R4).
+   */
+  log?: (message: string) => void;
 }): CatalogsPayload {
   let people: PersonSummary[] = [];
-  let peopleError: string | undefined;
+  let peopleFailed = false;
   try {
     people = params.loadPeople();
   } catch (err) {
-    peopleError =
-      err instanceof Error ? err.message : 'Person catalog unavailable';
+    peopleFailed = true;
+    params.log?.(`person catalog load failed: ${sanitizeCatalogError(err)}`);
   }
 
   return {
@@ -55,9 +72,13 @@ export function buildCatalogsPayload(params: {
     groups_status: params.groups.status,
     groups_total: params.groups.total_groups,
     groups_truncated: params.groups.truncated,
-    ...(params.groups.error ? { groups_error: params.groups.error } : {}),
+    // Fixed code only; the raw group-enumeration message is logged by
+    // `listGroupCatalogResult`'s caller and never copied here.
+    ...(params.groups.status === 'unavailable'
+      ? { groups_error: GROUP_CATALOG_UNAVAILABLE }
+      : {}),
     people,
-    people_status: peopleError ? 'unavailable' : 'ok',
-    ...(peopleError ? { people_error: peopleError } : {}),
+    people_status: peopleFailed ? 'unavailable' : 'ok',
+    ...(peopleFailed ? { people_error: PEOPLE_CATALOG_UNAVAILABLE } : {}),
   };
 }

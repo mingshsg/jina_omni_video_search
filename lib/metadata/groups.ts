@@ -9,6 +9,7 @@ import {
   groupLabel,
   normalizeGroupId,
 } from './catalogs';
+import { GROUP_CATALOG_UNAVAILABLE, sanitizeCatalogError } from './catalog-errors';
 
 export type GroupCatalogEntry = { id: string; label: string };
 
@@ -55,6 +56,12 @@ export function parseFreeformGroupId(raw: string): string {
  */
 export async function listGroupCatalogResult(
   locale: 'en' | 'zh' = 'en',
+  /**
+   * Receives a sanitized (credential-redacted) failure message on an ES error.
+   * The result's `error` is a fixed public code — the detail never reaches a
+   * response body (todo/40 R4, hard invariant 4).
+   */
+  log?: (message: string) => void,
 ): Promise<GroupCatalogResult> {
   const byId = new Map<string, string>();
   for (const g of SUGGESTED_ASSET_GROUPS) {
@@ -110,14 +117,13 @@ export async function listGroupCatalogResult(
       truncated,
     };
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : 'Group enumeration failed';
+    log?.(`group catalog enumeration failed: ${sanitizeCatalogError(err)}`);
     return {
       entries: suggestions,
       status: 'unavailable',
       total_groups: 0,
       truncated: false,
-      error: message.replace(/ApiKey\s+\S+/gi, 'ApiKey [redacted]'),
+      error: GROUP_CATALOG_UNAVAILABLE,
     };
   }
 }

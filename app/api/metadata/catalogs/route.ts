@@ -28,7 +28,9 @@ export async function GET(request: Request) {
   const locale = url.searchParams.get('locale') === 'zh' ? 'zh' : 'en';
   const q = url.searchParams.get('q') ?? '';
 
-  const groups = await listGroupCatalogResult(locale);
+  const groups = await listGroupCatalogResult(locale, (message) =>
+    console.warn(`[metadata/catalogs] ${message}`),
+  );
 
   const payload = buildCatalogsPayload({
     videoTypes: VIDEO_TYPES,
@@ -42,6 +44,9 @@ export async function GET(request: Request) {
       loadPeopleCatalog();
       return searchPeople(q, locale, q ? 20 : 50);
     },
+    // Raw exception detail (credential-redacted) is logged only; the response
+    // carries the fixed `people_error` code (todo/40 R4, hard invariant 4).
+    log: (message) => console.warn(`[metadata/catalogs] ${message}`),
   });
 
   return NextResponse.json(payload);

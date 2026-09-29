@@ -8,6 +8,7 @@ import {
   EuiFlexGroup,
   EuiFlexItem,
   EuiFormRow,
+  EuiIconTip,
   EuiSelect,
 } from '@elastic/eui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -17,6 +18,7 @@ import {
   facetsToApiFilters,
   type SearchFacetState,
 } from '@/lib/metadata/facets-ui';
+import { peopleCatalogUnavailable } from '@/lib/metadata/catalogs-status';
 
 export {
   EMPTY_FACETS,
@@ -30,6 +32,8 @@ type Catalogs = {
   primary_languages: string[];
   countries: Array<{ code: string; label: string }>;
   people: Array<{ id: string; display: string }>;
+  /** todo/40 R4 — `unavailable` means the empty `people` is a failure. */
+  people_status?: 'ok' | 'unavailable';
 };
 
 type Props = {
@@ -43,6 +47,9 @@ export function SearchFacets({ value, onChange }: Props) {
   const [actorOptions, setActorOptions] = useState<EuiComboBoxOptionOption[]>(
     [],
   );
+  // todo/40 R4: a person-catalog failure must be visible, not a silently empty
+  // actor list. `people_status: 'unavailable'` is the explicit signal.
+  const [actorsUnavailable, setActorsUnavailable] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -54,9 +61,12 @@ export function SearchFacets({ value, onChange }: Props) {
           setActorOptions(
             data.people.map((p) => ({ label: p.display, value: p.id })),
           );
+          setActorsUnavailable(peopleCatalogUnavailable(data));
+        } else {
+          setActorsUnavailable(true);
         }
       } catch {
-        /* ignore */
+        setActorsUnavailable(true);
       }
     })();
   }, [locale]);
@@ -68,13 +78,13 @@ export function SearchFacets({ value, onChange }: Props) {
           `/api/metadata/catalogs?locale=${locale}&q=${encodeURIComponent(q)}`,
         );
         const data = (await res.json()) as Catalogs;
-        if (res.ok) {
+        if (res.ok && !peopleCatalogUnavailable(data)) {
           setActorOptions(
             data.people.map((p) => ({ label: p.display, value: p.id })),
           );
         }
       } catch {
-        /* ignore */
+        /* autocomplete is best-effort; the explicit notice already shows */
       }
     },
     [locale],
@@ -161,7 +171,22 @@ export function SearchFacets({ value, onChange }: Props) {
         </EuiFormRow>
       </EuiFlexItem>
       <EuiFlexItem grow={2} style={{ minWidth: 200 }}>
-        <EuiFormRow label={t.metaActors}>
+        <EuiFormRow
+          label={
+            <>
+              {t.metaActors}{' '}
+              {actorsUnavailable && (
+                <EuiIconTip
+                  type="warning"
+                  color="warning"
+                  content={t.metaActorsUnavailable}
+                  position="top"
+                  aria-label={t.metaActorsUnavailable}
+                />
+              )}
+            </>
+          }
+        >
           <EuiComboBox
             compressed
             options={actorOptions}

@@ -99,10 +99,16 @@ describe('listGroupCatalogResult (G3/G5)', () => {
       new Error('ES down: ApiKey secret.value'),
     );
 
-    const result = await listGroupCatalogResult();
+    const logs: string[] = [];
+    const result = await listGroupCatalogResult('en', (message) =>
+      logs.push(message),
+    );
     expect(result.status).toBe('unavailable');
-    expect(result.error).toContain('[redacted]');
+    // R4: the result carries a fixed code; the (redacted) detail is logged.
+    expect(result.error).toBe('GROUP_CATALOG_UNAVAILABLE');
     expect(result.error).not.toContain('secret.value');
+    expect(logs.join(' ')).toContain('[redacted]');
+    expect(logs.join(' ')).not.toContain('secret.value');
     expect(result.entries.map((e) => e.id)).toEqual(
       expect.arrayContaining(['trailer', 'demo']),
     );

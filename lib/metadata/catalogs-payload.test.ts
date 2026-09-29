@@ -35,18 +35,37 @@ describe('buildCatalogsPayload (G3)', () => {
   });
 
   it('keeps groups and pinned catalogs when the person catalog fails', () => {
+    const logs: string[] = [];
     const payload = build({
       loadPeople: () => {
-        throw new Error('config/people.json missing');
+        throw new Error('config/people.json missing at /srv/config/people.json');
       },
+      log: (message) => logs.push(message),
     });
     // People degrade, but the shared route still succeeds with groups.
     expect(payload.people).toEqual([]);
     expect(payload.people_status).toBe('unavailable');
-    expect(payload.people_error).toContain('people.json');
+    // R4: only a fixed public code — never the raw exception text or a path.
+    expect(payload.people_error).toBe('PEOPLE_CATALOG_UNAVAILABLE');
+    expect(payload.people_error).not.toContain('people.json');
     expect(payload.groups_status).toBe('ok');
     expect(payload.groups).toHaveLength(2);
     expect(payload.video_types).toContain('trailer');
+    // The detail is available to the server log only, and is redacted.
+    expect(logs.join(' ')).toContain('people.json');
+  });
+
+  it('redacts a credential in the person-catalog log detail', () => {
+    const logs: string[] = [];
+    const payload = build({
+      loadPeople: () => {
+        throw new Error('Authorization: ApiKey abc.def');
+      },
+      log: (message) => logs.push(message),
+    });
+    expect(payload.people_error).toBe('PEOPLE_CATALOG_UNAVAILABLE');
+    expect(logs.join(' ')).toContain('[redacted]');
+    expect(logs.join(' ')).not.toContain('abc.def');
   });
 
   it('surfaces a group-enumeration failure independently of the people catalog', () => {
@@ -63,7 +82,8 @@ describe('buildCatalogsPayload (G3)', () => {
       },
     });
     expect(payload.groups_status).toBe('unavailable');
-    expect(payload.groups_error).toBe('ES down');
+    // R4: the raw "ES down" detail is not copied into the response.
+    expect(payload.groups_error).toBe('GROUP_CATALOG_UNAVAILABLE');
     // Starter suggestions still list so All/new groups stay usable.
     expect(payload.groups.map((g) => g.id)).toEqual(['trailer', 'demo']);
     expect(payload.people_status).toBe('ok');
