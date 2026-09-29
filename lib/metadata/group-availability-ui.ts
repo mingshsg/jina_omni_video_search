@@ -37,15 +37,6 @@ export function capGroupSelection(ids: string[]): {
   return { ids: unique.slice(0, GROUP_SELECTION_LIMIT), overflowed: true };
 }
 
-/** True when `groups` contains an entry for every selected id. */
-export function selectedGroupsResolved(
-  entries: GroupAvailabilityEntry[],
-  selectedIds: string[],
-): boolean {
-  const known = new Set(entries.map((entry) => entry.id));
-  return selectedIds.every((id) => known.has(id));
-}
-
 /**
  * Keep currently selected ids visible as selectable options even when the
  * server response is truncated or unavailable (the user must be able to see
@@ -132,11 +123,6 @@ export function selectableCompatibleVariants(
   if (!knownVariantIds) return suggestedVariantIds;
   const known = new Set(knownVariantIds);
   return suggestedVariantIds.filter((id) => known.has(id));
-}
-
-/** True when a group is selectable as an option (has an id). */
-export function isSelectableGroup(entry: GroupAvailabilityEntry): boolean {
-  return entry.id.length > 0;
 }
 
 /** Query string for the availability endpoint, including selected ids. */
