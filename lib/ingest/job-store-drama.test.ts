@@ -96,6 +96,27 @@ describe('R7 resolveIngestJob restores drama', () => {
     expect(job?.drama?.modules).toEqual(['structure']);
   });
 
+  it.each(['existing_only', 'force_asr'] as const)(
+    'retains a Library handoff policy after restart (%s)',
+    async (subtitleSource) => {
+      findAssetByJobIdMock.mockResolvedValueOnce(
+        assetWithDrama(`job-${subtitleSource}`, {
+          run_id: 'run-library',
+          enrichment_status: 'running',
+          modules: ['subtitles'],
+          languages: ['zh'],
+          modules_done: [],
+          subtitle_source: subtitleSource,
+          director_coverage: 'sampled',
+        }),
+      );
+      const job = await resolveIngestJob(`job-${subtitleSource}`);
+      expect(job?.drama?.status).toBe('pending');
+      expect(job?.drama?.subtitleSource).toBe(subtitleSource);
+      expect(job?.drama?.directorCoverage).toBe('sampled');
+    },
+  );
+
   it('leaves drama undefined when no durable record exists', async () => {
     findAssetByJobIdMock.mockResolvedValueOnce(assetWithDrama('job-plain', undefined));
     const job = await resolveIngestJob('job-plain');

@@ -128,6 +128,8 @@ export async function prepareDramaHandoff(job: IngestJob): Promise<DramaWorkspac
       enrichment_status: 'running',
       modules: job.drama.modules,
       languages: job.drama.languages,
+      subtitle_source: job.drama.subtitleSource,
+      director_coverage: job.drama.directorCoverage,
       modules_done: [],
     });
   } catch (err) {
@@ -189,6 +191,8 @@ export async function runDramaEnrichment(job: IngestJob): Promise<void> {
         enrichment_status: 'running',
         modules,
         languages,
+        subtitle_source: job.drama.subtitleSource,
+        director_coverage: job.drama.directorCoverage,
         modules_done: [],
       });
     } catch {
@@ -461,6 +465,8 @@ export async function runDramaEnrichment(job: IngestJob): Promise<void> {
       enrichment_status,
       modules,
       languages,
+      subtitle_source: job.drama.subtitleSource,
+      director_coverage: job.drama.directorCoverage,
       modules_done: modulesDone,
       structure,
       synopsis_zh: synopsisZh,

@@ -5,13 +5,16 @@
 import { getConfig } from '../config';
 import { getEsClient } from '../es/client';
 import type { StructureInterval } from './structure';
-import type { DramaLanguage, DramaModule } from '../ingest/drama-options';
+import type { DramaDirectorCoverage, DramaLanguage, DramaModule, DramaSubtitleSource } from '../ingest/drama-options';
 
 export interface DramaMetaPayload {
   run_id: string;
   enrichment_status: 'pending' | 'running' | 'succeeded' | 'failed' | 'partial';
   modules: DramaModule[];
   languages: DramaLanguage[];
+  /** Persist the selected policy so restart/retry cannot change providers. */
+  subtitle_source?: DramaSubtitleSource;
+  director_coverage?: DramaDirectorCoverage;
   structure?: StructureInterval[];
   synopsis_zh?: string;
   synopsis_en?: string;

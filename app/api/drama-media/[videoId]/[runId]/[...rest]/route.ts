@@ -1,4 +1,9 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { getConfig } from '@/lib/config';
+import { getAsset } from '@/lib/es/index-assets';
+import { approvedDramaMediaPath } from '@/lib/drama/media-access';
+import type { DramaMetaPayload } from '@/lib/drama/persist-meta';
 import { serveFileWithRange } from '@/lib/media/serve-file';
 
 export const runtime = 'nodejs';
@@ -17,11 +22,7 @@ function badRequest(message = 'Bad request'): Response {
 }
 
 /**
- * Serve drama enrichment artifacts (verified face cards, key scene stills,
- * directors script markdown) from the drama run workspace.
- *
- * Path is anchored under MEDIA_ROOT/media/<videoId>/drama/<runId>/ and is
- * validated with the same traversal guard used by other media routes.
+ * Serve only published, approved drama artifacts from the run workspace.
  */
 export async function GET(request: Request, { params }: Params) {
   const videoId = decodeURIComponent(params.videoId ?? '').trim();
@@ -47,15 +48,29 @@ export async function GET(request: Request, { params }: Params) {
 
   try {
     const cfg = getConfig();
-    const rel = rest.join('/');
-    const filePath = `${cfg.MEDIA_ROOT}/media/${videoId}/drama/${runId}/${rel}`;
+    const asset = await getAsset(videoId);
+    const drama = (asset?.meta as { drama?: DramaMetaPayload } | undefined)?.drama;
+    const filePath = approvedDramaMediaPath({
+      mediaRoot: cfg.MEDIA_ROOT,
+      videoId,
+      runId,
+      rest,
+      drama,
+    });
+    if (!filePath) return new Response('Not found', { status: 404 });
+    // A symlink inside the workspace must not expose a file outside it.
+    const runRoot = path.resolve(cfg.MEDIA_ROOT, 'media', videoId, 'drama', runId);
+    const realRoot = fs.realpathSync(runRoot);
+    const realFile = fs.realpathSync(filePath);
+    const rel = path.relative(realRoot, realFile);
+    if (!rel || rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
+      return new Response('Not found', { status: 404 });
+    }
     return serveFileWithRange(filePath, request, {
       cacheControl: 'private, max-age=86400',
     });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Drama media serve failed';
-    const safe = message.replace(/ApiKey\s+\S+/gi, 'ApiKey [redacted]');
-    return new Response(safe, { status: 500 });
+  } catch {
+    return new Response('Not found', { status: 404 });
   }
 }
 

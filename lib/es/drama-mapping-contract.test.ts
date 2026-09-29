@@ -20,6 +20,8 @@ function fullPayload(): DramaMetaPayload {
     enrichment_status: 'partial',
     modules: ['structure', 'subtitles', 'directors_script', 'key_actors', 'key_scenes'],
     languages: ['zh', 'en'],
+    subtitle_source: 'existing_only',
+    director_coverage: 'sampled',
     modules_done: ['structure', 'subtitles'],
     structure: [
       {

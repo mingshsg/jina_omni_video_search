@@ -15,6 +15,8 @@ import type { VideoAssetDocument } from '../es/index-assets';
  */
 export interface DramaSummaryDto {
   status: string;
+  subtitle_source?: string;
+  director_coverage?: string;
   languages?: string[];
   modules?: string[];
   modules_done?: string[];
@@ -38,6 +40,7 @@ export interface SafeKeyScene {
   end_ms: number;
   summary_zh?: string;
   summary_en?: string;
+  thumb_url?: string;
 }
 
 /** Path-free key actor candidate for the results flyout. */
@@ -46,6 +49,7 @@ export interface SafeKeyActor {
   role_en?: string;
   verified: boolean;
   t_ms?: number;
+  thumb_url?: string;
 }
 
 /**
@@ -59,6 +63,23 @@ export interface DramaResultsDto extends DramaSummaryDto {
   key_scenes?: SafeKeyScene[];
   key_actors?: SafeKeyActor[];
   subtitle_count?: number;
+  script_urls?: { zh?: string; en?: string };
+}
+
+/** Convert a published run path to a route URL without exposing MEDIA_ROOT. */
+function artifactUrl(videoId: string, runId: string, rawPath: string | undefined): string | undefined {
+  if (!rawPath || !runId) return undefined;
+  const segments = rawPath.split(/[\\/]/).filter(Boolean);
+  const marker = segments.findIndex((part, index) => part === 'drama' && segments[index + 1] === runId);
+  const relative = rawPath.startsWith('/') ? segments.slice(marker + 2) : segments;
+  if ((rawPath.startsWith('/') && marker < 0) || relative.length < 2) return undefined;
+  if (relative.some((part) => part === '.' || part === '..' || !/^[\w.-]+$/.test(part))) return undefined;
+  return [
+    '/api/drama-media',
+    encodeURIComponent(videoId),
+    encodeURIComponent(runId),
+    ...relative.map(encodeURIComponent),
+  ].join('/');
 }
 
 /**
@@ -81,6 +102,8 @@ export function dramaSummaryFromAsset(
   if (metaDrama) {
     return {
       status: metaDrama.enrichment_status,
+      ...(metaDrama.subtitle_source ? { subtitle_source: metaDrama.subtitle_source } : {}),
+      ...(metaDrama.director_coverage ? { director_coverage: metaDrama.director_coverage } : {}),
       languages: metaDrama.languages,
       modules: metaDrama.modules,
       modules_done: metaDrama.modules_done,
@@ -93,6 +116,8 @@ export function dramaSummaryFromAsset(
   if (!job) return undefined;
   return {
     status: job.status,
+    ...(job.subtitle_source ? { subtitle_source: job.subtitle_source } : {}),
+    ...(job.director_coverage ? { director_coverage: job.director_coverage } : {}),
     languages: job.languages,
     modules: job.modules,
     modules_done: job.modules_done,
@@ -111,6 +136,10 @@ export function dramaResultsFromAsset(
   if (!metaDrama) return base;
   return {
     ...base,
+    script_urls: {
+      zh: artifactUrl(asset.video_id, metaDrama.run_id, metaDrama.directors_script_zh_path),
+      en: artifactUrl(asset.video_id, metaDrama.run_id, metaDrama.directors_script_en_path),
+    },
     synopsis_zh: metaDrama.synopsis_zh,
     synopsis_en: metaDrama.synopsis_en,
     structure: metaDrama.structure?.map((s) => ({
@@ -125,12 +154,18 @@ export function dramaResultsFromAsset(
       end_ms: s.end_ms,
       summary_zh: s.summary_zh,
       summary_en: s.summary_en,
+      ...(artifactUrl(asset.video_id, metaDrama.run_id, s.thumb_path)
+        ? { thumb_url: artifactUrl(asset.video_id, metaDrama.run_id, s.thumb_path) }
+        : {}),
     })),
     key_actors: metaDrama.key_actors?.map((a) => ({
       role_zh: a.role_zh,
       role_en: a.role_en,
       verified: a.verified,
       t_ms: a.t_ms,
+      ...(a.verified && artifactUrl(asset.video_id, metaDrama.run_id, a.thumb_path)
+        ? { thumb_url: artifactUrl(asset.video_id, metaDrama.run_id, a.thumb_path) }
+        : {}),
     })),
     subtitle_count: metaDrama.subtitle_paths?.length,
   };

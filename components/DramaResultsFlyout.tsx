@@ -2,6 +2,7 @@
 
 import {
   EuiBadge,
+  EuiButtonEmpty,
   EuiCallOut,
   EuiFlexGroup,
   EuiFlexItem,
@@ -58,6 +59,7 @@ export function DramaResultsFlyout({
       };
       if (!res.ok) throw new Error(data.error?.message ?? t.libraryError);
       setDetail(data.drama ?? null);
+      setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : t.libraryError);
     }
@@ -67,6 +69,12 @@ export function DramaResultsFlyout({
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (!['pending', 'running'].includes((detail ?? drama).status)) return;
+    const timer = window.setInterval(() => void load(), 5000);
+    return () => window.clearInterval(timer);
+  }, [detail, drama, load]);
+
   const dto = detail ?? drama;
   const hasDetail = Boolean(
     detail &&
@@ -74,6 +82,7 @@ export function DramaResultsFlyout({
         (detail.structure && detail.structure.length > 0) ||
         (detail.key_scenes && detail.key_scenes.length > 0) ||
         (detail.key_actors && detail.key_actors.length > 0) ||
+        detail.script_urls?.zh || detail.script_urls?.en ||
         detail.subtitle_count != null),
   );
 
@@ -118,6 +127,9 @@ export function DramaResultsFlyout({
         <EuiTitle size="xxs">
           <h3>{t.dramaResultOverview}</h3>
         </EuiTitle>
+        <EuiButtonEmpty size="s" onClick={() => void load()}>
+          {t.refresh}
+        </EuiButtonEmpty>
         <EuiSpacer size="s" />
         <EuiText size="s">
           <p>
@@ -136,6 +148,8 @@ export function DramaResultsFlyout({
           <p>
             {t.dramaLanguagesLabel}: {(dto.languages ?? []).join(', ') || '—'}
           </p>
+          {dto.subtitle_source && <p>{t.dramaSubtitleSource}: {dto.subtitle_source}</p>}
+          {dto.director_coverage && <p>{t.dramaDirectorCoverage}: {dto.director_coverage}</p>}
           {dto.synopsis_status && (
             <p>
               {t.dramaSynopsisStatus}: <strong>{dto.synopsis_status}</strong>
@@ -168,6 +182,17 @@ export function DramaResultsFlyout({
               </>
             )}
 
+            {detail.script_urls && (detail.script_urls.zh || detail.script_urls.en) && (
+              <>
+                <EuiSpacer size="m" />
+                <EuiTitle size="xxs"><h3>{t.dramaModuleDirectors}</h3></EuiTitle>
+                <EuiText size="s">
+                  {detail.script_urls.zh && <p><a href={detail.script_urls.zh} target="_blank" rel="noopener noreferrer">zh script</a></p>}
+                  {detail.script_urls.en && <p><a href={detail.script_urls.en} target="_blank" rel="noopener noreferrer">en script</a></p>}
+                </EuiText>
+              </>
+            )}
+
             {detail.structure && detail.structure.length > 0 && (
               <>
                 <EuiSpacer size="m" />
@@ -180,6 +205,7 @@ export function DramaResultsFlyout({
                     <li key={i}>
                       <EuiText size="s">
                         <strong>{s.kind}</strong> · {s.start_ms}–{s.end_ms} ms
+                        {s.source ? ` · ${s.source}` : ''}
                       </EuiText>
                     </li>
                   ))}
@@ -201,6 +227,7 @@ export function DramaResultsFlyout({
                         {s.start_ms}–{s.end_ms} ms
                         {s.summary_zh ? ` · zh: ${s.summary_zh}` : ''}
                         {s.summary_en ? ` · en: ${s.summary_en}` : ''}
+                        {s.thumb_url && <a href={s.thumb_url} target="_blank" rel="noopener noreferrer"> · thumbnail</a>}
                       </EuiText>
                     </li>
                   ))}
@@ -222,6 +249,7 @@ export function DramaResultsFlyout({
                         {a.role_zh}
                         {a.role_en ? ` · ${a.role_en}` : ''}
                         {!a.verified ? ' · (unverified)' : ''}
+                        {a.thumb_url && <a href={a.thumb_url} target="_blank" rel="noopener noreferrer"> · face card</a>}
                       </EuiText>
                     </li>
                   ))}

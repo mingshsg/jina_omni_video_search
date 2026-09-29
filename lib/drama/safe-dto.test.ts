@@ -104,6 +104,30 @@ describe('dramaSummaryFromAsset', () => {
 });
 
 describe('dramaResultsFromAsset sanitizes paths', () => {
+  it('returns route links for published scripts and stills only', () => {
+    const base = '/internal/media/v1/drama/r1';
+    const doc = docWithMetaDrama({
+      run_id: 'r1',
+      enrichment_status: 'succeeded',
+      modules: ['directors_script', 'key_scenes', 'key_actors'],
+      languages: ['zh'],
+      directors_script_zh_path: `${base}/scripts/zh.md`,
+      directors_script_raw_path: `${base}/scripts/raw.md`,
+      key_scenes: [{ start_ms: 0, end_ms: 100, thumb_path: `${base}/scenes/one.jpg` }],
+      key_actors: [
+        { role_zh: 'verified', verified: true, thumb_path: `${base}/faces/yes.jpg` },
+        { role_zh: 'unverified', verified: false, thumb_path: `${base}/faces/no.jpg` },
+      ],
+    });
+    const dto = dramaResultsFromAsset(doc)!;
+    expect(dto.script_urls?.zh).toBe('/api/drama-media/v1/r1/scripts/zh.md');
+    expect(dto.key_scenes?.[0].thumb_url).toBe('/api/drama-media/v1/r1/scenes/one.jpg');
+    expect(dto.key_actors?.[0].thumb_url).toBe('/api/drama-media/v1/r1/faces/yes.jpg');
+    expect(dto.key_actors?.[1].thumb_url).toBeUndefined();
+    expect(JSON.stringify(dto)).not.toContain('/internal/media');
+    expect(JSON.stringify(dto)).not.toContain('scripts/raw.md');
+  });
+
   it('drops media_path and all *_path/thumb_path fields', () => {
     const doc = docWithMetaDrama({
       run_id: 'r1',

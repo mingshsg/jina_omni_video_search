@@ -87,6 +87,8 @@ export function videoAssetsMetaMappingProperties(
             enrichment_status: { type: 'keyword' },
             modules: { type: 'keyword' },
             languages: { type: 'keyword' },
+            subtitle_source: { type: 'keyword', index: false },
+            director_coverage: { type: 'keyword', index: false },
             structure: {
               type: 'nested',
               properties: {
@@ -100,7 +102,8 @@ export function videoAssetsMetaMappingProperties(
             synopsis_zh: { type: 'text' },
             synopsis_en: { type: 'text' },
             /** F2 evidence gate: `audited` vs `provisional` synopsis. */
-            synopsis_status: { type: 'keyword' },            directors_script_zh: { type: 'text', index: false },
+            synopsis_status: { type: 'keyword' },
+            directors_script_zh: { type: 'text', index: false },
             directors_script_en: { type: 'text', index: false },
             directors_script_zh_path: { type: 'keyword', index: false },
             directors_script_en_path: { type: 'keyword', index: false },

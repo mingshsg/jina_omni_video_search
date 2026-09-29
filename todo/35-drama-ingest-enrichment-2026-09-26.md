@@ -1,7 +1,7 @@
 # Drama ingest enrichment — 2026-09-26
 
-Plan: [`plan/12-drama-ingest-enrichment.md`](../plan/12-drama-ingest-enrichment.md)  
-Chinese: [`chn.docs/剧集入库增强规划.md`](../chn.docs/剧集入库增强规划.md)  
+Plan: [`plan/12-drama-ingest-enrichment.md`](../plan/12-drama-ingest-enrichment.md)
+Chinese: [`chn.docs/剧集入库增强规划.md`](../chn.docs/剧集入库增强规划.md)
 Upstream: https://github.com/mingsorg/episode_processing
 
 ## Status
@@ -12,10 +12,11 @@ Upstream: https://github.com/mingsorg/episode_processing
 | P1 Subtitles + structure + drama-subtitles index | Node code committed (`03932da`); live mapping + bulk/reconcile verified; ko/th ASR live integration and human quality still separate |
 | P2 Directors script + synopsis | Done (live EIS smoke NOT RUN) |
 | P3 Key actors + key scenes + frame GC job | Node code committed; live cost/latency NOT RUN (`todo/38` I1–I7 fixed and committed; `todo/37` tracks earlier fixes) |
-| P4 Search / Library consume (+ Library re-run) | Not started |
+| P4 Search / Library consume (+ Library re-run) | Library start/results first cut committed (`df7a10e`, `9547047`); submission fixes in progress; timed subtitle inspection, search consume and browser acceptance remain open |
 
-Committed 2026-09-28 evening as `03932da` (drama P0–P3 core only; P4 drafts
-and unrelated suggest/group work left uncommitted).
+P0–P3 core was committed as `03932da`. The P4 per-run option backend and
+Library start/results first cut were committed as `df7a10e` and `9547047`.
+`todo/39` tracks the follow-up submission defects; this is not P4 acceptance.
 
 ## Decisions (2026-09-26)
 
@@ -65,7 +66,7 @@ and unrelated suggest/group work left uncommitted).
 
 ### P3 — Key actors + key scenes + GC
 
-Code for these stages exists in the current working tree, but the checks below
+Code for these stages is committed, but the checks below
 remain open. The adoption review in `todo/36` records additional P1 blockers;
 do not mark P3 complete merely because the runner calls the modules.
 
@@ -78,10 +79,10 @@ do not mark P3 complete merely because the runner calls the modules.
 
 - [ ] Optional filter: exclude 片头/片尾/recap windows from moment results
 - [ ] Library / flyout: structure + faces + scenes
-- [ ] Library action: configure modules, `zh/en/ko/th` source languages, subtitle method, and sampled director coverage for an existing ready asset; review choices before an async start. See plan/12 P4. Two backend draft files exist but are incomplete, untested, and not deployed.
-- [ ] Library result view: run status/progress plus subtitles, structure timeline, director script/synopsis, key scenes, and actor candidate inspection; label partial, gaps, provenance, and provisional outputs.
+- [x] Library action code: configure modules, `zh/en/ko/th` source languages, subtitle method, and sampled director coverage for an existing ready asset; review choices before an async start. `df7a10e`/`9547047` committed the first cut. Durable policy repair is tracked in `todo/39` S2; browser acceptance remains open.
+- [ ] Library result view: current first cut shows status, synopsis, structure rows, scene/actor summaries, approved script/still links, and refresh. Timed subtitle cue queries, timeline/seek UI, coverage gaps, and detailed provenance remain open. Do not call the first cut full P4 inspection.
 - [ ] Safe post-ingest API: persist a recoverable marker before `202`, reject missing media/overlap, never re-embed, query timed subtitles, and keep previous successful generations until a complete replacement. Resolve todo/38 I1–I4 before enabling reprocess.
-- [ ] Tighten `api/drama-media` to an explicit artifact allowlist before linking previews; current root containment also serves run-internal `meta.json` with an internal media path.
+- [x] Code: `api/drama-media` now authorizes only published ZH/EN scripts, key-scene stills, and verified face cards; `meta.json`, audio, SRT, raw script, audit files and unverified cards are denied. Path helper tests pass. Rebuilt-container route check remains open in `todo/39`.
 - [ ] Browser and live index acceptance for the Library workflow on a rebuilt container; human content-quality review remains a separate round.
 - [ ] File + live search regression
 - [ ] Do not claim p95/relevance without labeled run

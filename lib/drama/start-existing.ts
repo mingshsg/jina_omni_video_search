@@ -43,7 +43,7 @@ export async function startExistingDrama(
       throw new ExistingDramaStartError('DRAMA_NOT_READY', 409, 'Video must be ready before drama enrichment');
     }
     const drama = (asset.meta as { drama?: unknown } | undefined)?.drama;
-    if (drama) {
+    if (drama || asset.job?.drama) {
       throw new ExistingDramaStartError(
         'DRAMA_ALREADY_REQUESTED',
         409,

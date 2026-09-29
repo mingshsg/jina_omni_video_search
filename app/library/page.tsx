@@ -146,6 +146,23 @@ export default function LibraryPage() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (!assets.some((asset) => ['pending', 'running'].includes(asset.drama?.status ?? ''))) return;
+    const timer = window.setInterval(() => {
+      void (async () => {
+        try {
+          const res = await fetch('/api/library');
+          if (!res.ok) return;
+          const data = (await res.json()) as { assets?: LibraryAsset[] };
+          setAssets(data.assets ?? []);
+        } catch {
+          // Keep the last visible status; the next poll can recover.
+        }
+      })();
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [assets]);
+
   const retry = useCallback(
     async (asset: LibraryAsset) => {
       if (!asset.job_id) return;

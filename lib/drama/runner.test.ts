@@ -128,11 +128,11 @@ import {
   clearDramaRunLeases,
   isDramaRunActive,
   prepareDramaHandoff,
-  prepareDramaHandoff,
   releaseDramaRun,
   runDramaEnrichment,
   tryAcquireDramaRun,
-} from './runner';import { persistDramaMeta } from './persist-meta';
+} from './runner';
+import { persistDramaMeta } from './persist-meta';
 import { generateDirectorsScript } from './directors-script';
 import {
   indexDramaSubtitles,
@@ -201,6 +201,36 @@ describe('runDramaEnrichment', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
+
+  it.each(['existing_only', 'force_asr'] as const)(
+    'persists the selected Library policy at handoff and completion (%s)',
+    async (subtitleSource) => {
+      const job = fakeJob({
+        status: 'pending',
+        languages: ['zh'],
+        modules: ['subtitles'],
+        modules_done: [],
+        subtitleSource,
+      });
+      await prepareDramaHandoff(job);
+      expect(persistDramaMeta).toHaveBeenLastCalledWith(
+        'vid1',
+        expect.objectContaining({
+          enrichment_status: 'running',
+          subtitle_source: subtitleSource,
+          director_coverage: 'sampled',
+        }),
+      );
+      await runDramaEnrichment(job);
+      expect(persistDramaMeta).toHaveBeenLastCalledWith(
+        'vid1',
+        expect.objectContaining({
+          subtitle_source: subtitleSource,
+          director_coverage: 'sampled',
+        }),
+      );
+    },
+  );
 
   it('runs structure and persists meta.drama even if subtitles fail', async () => {
     const job = fakeJob({

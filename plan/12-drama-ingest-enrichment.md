@@ -1,9 +1,9 @@
 # Drama ingest enrichment (adopt `episode_processing`)
 
-Date: 2026-09-26  
-Status: **P0–P3 Node code committed as `03932da` on `live-video-search` (2026-09-28 evening); live mapping/terminal-update/subtitle-reconcile gates verified; wider drama acceptance remains blocked by todo/38 live/operational gates and P4. The ko/th code path passes automated development gates; human transcript quality is a separate round. P4 per-run `subtitle_source`/`director_coverage` options added to the Library drama start backend (2026-09-28).**  
-Upstream ideas: [`mingsorg/episode_processing`](https://github.com/mingsorg/episode_processing)  
-Tracker: `todo/35-drama-ingest-enrichment-2026-09-26.md`  
+Date: 2026-09-26
+Status: **P0–P3 Node code committed as `03932da`; P4 Library start/results first cut committed as `df7a10e` and `9547047`. Submission fixes are tracked in `todo/39`. Live drama quality, timed subtitle inspection, search consume, browser and multi-replica gates remain open; human transcript quality is a separate round.**
+Upstream ideas: [`mingsorg/episode_processing`](https://github.com/mingsorg/episode_processing)
+Tracker: `todo/35-drama-ingest-enrichment-2026-09-26.md`
 Chinese summary: `chn.docs/剧集入库增强规划.md`
 
 ## Goal
@@ -331,15 +331,12 @@ Not required to ship enrichment itself, but drives schema choices:
    carefully labeled as *this file's drama enrichment*, not external catalog
    work synopsis (provenance in `meta.review` or `meta.drama.source`).
 
-### P4 Library workflow for an existing video (planned, 2026-09-28)
+### P4 Library workflow for an existing video (first cut, 2026-09-29)
 
-The current Library has metadata editing and re-indexing, but **no** control to
-start drama enrichment or inspect its generated documents. A backend-only
-draft exists at `lib/drama/start-existing.ts` and
-`app/api/library/[videoId]/drama/route.ts`; it was started before the request
-changed to planning-only. It is **incomplete, untested, and not deployed**.
-The next implementation tool must review or replace it; do not treat the
-presence of the route file as this feature being available.
+The Library now has a start action, per-run subtitle policy, a result summary,
+and approved script/still links. The first cut is not full P4 acceptance:
+timed subtitle query/seek, coverage gaps, browser outcomes and restart checks
+remain open in `todo/35` and `todo/39`.
 
 **Entry and eligibility.** Add a distinct **Process as drama** action on each
 ready Library asset; do not reuse **Re-index**, which reruns chunk embedding.
@@ -393,10 +390,11 @@ Keep prior successful results visible until a new generation is complete; do
 not retire subtitle generations after only one of several selected languages
 succeeds. Surface unavailable artifacts as missing, never as empty success.
 Artifact previews must not reveal internal `media_path` or arbitrary server
-files. Tighten the existing `app/api/drama-media/[videoId]/[runId]/[...rest]`
-route before using it for inspection: its current root containment still
-permits requesting run-internal files such as `meta.json`. Serve an explicit
-allowlist of SRT, script, and approved thumbnail artifacts through a safe DTO.
+files. The `app/api/drama-media/[videoId]/[runId]/[...rest]` route now checks
+published artifact paths and denies `meta.json`, audio, raw scripts and
+temporary files; the safe DTO emits only route URLs. Verify this against a
+rebuilt container before claiming runtime acceptance. Timed SRT inspection is
+still open and is not exposed through this route.
 Human review of transcript/scene quality is a later round, separate
 from the functional development gate.
 
