@@ -17,7 +17,7 @@ Code committed **b6388f6** (ingest side, 2026-09-29) and **8d291c2**
 | Backfill script: 10 s/`fine` → `trailer`, 2 s/`2s` → `demo` | Done |
 | Docs (`api-contract`) | Done |
 | `yarn setup-indices` on target cluster | Done (verified 2026-09-29, no conflicts, `meta.group_id` keyword present) |
-| Existing-video backfill | Per-video Library confirmation requested 2026-09-29; bulk backfill will not run automatically. Real writes not run. |
+| Existing-video backfill | Per-video Library group selector requested 2026-09-29; bulk backfill will not run automatically. Real writes not run. |
 | Browser smoke: import with custom name → search facet filters it | **NOT RUN** (manual, needs running container) |
 
 ## Notes
@@ -30,6 +30,12 @@ Code committed **b6388f6** (ingest side, 2026-09-29) and **8d291c2**
   video with an explicit confirmation action; leave the bulk backfill script
   operator-only and do not execute it automatically. Existing groups are never
   overwritten by the Library action.
+- User correction 2026-09-29: the Library backfill dialog must offer the group
+  catalog and a custom group entry. The inferred group is a preselected
+  suggestion, not a forced assignment. Show the action on any ungrouped video,
+  including one with no inference. Preserve per-video manual confirmation and
+  the existing-group guard. The API accepts a selected `group_id` and retains
+  `expected_group_id` for legacy callers.
 - `yarn setup-indices` verified 2026-09-29: reports `"conflicts": []` and
   "All indices already exist — mapping already current."; read back
   `GET video-assets/_mapping` → `meta.group_id` is `{"type":"keyword"}` and
@@ -56,10 +62,11 @@ Code committed **b6388f6** (ingest side, 2026-09-29) and **8d291c2**
       `meta.group_id` keyword in mapping) — `yarn backfill-group-id --dry-run`
       also verified; the real bulk backfill is **not** run.
 - [x] Add a per-video Library confirmation action and a guarded API that
-      writes only the displayed inferred group when `meta.group_id` is absent.
+      writes the selected group when `meta.group_id` is absent.
       No automatic or bulk write is wired into the app. The combined staging
       tree passed 87 files / 610 tests and build on 2026-09-29; this is not a
-      live Elasticsearch script or browser acceptance result.
+      live Elasticsearch script or browser acceptance result. The subsequent
+      selector change requires its own fresh test/build and browser gates.
 - [x] Focused `codex/group-filter-complete` branch, based on the pushed
       `codex/url-safety-suggest` prerequisite: Node 22.13.1
       `yarn test --maxWorkers=4` passed 66 files / 473 tests and `yarn build`

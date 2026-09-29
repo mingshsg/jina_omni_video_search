@@ -657,10 +657,10 @@ export const uiEn: UiMessages = {
   actionEditMeta: 'Edit metadata',
   actionBackfillGroup: 'Backfill group',
   backfillGroupConfirm:
-    'Assign the inferred group “{group}” to “{title}”? This updates only this video and never overwrites an existing group.',
+    'Choose an index group for “{title}”. This updates only this video and never overwrites an existing group.',
   backfillGroupDone: 'Assigned group “{group}”',
   backfillGroupChanged:
-    'The video or its group changed. Refresh and review the suggestion again.',
+    'The video or its group changed. Refresh and review the group again.',
   removeConfirm: 'Remove this video from the search index? Media files on disk are kept.',
   removeNote: 'Removes Elasticsearch docs only; files stay on disk.',
   chunksLabel: 'chunks',
@@ -1095,7 +1095,7 @@ export const uiZh: UiMessages = {
   actionEditMeta: '编辑元数据',
   actionBackfillGroup: '回填分组',
   backfillGroupConfirm:
-    '将视频“{title}”的分组设为推断值“{group}”？仅更新此视频，不覆盖已有分组。',
+    '为视频“{title}”选择索引分组。仅更新此视频，不覆盖已有分组。',
   backfillGroupDone: '已设置分组“{group}”',
   backfillGroupChanged: '视频或分组已变化，请刷新后重新确认。',
   removeConfirm: '从检索索引中移除此视频？磁盘上的媒体文件会保留。',

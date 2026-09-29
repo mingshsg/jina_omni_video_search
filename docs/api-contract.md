@@ -659,20 +659,25 @@ includes `suggested_group_id` (`trailer` for 10 s/`fine`, `demo` for 2 s/`2s`).
 ### `POST /api/library/{videoId}/group/backfill`
 
 Explicit single-video backfill. The Library asks for confirmation before the
-request. The server recomputes the inferred group, never overwrites an
-existing `meta.group_id`, and changes no other video or chunk vectors.
+request. The user may select an existing index group or enter a new one;
+the inferred `trailer`/`demo` group is only a preselected suggestion. The
+server never overwrites an existing `meta.group_id` and changes no other video
+or chunk vectors.
 No backfill runs automatically.
 
-**Request:** `{ "expected_group_id": "trailer" }` (or `"demo"`).
-**200:** `{ "video_id": "uuid", "group_id": "trailer" }`.
+**Request:** `{ "group_id": "Drama" }` (free-form group, normalized and limited
+to 64 characters). The legacy inferred-only request
+`{ "expected_group_id": "trailer" }` (or `"demo"`) remains supported and
+checks the current inference before writing. Do not send both fields.
+**200:** `{ "video_id": "uuid", "group_id": "Drama" }`.
 
 | Code | HTTP | When |
 | --- | --- | --- |
-| `GROUP_BACKFILL_INVALID` | 400 | Invalid expected group |
+| `GROUP_BACKFILL_INVALID` | 400 | Invalid group or request shape |
 | `GROUP_BACKFILL_NOT_FOUND` | 404 | Missing video |
 | `GROUP_BACKFILL_ALREADY_SET` | 409 | Existing group or concurrent assignment |
-| `GROUP_BACKFILL_CHANGED` | 409 | Proposal changed before confirmation |
-| `GROUP_BACKFILL_NO_MATCH` | 422 | Variants do not imply a group |
+| `GROUP_BACKFILL_CHANGED` | 409 | Legacy inferred proposal changed before confirmation |
+| `GROUP_BACKFILL_NO_MATCH` | 422 | Legacy request has no matching variant |
 | `GROUP_BACKFILL_FAILED` | 500 | Index update failed |
 
 ### `DELETE /api/library/{videoId}`

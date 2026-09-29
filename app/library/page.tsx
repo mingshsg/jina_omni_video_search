@@ -20,6 +20,7 @@ import { AppShell, formatDurationMs } from '@/components/AppShell';
 import { DramaResultsFlyout } from '@/components/DramaResultsFlyout';
 import { DramaStartFlyout } from '@/components/DramaStartFlyout';
 import { EditMetadataFlyout } from '@/components/EditMetadataFlyout';
+import { GroupBackfillModal } from '@/components/GroupBackfillModal';
 import type { DramaSummaryDto } from '@/lib/drama/safe-dto';
 import { formatChunkPresetLabel } from '@/lib/ingest/chunk-presets';
 import { useLocale } from '@/lib/i18n/locale-context';
@@ -212,44 +213,6 @@ export default function LibraryPage() {
     [t.libraryError, t.removeDone, load],
   );
 
-  const backfillGroup = useCallback(
-    async (asset: LibraryAsset) => {
-      if (!asset.suggested_group_id) return;
-      setBusyId(asset.video_id);
-      setError(null);
-      setToast(null);
-      try {
-        const res = await fetch(
-          `/api/library/${encodeURIComponent(asset.video_id)}/group/backfill`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept-Language': locale,
-            },
-            body: JSON.stringify({ expected_group_id: asset.suggested_group_id }),
-          },
-        );
-        if (!res.ok) {
-          throw new Error(res.status === 409 || res.status === 422
-            ? t.backfillGroupChanged
-            : t.libraryError);
-        }
-        setToast(fillTemplate(t.backfillGroupDone, {
-          group: asset.suggested_group_id,
-        }));
-        setBackfillTarget(null);
-        await load();
-      } catch (err) {
-        await load();
-        setError(err instanceof Error ? err.message : t.libraryError);
-      } finally {
-        setBusyId(null);
-      }
-    },
-    [locale, t.backfillGroupChanged, t.backfillGroupDone, t.libraryError, load],
-  );
-
   const removeBatch = useCallback(
     async (mode: BatchMode) => {
       const targets = mode === 'all' ? assets : selected;
@@ -386,8 +349,7 @@ export default function LibraryPage() {
             description: t.actionBackfillGroup,
             type: 'icon',
             icon: 'plusCircle',
-            available: (item: LibraryAsset) =>
-              !item.group_id && Boolean(item.suggested_group_id),
+            available: (item: LibraryAsset) => !item.group_id,
             enabled: (item: LibraryAsset) =>
               !batchBusy && busyId !== item.video_id,
             onClick: (item: LibraryAsset) => setBackfillTarget(item),
@@ -588,23 +550,20 @@ export default function LibraryPage() {
         </EuiConfirmModal>
       )}
 
-      {backfillTarget?.suggested_group_id && (
-        <EuiConfirmModal
-          title={t.actionBackfillGroup}
-          onCancel={() => setBackfillTarget(null)}
-          onConfirm={() => void backfillGroup(backfillTarget)}
-          cancelButtonText={t.cancelConfirm}
-          confirmButtonText={t.actionBackfillGroup}
-          defaultFocusedButton="cancel"
-          isLoading={busyId === backfillTarget.video_id}
-        >
-          <p>
-            {fillTemplate(t.backfillGroupConfirm, {
-              title: backfillTarget.title || backfillTarget.video_id,
-              group: backfillTarget.suggested_group_id,
-            })}
-          </p>
-        </EuiConfirmModal>
+      {backfillTarget && (
+        <GroupBackfillModal
+          key={backfillTarget.video_id}
+          videoId={backfillTarget.video_id}
+          title={backfillTarget.title || backfillTarget.video_id}
+          suggestedGroup={backfillTarget.suggested_group_id}
+          onClose={() => setBackfillTarget(null)}
+          onSaved={(groupId) => {
+            setToast(fillTemplate(t.backfillGroupDone, { group: groupId }));
+            setBackfillTarget(null);
+            void load();
+          }}
+          onConflict={() => void load()}
+        />
       )}
 
       {editTarget && (

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { backfillAssetGroup } from '@/lib/es/group-backfill';
+import { parseFreeformGroupId } from '@/lib/metadata/groups';
 
 export const runtime = 'nodejs';
 
@@ -15,15 +16,24 @@ export async function POST(_request: Request, { params }: Params) {
     );
   }
 
-  let expectedGroup: 'trailer' | 'demo';
+  let selectedGroup: string;
+  let expectedSuggestion: 'trailer' | 'demo' | undefined;
   try {
     const body: unknown = await _request.json();
-    const value =
-      body && typeof body === 'object' && 'expected_group_id' in body
-        ? body.expected_group_id
-        : null;
-    if (value !== 'trailer' && value !== 'demo') throw new Error('invalid');
-    expectedGroup = value;
+    if (!body || typeof body !== 'object') throw new Error('invalid');
+    if ('group_id' in body && 'expected_group_id' in body) {
+      throw new Error('ambiguous');
+    }
+    if ('group_id' in body && typeof body.group_id === 'string') {
+      selectedGroup = parseFreeformGroupId(body.group_id);
+    } else if ('expected_group_id' in body) {
+      const value = body.expected_group_id;
+      if (value !== 'trailer' && value !== 'demo') throw new Error('invalid');
+      expectedSuggestion = value;
+      selectedGroup = value;
+    } else {
+      throw new Error('invalid');
+    }
   } catch {
     return NextResponse.json(
       { error: { code: 'GROUP_BACKFILL_INVALID' } },
@@ -32,7 +42,11 @@ export async function POST(_request: Request, { params }: Params) {
   }
 
   try {
-    const outcome = await backfillAssetGroup(videoId, expectedGroup);
+    const outcome = await backfillAssetGroup(
+      videoId,
+      selectedGroup,
+      expectedSuggestion,
+    );
     if (outcome.status === 'updated') {
       return NextResponse.json({ video_id: videoId, group_id: outcome.group_id });
     }

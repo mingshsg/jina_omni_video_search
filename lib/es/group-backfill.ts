@@ -1,10 +1,10 @@
 import { getConfig } from '../config';
-import { inferGroupFromVariants } from '../metadata/groups';
+import { inferGroupFromVariants, parseFreeformGroupId } from '../metadata/groups';
 import { getEsClient } from './client';
 import { getAsset } from './index-assets';
 
 export type GroupBackfillOutcome =
-  | { status: 'updated'; group_id: 'trailer' | 'demo' }
+  | { status: 'updated'; group_id: string }
   | { status: 'already_set' | 'no_match' | 'not_found' | 'changed' };
 
 /**
@@ -13,15 +13,22 @@ export type GroupBackfillOutcome =
  */
 export async function backfillAssetGroup(
   videoId: string,
-  expectedGroup: 'trailer' | 'demo',
+  selectedGroup: string,
+  /** Legacy inferred-only request. New manual selections omit this. */
+  expectedSuggestion?: 'trailer' | 'demo',
 ): Promise<GroupBackfillOutcome> {
+  const groupId = parseFreeformGroupId(selectedGroup);
   const asset = await getAsset(videoId);
   if (!asset) return { status: 'not_found' };
   if (asset.meta?.group_id) return { status: 'already_set' };
 
-  const groupId = inferGroupFromVariants(asset.variants ?? []);
-  if (!groupId) return { status: 'no_match' };
-  if (groupId !== expectedGroup) return { status: 'changed' };
+  if (expectedSuggestion) {
+    const inferred = inferGroupFromVariants(asset.variants ?? []);
+    if (!inferred) return { status: 'no_match' };
+    if (inferred !== expectedSuggestion || groupId !== expectedSuggestion) {
+      return { status: 'changed' };
+    }
+  }
 
   const client = getEsClient();
   const cfg = getConfig();
