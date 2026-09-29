@@ -58,6 +58,7 @@ import {
   type ParseChip,
   type RejectedEntry,
 } from '@/lib/metadata/parse-chips';
+import { shouldRerunOnFilterChange } from '@/lib/metadata/search-request-gate';
 
 const SearchGroupFilter = dynamic(
   () => import('@/components/SearchGroupFilter').then((m) => m.SearchGroupFilter),
@@ -239,6 +240,10 @@ export default function SearchPage() {
   // (plan/05-parse-chip-state-model.md decision 3). `null` means "no search
   // submitted yet" and must not itself count as a change.
   const lastSubmittedQueryRef = useRef<string | null>(null);
+  // G4 (todo/39): whether the user has explicitly run a search at least once.
+  // Filter changes before that only update UI state — a control click must not
+  // spend a query embedding or a search request on an unsubmitted draft.
+  const searchSubmittedRef = useRef(false);
   // Monotonic request sequence so an out-of-order response from an older
   // request (e.g. two quick chip clicks) never overwrites a newer one.
   const requestSeqRef = useRef(0);
@@ -372,6 +377,9 @@ export default function SearchPage() {
     }
     const q = query.trim();
     if (!q) return;
+    // An explicit Search (button, Enter, or a chip/filter action after one)
+    // marks the draft as submitted for G4's rerun gate.
+    searchSubmittedRef.current = true;
     const queryChanged =
       lastSubmittedQueryRef.current !== null &&
       lastSubmittedQueryRef.current !== q;
@@ -850,7 +858,13 @@ export default function SearchPage() {
             onChange={(ids) => {
               const next = { ...facets, group_id: ids };
               setFacets(next);
-              if (query.trim() && variantId) {
+              if (
+                shouldRerunOnFilterChange({
+                  submitted: searchSubmittedRef.current,
+                  query,
+                  variantId,
+                })
+              ) {
                 void runSearch({ facetsOverride: next });
               }
             }}
