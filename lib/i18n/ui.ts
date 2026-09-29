@@ -46,7 +46,6 @@ export type UiMessages = {
   groupFilterVariantSwitch: string;
   groupFilterVariantUnknown: string;
   /** G5 — searchable catalog lookup. `{name}` is the typed group name. */
-  groupFilterSearchPlaceholder: string;
   groupFilterSearchNoMatch: string;
   resultsTitle: string;
   playerTitle: string;
@@ -468,7 +467,6 @@ export const uiEn: UiMessages = {
   groupFilterVariantSwitch: 'Switch to',
   groupFilterVariantUnknown:
     'The group catalog was incomplete, so this empty result may be a catalog gap rather than a true mismatch.',
-  groupFilterSearchPlaceholder: 'Type an exact group name to look it up',
   groupFilterSearchNoMatch: 'No stored group matches “{name}”.',
   resultsTitle: 'Results',
   playerTitle: 'Player',
@@ -930,7 +928,6 @@ export const uiZh: UiMessages = {
   groupFilterVariantSwitch: '切换至',
   groupFilterVariantUnknown:
     '分组目录不完整，因此这次空结果可能是目录缺口，而非真正的变体不匹配。',
-  groupFilterSearchPlaceholder: '输入完整分组名进行查找',
   groupFilterSearchNoMatch: '没有匹配“{name}”的已存分组。',
   resultsTitle: '结果',
   playerTitle: '播放器',
