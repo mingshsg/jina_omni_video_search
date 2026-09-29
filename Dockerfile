@@ -20,6 +20,8 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN yarn build
+# This repository has no static public assets yet; keep the runner COPY valid.
+RUN mkdir -p public
 
 FROM node:22-bookworm-slim AS runner
 WORKDIR /app

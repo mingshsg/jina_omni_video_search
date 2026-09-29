@@ -104,5 +104,8 @@ do not mark P3 complete merely because the runner calls the modules.
 
 - [x] `codex/drama-enrichment-complete`: Node 22.13.1 `yarn test` passed 87 files / 611 tests; `yarn build` passed, including route compilation and typecheck. `git diff --check` passed.
 - [x] Removed duplicate group imports, form control, mapping/schema fields and package script introduced while combining the group and drama branches.
-- [ ] Rebuild the app container with this exact branch, run `yarn setup-indices`, then verify Library start/results, media denial and restart/retry against the running service.
+- [x] Rebuilt and restarted the app container from this branch after repairing the missing `public/` COPY source. `/ingest`, `/library` and `/api/library` returned HTTP 200; an unknown drama artifact path returned HTTP 404. The container received both EIS inference IDs. Browser inspection showed the Library "Process as drama" flyout and the per-video group-backfill confirmation. No backfill or enrichment was started.
+- [ ] With a real drama asset, verify successful Library results/media links, denial of unpublished artifacts, and restart/retry policy against the running service.
 - [ ] Human review of a representative drama episode, including subtitle timing, synopsis grounding, actors, scenes, and search relevance.
+- [x] `yarn setup-indices` upgraded the live assets mapping with `meta.drama.subtitle_source` and `director_coverage` and reported no conflicts; both chosen EIS chat endpoints answered a minimal request. Their IDs are set only in ignored `.env`.
+- [ ] ASR is not configured in the running container. The first subtitle test needs matching sidecar/embedded subtitles, or an ASR API key/Whisper CLI configured in ignored `.env` before upload.
