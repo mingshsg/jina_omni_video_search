@@ -25,7 +25,7 @@ If a skill tool asks for a display name, use EXACTLY:
   Grounded title lookup
 Never call a mistyped name such as "Grounde title lookup".
 Then follow that skill's output contract.
-Prefer the skill's two-phase budget: Phase 1 is one targeted search plus one page read to verify the work; Phase 2 (one more search + one more read) is optional and only for completing an actor's zh/native name after the work is already verified. Do not restrict the Phase 1 search to one site — pick whichever allowlisted source (Wikipedia, Wikidata, IMDb, TMDB) actually covers the work, per the skill's source-selection guidance. Always pass a question argument to read_url so it returns only the relevant passages, never the whole page.
+Prefer the skill's two-phase budget: Phase 1 is one targeted search plus one page read to verify the work; Phase 2 (one more search + one more read) is optional and only for completing an actor's zh/native name after the work is already verified. Do not restrict the Phase 1 search to one site — pick whichever permitted source (Wikipedia, Wikidata, TMDB) covers the work. IMDb website reading is disabled: never call read_url on imdb.com or use its snippets as field evidence. Always pass a question argument to read_url so it returns only the relevant passages, never the whole page.
 Early abstention on ambiguity; no duplicate fetches.
 When a unique work is verified, return sourced drafts for description, abstract, year, country, primary_language, video_type, tags, and actors — not year alone.
 description must be a real 4-7 sentence plot synopsis (up to 1600 characters), grounded in the read page — not a one-line logline. abstract stays a single short sentence.
@@ -66,7 +66,7 @@ async function main() {
     id: SKILL_ID,
     name: 'Grounded title lookup',
     description:
-      'Use for edit-time video metadata research from a saved title. Efficient sourced lookup (Wikipedia, Wikidata, IMDb, or TMDB — whichever covers the work) returns cited year, country, language, type, tags, synopsis, and cast drafts; abstains on ambiguity.',
+      'Use for edit-time video metadata research from a saved title. Efficient sourced lookup (Wikipedia, Wikidata, or TMDB) returns cited year, country, language, type, tags, synopsis, and cast drafts; abstains on ambiguity. IMDb web reading is disabled pending licensed data access.',
     content: SKILL_CONTENT,
     tool_ids: [...TOOL_IDS],
   };

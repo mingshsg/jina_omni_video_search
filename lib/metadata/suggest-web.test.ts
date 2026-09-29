@@ -13,10 +13,10 @@ describe('suggest-web allowlist', () => {
     expect(isAllowlistedUrl('https://www.wikidata.org/wiki/Q123')).toBe(true);
   });
 
-  it('accepts Wikipedia / IMDb / TMDB hosts', () => {
+  it('accepts Wikipedia/TMDB but keeps IMDb web reading disabled', () => {
     expect(isAllowlistedUrl('https://en.wikipedia.org/wiki/Film')).toBe(true);
     expect(isAllowlistedUrl('https://www.imdb.com/title/tt0052218/')).toBe(
-      true,
+      false,
     );
     expect(isAllowlistedUrl('https://www.themoviedb.org/movie/1')).toBe(true);
   });
@@ -29,6 +29,35 @@ describe('suggest-web allowlist', () => {
 });
 
 describe('applyAgentPayloadToLocal', () => {
+  it('never returns credential URLs from model fields, candidates, actors or trace', () => {
+    const raw = 'https://alice:synthetic-secret@en.wikipedia.org/wiki/Some_Show?token=synthetic-secret&curid=123#section';
+    const safe = 'https://en.wikipedia.org/wiki/Some_Show?curid=123';
+    const local = buildLocalSuggestions({ title: 'Some Unmatched Title' });
+    const result = applyAgentPayloadToLocal({
+      local,
+      maxReads: 2,
+      toolTrace: [{ tool_id: 'jina.read_url', url: raw, question: `Check ${raw}` }],
+      payload: {
+        status: 'ok',
+        notes: `Found ${raw}`,
+        fields: {
+          year: { value: 2003, url: raw, evidence: `Year from ${raw}` },
+          description: { value: `A series: ${raw}`, url: raw, evidence: 'A series.' },
+        },
+        candidates: [{ title: 'Some Show', url: raw, reason: `Match: ${raw}` }],
+        actors: [{ names: { en: 'Synthetic Actor' }, url: raw }],
+      },
+    });
+    const response = JSON.stringify(result);
+    expect(response).not.toContain('synthetic-secret');
+    expect(response).not.toContain('alice:');
+    expect(response).toContain(safe);
+    expect(result.suggestions.year?.source_url).toBe(safe);
+    expect(result.web?.candidates[0]?.url).toBe(safe);
+    expect(result.web?.actor_candidates?.[0]?.url).toBe(safe);
+    expect(result.web?.tool_trace?.[0]?.url).toBe(safe);
+  });
+
   it('replaces the local title clue with a sourced work description', () => {
     const local = buildLocalSuggestions({ title: '琅琊榜' });
     const result = applyAgentPayloadToLocal({
@@ -289,9 +318,12 @@ describe('applyAgentPayloadToLocal', () => {
       value: 'KR',
       source: 'external_web',
       confidence: 0.5,
-      source_url: 'https://random-fan-blog.example/post',
     });
     expect(result.suggestions.country?.evidence).toMatch(/^\[agent, uncited\]/);
+    // todo/33 R3: an uncited (non-allowlisted) URL must NOT become source_url,
+    // which the editor renders as a citation. The fan-blog link stays visible
+    // only in the evidence text and in reference_urls, framed as unverified.
+    expect(result.suggestions.country?.source_url).toBeUndefined();
   });
 
   it('applies a cited field at full confidence with a plain [agent] evidence prefix', () => {
@@ -376,9 +408,27 @@ describe('applyAgentPayloadToLocal', () => {
     });
     expect(result.suggestions.reference_urls?.value).toEqual([
       'https://en.wikipedia.org/wiki/Some_Show',
-      'https://www.imdb.com/title/tt0000000/',
-      'https://www.imdb.com/name/nm0000000/',
     ]);
+  });
+
+  it('does not apply a field sourced from an IMDb web page', () => {
+    const local = buildLocalSuggestions({ title: 'Some Unmatched Title' });
+    const result = applyAgentPayloadToLocal({
+      local,
+      maxReads: 2,
+      payload: {
+        status: 'ok',
+        fields: {
+          country: {
+            value: 'KR',
+            url: 'https://www.imdb.com/title/tt0000000/',
+            evidence: 'IMDb title details.',
+          },
+        },
+      },
+    });
+    expect(result.suggestions.country).toBeUndefined();
+    expect(result.suggestions.reference_urls).toBeUndefined();
   });
 
   it('includes uncited/non-allowlisted urls in reference_urls even though they were not cited', () => {
@@ -400,6 +450,31 @@ describe('applyAgentPayloadToLocal', () => {
     expect(result.suggestions.reference_urls?.value).toEqual([
       'https://random-fan-blog.example/post',
     ]);
+  });
+
+  it('strips credentials from agent-supplied reference_urls', () => {
+    // todo/33 R1 — synthetic tokens only. These URLs are model-controlled.
+    const local = buildLocalSuggestions({ title: 'Some Unmatched Title' });
+    const result = applyAgentPayloadToLocal({
+      local,
+      maxReads: 2,
+      payload: {
+        status: 'ok',
+        fields: {
+          country: {
+            value: 'KR',
+            url: 'https://alice:s3cret@en.wikipedia.org/wiki/Some_Show?token=AAA',
+            evidence: 'Infobox.',
+          },
+        },
+      },
+    });
+    expect(result.suggestions.reference_urls?.value).toEqual([
+      'https://en.wikipedia.org/wiki/Some_Show',
+    ]);
+    const stored = JSON.stringify(result.suggestions.reference_urls);
+    expect(stored).not.toContain('s3cret');
+    expect(stored).not.toContain('AAA');
   });
 
   it('omits reference_urls entirely when the payload has no urls at all', () => {

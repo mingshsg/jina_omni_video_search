@@ -85,21 +85,14 @@ parallel during Phase 1); never fan out exploratory reads.
    identifies a work, return `empty`.
 4. Otherwise pick the single best HTTPS allowlisted hit and **read it once**,
    with a `question` covering year/country/language/kind/genres/cast (see
-   above). Choose the source by what the work needs, not by habit — all four
-   Phase-1 domains are equally permitted:
+   above). Choose the source by what the work needs, not by habit:
    - **Wikipedia** is usually the strongest single choice, because one page
      carries *both* the synopsis prose (`description`/`abstract`) and a cast
      list that gives character names and native-script names together (e.g.
      "Song Kang-ho as Kim Ki-taek (김기택)"). Prefer it when the work has a
      real article and you need prose or cast.
-   - **IMDb** is the better choice when the work has no usable Wikipedia
-     article, or when the fields you still need are the structured ones. Its
-     "Details" block states country of origin, languages, release date and
-     "Also known as" title variants explicitly. Note its plot/"Storyline"
-     section often does **not** survive extraction, so do not pick IMDb when
-     `description`/`abstract` is the main gap.
    - **TMDB** is a reasonable fallback for non-English works that are thin on
-     both of the above.
+     Wikipedia.
    - **Wikidata** when the hit is a structured item and a Wikipedia lead
      would be redundant.
    Do not read a second page merely to corroborate a fact the first page
@@ -126,7 +119,9 @@ parallel during Phase 1); never fan out exploratory reads.
 ### Readable domains
 
 **Phase 1 (work-level facts):** read only HTTPS pages on wikipedia.org and
-its language subdomains, wikidata.org, imdb.com, and themoviedb.org.
+its language subdomains, wikidata.org, and themoviedb.org. IMDb website
+reading is disabled pending an applicable IMDb data license. Do not call
+`read_url` on imdb.com or use IMDb search snippets as field evidence.
 
 **Phase 2 (name completion only):** additionally allowed —
 baike.baidu.com, movie.douban.com, mydramalist.com, hancinema.net,
@@ -299,43 +294,10 @@ compact reply:
 ```
 
 The Wikipedia URLs above are **incidental to that example**, not a required
-source — every `url` is Wikipedia only because that one page happened to
-carry the synopsis and the cast together. All four Phase-1 domains are
-first-class. When the single page you read is IMDb, cite IMDb; the contract
-is identical. For example, for a work whose structured details you read from
-IMDb:
-
-```
-{
-  "status": "ok",
-  "candidates": [
-    {
-      "title": "Parasite",
-      "url": "https://www.imdb.com/title/tt6751668/",
-      "year": 2019,
-      "reason": "Title page matches the cleaned work title."
-    }
-  ],
-  "fields": {
-    "country": {
-      "value": "KR",
-      "url": "https://www.imdb.com/title/tt6751668/",
-      "evidence": "Details lists country of origin: South Korea."
-    },
-    "primary_language": {
-      "value": "ko",
-      "url": "https://www.imdb.com/title/tt6751668/",
-      "evidence": "Details lists Languages: Korean."
-    }
-  },
-  "notes": "Structured details read from the IMDb title page."
-}
-```
-
-Note that this second example still returns `candidates` — a `status: "ok"`
-reply should always name the page(s) you considered, whatever the domain.
-It shows fewer `fields` only because it is illustrating source choice, not
-because an `ok` reply may skip the fields it can support.
+source. A `status: "ok"` reply should name the page(s) considered in
+`candidates`, whatever permitted domain supplied the evidence. IMDb remains
+an inactive backup option for a separately licensed data API; it is not a
+permitted `read_url` domain for this skill.
 
 Allowed keys and types when present:
 

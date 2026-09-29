@@ -143,11 +143,11 @@ value is never reordered or reconstructed — copied exactly as the source
 shows it. Omit `character` and any field entry you cannot cite; never send
 `null` language keys.
 
-The app accepts this JSON only through a strict bounded schema. It drops
-non-HTTPS or non-allowlisted URLs, applies fields and actors only for
-`status=ok`, requires cited URLs for external proposals, validates
-country/language/type against catalogs, and keeps unresolved actor identities
-read-only. Filled editor fields are never overwritten (draft + UI empty checks).
+The app accepts this JSON only through a strict bounded schema. It applies
+agent fields and actors only for `status=ok`, discounts uncited scalar fields,
+and validates country/language/type against catalogs. Actor candidates still
+require allowlisted source URLs. Filled editor fields are never overwritten
+(draft + UI empty checks).
 
 ## Skill behavior
 
@@ -158,17 +158,16 @@ Two-phase budget: Phase 1 is **1 targeted search + 1 page
 read** to verify the work (unchanged); Phase 2 is an optional **+1
 search/+1 read** spent only on completing a missing actor zh/native name
 after the work is already verified — worst case still 2 searches + 2 reads.
-The Phase 1 search is **not** restricted to a single site: it previously
-appended `site:wikipedia.org`, which made the allowlisted IMDb/TMDB domains
-structurally unreachable (they were filtered out of the result set before
-ranking). The skill now selects a source per work — Wikipedia for prose and
-cast-with-character-names, IMDb for structured country/language/AKA details,
-TMDB as a fallback for thin non-English works.
+The Phase 1 search is **not** restricted to a single site. The skill selects
+Wikipedia for prose and cast-with-character-names, with TMDB or Wikidata as
+permitted alternatives when Wikipedia is thin or missing. IMDb is a disabled
+backup option until an applicable data license and a separate API adapter are
+available; Jina Reader must not read IMDb web pages.
 Every `read_url` call must pass a `question` argument so the tool returns
 only the relevant passages (cheaper, and less raw page text for prompt
 injection to hide in) instead of the whole page. Abstain early on ambiguous
 titles. Reader domains for work-level facts: Wikipedia (incl. language
-subdomains), Wikidata, IMDb, TMDB. Reader domains additionally allowed for
+subdomains), Wikidata, TMDB. Reader domains additionally allowed for
 Phase 2 name-only lookups: Baidu Baike, Douban, MyDramaList, HanCinema,
 AsianWiki. Extract year, country, original language, video_type (file-level
 cues win over parent work), description/abstract, genre tags, and

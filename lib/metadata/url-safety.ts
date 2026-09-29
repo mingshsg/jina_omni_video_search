@@ -116,3 +116,8 @@ export function isAlreadySafeExternalUrl(
   const sanitized = sanitizeExternalUrl(raw, options);
   return sanitized !== null && sanitized === raw.trim();
 }
+
+/** Model-provided prose is not a URL field; omit embedded links altogether. */
+export function redactExternalUrlsInText(raw: string): string {
+  return raw.replace(/https?:\/\/\S+/gi, '[link]');
+}

@@ -19,7 +19,6 @@ import {
   AgentBuilderError,
   converseSuggestAgent,
   isAgentBuilderSuggestConfigured,
-  isRenderableTraceUrl,
   type AgentBuilderFieldDraft,
   type AgentBuilderSuggestPayload,
   type AgentToolTraceEntry,
@@ -31,6 +30,7 @@ import {
   JinaWebError,
   type JinaSearchHit,
 } from './jina-web';
+import { redactExternalUrlsInText, sanitizeExternalUrl } from './url-safety';
 import type { LocalSuggestResult, SuggestFieldDraft } from './suggest-local';
 import { getAliasIndex } from './people';
 
@@ -43,8 +43,6 @@ export const SUGGEST_WEB_ALLOWLIST = [
   'ko.wikipedia.org',
   'wikidata.org',
   'www.wikidata.org',
-  'imdb.com',
-  'www.imdb.com',
   'themoviedb.org',
   'www.themoviedb.org',
 ] as const;
@@ -141,20 +139,20 @@ export function normalizeAgentActorCandidates(
   let droppedUncited = 0;
   const candidates = (actors ?? [])
     .flatMap((actor) => {
-      const en = actor.names?.en?.normalize('NFKC').trim() ?? '';
+      const en = redactExternalUrlsInText(actor.names?.en?.normalize('NFKC').trim() ?? '');
       // No English name at all is malformed agent output, not a policy
       // drop — nothing the operator could act on, so it is not counted.
       if (!en) return [];
-      const url = String(actor.url ?? '');
-      if (!isNameAllowlistedUrl(url)) {
+      const url = sanitizeExternalUrl(actor.url, { protocols: ['https:'] });
+      if (!url || !isNameAllowlistedUrl(url)) {
         droppedUncited += 1;
         return [];
       }
-      const zh = actor.names?.zh?.normalize('NFKC').trim() || null;
+      const zh = redactExternalUrlsInText(actor.names?.zh?.normalize('NFKC').trim() ?? '') || null;
       const nativeRaw = actor.names?.native;
       const nativeName =
         nativeRaw && typeof nativeRaw.name === 'string'
-          ? nativeRaw.name.normalize('NFKC').trim()
+          ? redactExternalUrlsInText(nativeRaw.name.normalize('NFKC').trim())
           : '';
       const native =
         nativeRaw && typeof nativeRaw.lang === 'string' && nativeName
@@ -170,9 +168,9 @@ export function normalizeAgentActorCandidates(
       return [
         {
           names,
-          character: actor.character?.normalize('NFKC').trim() || null,
+          character: redactExternalUrlsInText(actor.character?.normalize('NFKC').trim() ?? '') || null,
           url,
-          evidence: String(actor.evidence ?? '').slice(0, 280),
+          evidence: redactExternalUrlsInText(String(actor.evidence ?? '')).slice(0, 280),
           retrieved_at: retrievedAt,
           matched_person_id:
             matchedIds.size === 1 ? [...matchedIds][0]! : null,
@@ -194,6 +192,12 @@ function hostnameOf(url: string): string | null {
   } catch {
     return null;
   }
+}
+
+/** IMDb is a future licensed fallback, not an automated Jina Reader source. */
+function isDisabledImdbUrl(url: string): boolean {
+  const host = hostnameOf(url);
+  return host === 'imdb.com' || Boolean(host?.endsWith('.imdb.com'));
 }
 
 export function isAllowlistedUrl(url: string): boolean {
@@ -262,10 +266,18 @@ function collectReferenceUrls(payload: AgentBuilderSuggestPayload): string[] {
   const add = (url: unknown): void => {
     if (out.length >= META_BOUNDS.referenceUrlsMax) return;
     if (typeof url !== 'string' || !url) return;
-    const trimmed = url.trim();
-    if (!trimmed || !isRenderableTraceUrl(trimmed) || seen.has(trimmed)) return;
-    seen.add(trimmed);
-    out.push(trimmed);
+    // todo/33 R1: sanitize before storing. These URLs are model-controlled
+    // and land in `meta.reference_urls`, which is persisted to ES _source
+    // and returned by the editor API — so userinfo/credential params here
+    // would breach the no-secrets-in-indexed-documents invariant. Dedupe on
+    // the sanitized form so two URLs differing only by a stripped token
+    // collapse to one entry.
+    const safe = sanitizeExternalUrl(url, {
+      maxLength: META_BOUNDS.referenceUrlMaxLen,
+    });
+    if (!safe || isDisabledImdbUrl(safe) || seen.has(safe)) return;
+    seen.add(safe);
+    out.push(safe);
   };
   const fields = payload.fields;
   if (fields) {
@@ -338,13 +350,17 @@ export function applyAgentPayloadToLocal(params: {
       ? (payload.candidates ?? [])
           .filter((candidate) => candidate.url && isAllowlistedUrl(candidate.url))
           .slice(0, 3)
-          .map((candidate) => ({
+          .flatMap((candidate) => {
+            const url = sanitizeExternalUrl(candidate.url, { protocols: ['https:'] });
+            if (!url) return [];
+            return [{
             provider: 'agent_builder' as const,
-            title: String(candidate.title ?? '').slice(0, 300),
-            url: String(candidate.url),
-            snippet: String(candidate.reason ?? '').slice(0, 280),
+            title: redactExternalUrlsInText(String(candidate.title ?? '')).slice(0, 300),
+            url,
+            snippet: redactExternalUrlsInText(String(candidate.reason ?? '')).slice(0, 280),
             allowlisted: true,
-          }))
+            }];
+          })
       : [];
   const reads = candidates.slice(0, maxReads).map((candidate) => ({
     url: candidate.url,
@@ -367,10 +383,14 @@ export function applyAgentPayloadToLocal(params: {
     ): { value: unknown; url: string | null; evidence: string; cited: boolean } | null => {
       if (!field) return null;
       const rawUrl = typeof field.url === 'string' && field.url ? field.url : null;
+      // Defense in depth for an older live skill or a model that ignores the
+      // source policy: never turn an IMDb web-page read into a draft value.
+      if (rawUrl && isDisabledImdbUrl(rawUrl)) return null;
+      const safeUrl = sanitizeExternalUrl(rawUrl);
       return {
         value: field.value,
-        url: rawUrl,
-        evidence: String(field.evidence ?? '').slice(0, 280),
+        url: safeUrl,
+        evidence: redactExternalUrlsInText(String(field.evidence ?? '')).slice(0, 280),
         // Bug fix (todo/30 S6): this used to *gate* the whole fact — no
         // allowlisted URL meant the value was silently dropped, even though
         // the zod schema in agent-builder-suggest.ts always treated `url`
@@ -378,7 +398,7 @@ export function applyAgentPayloadToLocal(params: {
         // just trust it less and label it distinctly (see
         // `discountForCitation` / the `[agent, uncited]` evidence prefix
         // below) rather than discard real agent output.
-        cited: !!rawUrl && isAllowlistedUrl(rawUrl),
+        cited: !!safeUrl && isAllowlistedUrl(safeUrl),
       };
     };
 
@@ -390,12 +410,25 @@ export function applyAgentPayloadToLocal(params: {
     const discountForCitation = (base: number, wasCited: boolean): number =>
       wasCited ? base : Math.max(0.3, Math.round((base - 0.15) * 100) / 100);
 
-    /** Only pass through source_url when it satisfies the stricter https-only
-     * provenance schema used at Save time (validate.ts fieldProvenanceSchema)
-     * — an http-only or otherwise-unciteable URL is still shown in evidence
-     * text, just not carried as a clickable "source" link. */
-    const citableSourceUrl = (url: string | null): string | undefined =>
-      url && url.startsWith('https://') ? url : undefined;
+    /**
+     * `source_url` is rendered by the editor as *the citation* for a field.
+     *
+     * Bug fix (todo/33 R3): this used to accept any `https://` URL, so an
+     * uncited fact — one whose URL failed the domain allowlist, e.g. a fan
+     * blog — still got a clickable "source" link next to evidence text that
+     * said `[agent, uncited]`. That is self-contradictory, and it dressed an
+     * untrusted link as provenance. Now only an actually-cited (allowlisted)
+     * URL becomes `source_url`. The uncited URL is not lost: it is still
+     * visible in the evidence text and collected into `reference_urls` as an
+     * unverified research link, which is the honest framing for it.
+     */
+    const citableSourceUrl = (
+      url: string | null,
+      wasCited: boolean,
+    ): string | undefined =>
+      wasCited && url
+        ? sanitizeExternalUrl(url, { protocols: ['https:'] }) ?? undefined
+        : undefined;
 
     const year = readField(payload.fields?.year);
     if (
@@ -412,7 +445,7 @@ export function applyAgentPayloadToLocal(params: {
         confidence: discountForCitation(0.7, year.cited),
         source: 'external_web',
         evidence: `[agent${year.cited ? '' : ', uncited'}] ${year.evidence || `year ${year.value}`}`,
-        source_url: citableSourceUrl(year.url),
+        source_url: citableSourceUrl(year.url, year.cited),
         retrieved_at: retrievedAt,
       };
     }
@@ -431,7 +464,7 @@ export function applyAgentPayloadToLocal(params: {
         confidence: discountForCitation(0.65, country.cited),
         source: 'external_web',
         evidence: `[agent${country.cited ? '' : ', uncited'}] ${country.evidence || 'work production country'}`,
-        source_url: citableSourceUrl(country.url),
+        source_url: citableSourceUrl(country.url, country.cited),
         retrieved_at: retrievedAt,
       };
     }
@@ -451,7 +484,7 @@ export function applyAgentPayloadToLocal(params: {
           confidence: discountForCitation(0.65, language.cited),
           source: 'external_web',
           evidence: `[agent${language.cited ? '' : ', uncited'}] ${language.evidence || 'work original language'}`,
-          source_url: citableSourceUrl(language.url),
+          source_url: citableSourceUrl(language.url, language.cited),
           retrieved_at: retrievedAt,
         };
       }
@@ -475,7 +508,7 @@ export function applyAgentPayloadToLocal(params: {
         confidence: discountForCitation(0.6, videoType.cited),
         source: 'external_web',
         evidence: `[agent${videoType.cited ? '' : ', uncited'}] ${videoType.evidence || 'sourced video type'}`,
-        source_url: citableSourceUrl(videoType.url),
+        source_url: citableSourceUrl(videoType.url, videoType.cited),
         retrieved_at: retrievedAt,
       };
     }
@@ -490,11 +523,11 @@ export function applyAgentPayloadToLocal(params: {
       })
     ) {
       suggestions.description = {
-        value: description.value.trim().slice(0, META_BOUNDS.descriptionMax),
+        value: redactExternalUrlsInText(description.value.trim()).slice(0, META_BOUNDS.descriptionMax),
         confidence: discountForCitation(0.65, description.cited),
         source: 'external_web',
         evidence: `[agent${description.cited ? '' : ', uncited'}] ${description.evidence || 'grounded work description'}`,
-        source_url: citableSourceUrl(description.url),
+        source_url: citableSourceUrl(description.url, description.cited),
         retrieved_at: retrievedAt,
       };
     }
@@ -509,11 +542,11 @@ export function applyAgentPayloadToLocal(params: {
       })
     ) {
       suggestions.abstract = {
-        value: abstract.value.trim().slice(0, META_BOUNDS.abstractMax),
+        value: redactExternalUrlsInText(abstract.value.trim()).slice(0, META_BOUNDS.abstractMax),
         confidence: discountForCitation(0.65, abstract.cited),
         source: 'external_web',
         evidence: `[agent${abstract.cited ? '' : ', uncited'}] ${abstract.evidence || 'grounded work abstract'}`,
-        source_url: citableSourceUrl(abstract.url),
+        source_url: citableSourceUrl(abstract.url, abstract.cited),
         retrieved_at: retrievedAt,
       };
     }
@@ -521,7 +554,7 @@ export function applyAgentPayloadToLocal(params: {
     const tags = readField(payload.fields?.tags);
     if (Array.isArray(tags?.value)) {
       const bounded = tags.value
-        .map((tag) => String(tag).normalize('NFKC').trim())
+        .map((tag) => redactExternalUrlsInText(String(tag).normalize('NFKC').trim()))
         .filter((tag) => tag.length > 0 && tag.length <= META_BOUNDS.tagMaxLen)
         .slice(0, META_BOUNDS.tagsMax);
       if (
@@ -536,7 +569,7 @@ export function applyAgentPayloadToLocal(params: {
           confidence: discountForCitation(0.55, tags.cited),
           source: 'external_web',
           evidence: `[agent${tags.cited ? '' : ', uncited'}] ${tags.evidence || 'sourced genre keywords'}`,
-          source_url: citableSourceUrl(tags.url),
+          source_url: citableSourceUrl(tags.url, tags.cited),
           retrieved_at: retrievedAt,
         };
       }
@@ -576,19 +609,26 @@ export function applyAgentPayloadToLocal(params: {
     web: {
       used: true,
       status: payload.status,
-      reason: payload.notes,
+      reason: payload.notes ? redactExternalUrlsInText(payload.notes) : undefined,
       candidates,
       reads,
       elapsed_ms: elapsedMs,
       agent_id: agentId,
       actor_candidates: actorCandidates,
       actor_candidates_dropped: actorCandidatesDropped,
-      tool_trace: toolTrace,
+      tool_trace: toolTrace?.map((entry) => ({
+        tool_id: entry.tool_id,
+        ...(entry.query ? { query: redactExternalUrlsInText(entry.query) } : {}),
+        ...(entry.question ? { question: redactExternalUrlsInText(entry.question) } : {}),
+        ...(entry.url
+          ? { url: sanitizeExternalUrl(entry.url) ?? undefined }
+          : {}),
+      })),
     },
   };
 }
 
-/** Prefer Wikipedia / IMDb / TMDB hits that look like the work title. */
+/** Prefer Wikipedia / TMDB hits that look like the work title. */
 export function pickReadableCandidates(
   hits: JinaSearchHit[],
   workTitle: string,
@@ -605,7 +645,7 @@ export function pickReadableCandidates(
       }
       const host = hostnameOf(h.url) ?? '';
       if (host.includes('wikipedia')) score += 2;
-      if (host.includes('imdb') || host.includes('themoviedb')) score += 1;
+      if (host.includes('themoviedb')) score += 1;
       return { hit: h, score };
     })
     .filter((r) => r.score > 0)
@@ -711,7 +751,6 @@ async function enrichViaAgentBuilder(params: {
         area: 'suggest_web',
         phase: 'agent_builder_enrichment_failed',
         reason,
-        error: err instanceof Error ? err.message : String(err),
       }),
     );
     const suggestions = { ...local.suggestions };
@@ -753,18 +792,22 @@ async function enrichViaJinaRest(params: {
       timeoutMs: cfg.SUGGEST_WEB_TIMEOUT_MS,
       signal,
     });
-    const candidates: SuggestWebCandidate[] = hits
+    const safeHits = hits.flatMap((hit) => {
+      const url = sanitizeExternalUrl(hit.url, { protocols: ['https:'] });
+      return url ? [{ ...hit, url }] : [];
+    });
+    const candidates: SuggestWebCandidate[] = safeHits
       .filter((hit) => isAllowlistedUrl(hit.url))
       .slice(0, 8)
       .map((hit) => ({
         provider: 'jina' as const,
-        title: hit.title,
+        title: redactExternalUrlsInText(hit.title),
         url: hit.url,
-        snippet: hit.description.slice(0, 280),
+        snippet: redactExternalUrlsInText(hit.description).slice(0, 280),
         allowlisted: true,
       }));
     const readable = pickReadableCandidates(
-      hits,
+      safeHits,
       work,
       cfg.SUGGEST_WEB_MAX_READS,
     );
@@ -794,10 +837,11 @@ async function enrichViaJinaRest(params: {
           timeoutMs: cfg.SUGGEST_WEB_TIMEOUT_MS,
           signal,
         });
-        if (!isAllowlistedUrl(page.url)) continue;
+        const pageUrl = sanitizeExternalUrl(page.url, { protocols: ['https:'] });
+        if (!pageUrl || !isAllowlistedUrl(pageUrl)) continue;
         reads.push({
-          url: page.url,
-          title: page.title,
+          url: pageUrl,
+          title: redactExternalUrlsInText(page.title),
           content: page.content.slice(0, 4000),
         });
       } catch {
@@ -815,7 +859,7 @@ async function enrichViaJinaRest(params: {
           value: consensus.year,
           confidence: 0.55,
           source: 'external_web',
-          evidence: `[jina-rest] ${consensus.evidence}; sources: ${reads
+          evidence: `[jina-rest] ${redactExternalUrlsInText(consensus.evidence)}; sources: ${reads
             .map((r) => r.url)
             .join(', ')}`,
           source_url: reads[0]!.url,

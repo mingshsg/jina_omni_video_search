@@ -703,6 +703,17 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
       let applied = 0;
       const sug = data.suggestions ?? {};
 
+      // todo/33 R3: an agent draft with no allowlisted citation must not
+      // write itself into the form. A cited fact still auto-fills an empty
+      // field (the S6 decision); an uncited one is held in the pending-apply
+      // tray so the operator has to accept it explicitly. Detection is the
+      // server's own marker — `[agent, uncited]` — which suggest-web.ts sets
+      // exactly when there was no allowlisted citation. Local title-clue and
+      // catalog-validated drafts carry no such prefix and are unaffected.
+      const isUncited = (draft: SuggestField): boolean =>
+        typeof draft.evidence === 'string' &&
+        draft.evidence.startsWith('[agent, uncited]');
+
       const mark = (key: keyof SuggestedSources, draft: SuggestField) => {
         nextSources[key] = 'suggestion';
         nextProvenance[key] = {
@@ -722,19 +733,25 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
         applied += 1;
       };
 
-      if (snapshot.yearEmpty && cur.year.trim() === '' && sug.year != null) {
+      if (sug.year != null && isUncited(sug.year)) {
+        nextPending.year = sug.year;
+      } else if (snapshot.yearEmpty && cur.year.trim() === '' && sug.year != null) {
         setYear(String(sug.year.value));
         mark('year', sug.year);
       } else if (sug.year != null) {
         nextPending.year = sug.year;
       }
-      if (snapshot.typeEmpty && cur.videoType === '' && sug.video_type != null) {
+      if (sug.video_type != null && isUncited(sug.video_type)) {
+        nextPending.video_type = sug.video_type;
+      } else if (snapshot.typeEmpty && cur.videoType === '' && sug.video_type != null) {
         setVideoType(String(sug.video_type.value));
         mark('video_type', sug.video_type);
       } else if (sug.video_type != null) {
         nextPending.video_type = sug.video_type;
       }
-      if (
+      if (sug.primary_language != null && isUncited(sug.primary_language)) {
+        nextPending.primary_language = sug.primary_language;
+      } else if (
         snapshot.langEmpty &&
         cur.language === '' &&
         sug.primary_language != null
@@ -744,13 +761,17 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
       } else if (sug.primary_language != null) {
         nextPending.primary_language = sug.primary_language;
       }
-      if (snapshot.countryEmpty && cur.country === '' && sug.country != null) {
+      if (sug.country != null && isUncited(sug.country)) {
+        nextPending.country = sug.country;
+      } else if (snapshot.countryEmpty && cur.country === '' && sug.country != null) {
         setCountry(String(sug.country.value));
         mark('country', sug.country);
       } else if (sug.country != null) {
         nextPending.country = sug.country;
       }
-      if (
+      if (sug.description != null && isUncited(sug.description)) {
+        nextPending.description = sug.description;
+      } else if (
         snapshot.descriptionEmpty &&
         cur.description.trim() === '' &&
         sug.description != null
@@ -760,7 +781,9 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
       } else if (sug.description != null) {
         nextPending.description = sug.description;
       }
-      if (
+      if (sug.abstract != null && isUncited(sug.abstract)) {
+        nextPending.abstract = sug.abstract;
+      } else if (
         snapshot.abstractEmpty &&
         cur.abstract.trim() === '' &&
         sug.abstract != null
@@ -776,6 +799,12 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
           .map((s) => s.trim())
           .filter(Boolean).length === 0;
       if (
+        Array.isArray(sug.tags?.value) &&
+        sug.tags.value.length > 0 &&
+        isUncited(sug.tags)
+      ) {
+        nextPending.tags = sug.tags;
+      } else if (
         snapshot.tagsEmpty &&
         curTagsEmpty &&
         Array.isArray(sug.tags?.value) &&

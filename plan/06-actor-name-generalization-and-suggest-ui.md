@@ -34,7 +34,7 @@ user rather than found by a review:
 ## Decisions
 
 - **No Wikidata requirement.** Free web search is fine as the discovery step;
-  Wikipedia/Wikidata/IMDb/TMDB remain the trusted read domains for
+  Wikipedia/Wikidata/TMDB remain the trusted read domains for
   work-level facts.
 - **Tool budget may grow, but stays bounded.** Two phases, each 1 search + 1
   read: Phase 1 (always) identifies the work; Phase 2 (optional) is spent
@@ -58,7 +58,7 @@ user rather than found by a review:
   appear when it adds real information. The native-script string is never
   reordered or reconstructed; it is copied exactly as the source shows it.
 - **Name-only domain allowlist.** Work-level facts stay on the strict
-  Wikipedia/Wikidata/IMDb/TMDB allowlist. Actor name completion (Phase 2
+  Wikipedia/Wikidata/TMDB allowlist. Actor name completion (Phase 2
   only) additionally allows Baidu Baike, Douban, MyDramaList, HanCinema,
   AsianWiki — lower-trust sources are acceptable here because actor
   candidates are already gated behind exact-alias resolution against
