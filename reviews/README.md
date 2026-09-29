@@ -36,6 +36,13 @@ loses an action item.
 
 ## Current — hybrid metadata search
 
+- [`group-search-and-backfill-code-review-2026-09-29.md`](./group-search-and-backfill-code-review-2026-09-29.md)
+  — **Group search is wired but not acceptance-ready.** Variant/Group mismatch
+  can silently exclude results; selection bounds and catalog failures need
+  handling. Node 22 tests (616) and build pass; grouped live search and manual
+  backfill writes remain unverified.
+  → [`todo/39`](../todo/39-group-search-and-backfill-2026-09-29.md)
+
 - [`suggest-imdb-and-source-boundary-code-review-2026-09-24.md`](./suggest-imdb-and-source-boundary-code-review-2026-09-24.md)
   — **Suggest source and URL safety.** The historical review identified
   credential-bearing URLs and uncited draft handling; the current disposition
