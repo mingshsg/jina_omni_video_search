@@ -37,11 +37,9 @@ loses an action item.
 ## Current — hybrid metadata search
 
 - [`suggest-imdb-and-source-boundary-code-review-2026-09-24.md`](./suggest-imdb-and-source-boundary-code-review-2026-09-24.md)
-  — **IMDb removed from the app allowlist and Agent policy.** Two P1s remain:
-  generic Reader calls lack a visible domain block, and raw source URLs can
-  persist credentials or tokens. Uncited
-  auto-fill, research-link labeling, and canonical actor aliases need fixes.
-  → [`todo/33`](../todo/33-suggest-imdb-and-source-boundary-2026-09-24.md)
+  — **Suggest source and URL safety.** The historical review identified
+  credential-bearing URLs and uncited draft handling; the current disposition
+  and remaining live/browser gates are in [`todo/33`](../todo/33-suggest-imdb-and-source-boundary-2026-09-24.md).
 
 - [`suggest-metadata-editor-session-review-2026-09-23.md`](./suggest-metadata-editor-session-review-2026-09-23.md)
   — **`reference_urls`, todo/30 S6 citation relaxation, "Known as" alias

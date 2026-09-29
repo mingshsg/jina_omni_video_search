@@ -12,11 +12,12 @@ Upstream: https://github.com/mingsorg/episode_processing
 | P1 Subtitles + structure + drama-subtitles index | Node code committed (`03932da`); live mapping + bulk/reconcile verified; ko/th ASR live integration and human quality still separate |
 | P2 Directors script + synopsis | Done (live EIS smoke NOT RUN) |
 | P3 Key actors + key scenes + frame GC job | Node code committed; live cost/latency NOT RUN (`todo/38` I1–I7 fixed and committed; `todo/37` tracks earlier fixes) |
-| P4 Search / Library consume (+ Library re-run) | Library start/results first cut committed (`df7a10e`, `9547047`); submission fixes in progress; timed subtitle inspection, search consume and browser acceptance remain open |
+| P4 Search / Library consume (+ Library re-run) | Library start/results first cut and media/policy fixes committed on `codex/drama-enrichment-complete`; timed subtitle inspection, search consume and browser acceptance remain open |
 
 P0–P3 core was committed as `03932da`. The P4 per-run option backend and
 Library start/results first cut were committed as `df7a10e` and `9547047`.
-`todo/39` tracks the follow-up submission defects; this is not P4 acceptance.
+The media allowlist and durable Library policy fixes are in this drama branch;
+they do not establish P4 browser or human-quality acceptance.
 
 ## Decisions (2026-09-26)
 
@@ -79,10 +80,10 @@ do not mark P3 complete merely because the runner calls the modules.
 
 - [ ] Optional filter: exclude 片头/片尾/recap windows from moment results
 - [ ] Library / flyout: structure + faces + scenes
-- [x] Library action code: configure modules, `zh/en/ko/th` source languages, subtitle method, and sampled director coverage for an existing ready asset; review choices before an async start. `df7a10e`/`9547047` committed the first cut. Durable policy repair is tracked in `todo/39` S2; browser acceptance remains open.
+- [x] Library action code: configure modules, `zh/en/ko/th` source languages, subtitle method, and sampled director coverage for an existing ready asset; review choices before an async start. The selected policy is persisted in `meta.drama` across handoff, running and terminal writes. Browser and restart acceptance remain open.
 - [ ] Library result view: current first cut shows status, synopsis, structure rows, scene/actor summaries, approved script/still links, and refresh. Timed subtitle cue queries, timeline/seek UI, coverage gaps, and detailed provenance remain open. Do not call the first cut full P4 inspection.
 - [ ] Safe post-ingest API: persist a recoverable marker before `202`, reject missing media/overlap, never re-embed, query timed subtitles, and keep previous successful generations until a complete replacement. Resolve todo/38 I1–I4 before enabling reprocess.
-- [x] Code: `api/drama-media` now authorizes only published ZH/EN scripts, key-scene stills, and verified face cards; `meta.json`, audio, SRT, raw script, audit files and unverified cards are denied. Path helper tests pass. Rebuilt-container route check remains open in `todo/39`.
+- [x] Code: `api/drama-media` now authorizes only published ZH/EN scripts, key-scene stills, and verified face cards; `meta.json`, audio, SRT, raw script, audit files and unverified cards are denied. Path helper tests pass. Rebuilt-container route check remains open.
 - [ ] Browser and live index acceptance for the Library workflow on a rebuilt container; human content-quality review remains a separate round.
 - [ ] File + live search regression
 - [ ] Do not claim p95/relevance without labeled run
@@ -98,3 +99,10 @@ do not mark P3 complete merely because the runner calls the modules.
 | Search relevance with structure filter | NOT RUN |
 | Docker image with Python drama deps rebuild | NOT RUN |
 | Frame GC job in production-like schedule | NOT RUN |
+
+## Submission branch check (2026-09-29)
+
+- [x] `codex/drama-enrichment-complete`: Node 22.13.1 `yarn test` passed 87 files / 611 tests; `yarn build` passed, including route compilation and typecheck. `git diff --check` passed.
+- [x] Removed duplicate group imports, form control, mapping/schema fields and package script introduced while combining the group and drama branches.
+- [ ] Rebuild the app container with this exact branch, run `yarn setup-indices`, then verify Library start/results, media denial and restart/retry against the running service.
+- [ ] Human review of a representative drama episode, including subtitle timing, synopsis grounding, actors, scenes, and search relevance.

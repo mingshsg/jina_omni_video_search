@@ -290,7 +290,6 @@ export const metaPatchBodySchema = z
     reference_urls: z
       .union([referenceUrlListSchema, z.null()])
       .optional(),
-    group_id: z.union([z.string(), z.null()]).optional(),
     /** Optional per-field provenance when saving accepted suggestions. */
     field_sources: z
       .object({

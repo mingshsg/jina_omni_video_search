@@ -27,7 +27,6 @@
     "probe-query-parser": "tsx scripts/probe-query-parser.ts",
     "probe-jina-suggest": "tsx scripts/probe-jina-suggest.ts",
     "download-agent-builder-artefacts": "tsx scripts/download-agent-builder-artefacts.ts",
-    "backfill-group-id": "tsx scripts/backfill-group-id.ts",
     "ensure-suggest-agent": "tsx scripts/ensure-suggest-agent.ts",
     "drama-gc-sweep": "tsx scripts/drama-gc-sweep.ts"
   },

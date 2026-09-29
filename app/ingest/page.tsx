@@ -1004,18 +1004,6 @@ export default function IngestPage() {
           </>
         )}
 
-        <EuiFormRow label={t.groupLabel} helpText={t.groupHelp}>
-          <CreatableGroupCombo
-            placeholder={t.groupLabel}
-            options={groupOptions}
-            selectedOptions={selectedGroup}
-            onChange={setSelectedGroup}
-            onCreateOption={onCreateGroup}
-            isDisabled={formBusy}
-            aria-label={t.groupLabel}
-          />
-        </EuiFormRow>
-
         <EuiFormRow
           label={t.groupLabel}
           helpText={t.groupHelp}

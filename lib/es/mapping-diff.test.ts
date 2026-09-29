@@ -138,7 +138,6 @@ describe('diffMappingProperties', () => {
           tags_key: { type: 'keyword' },
           group_id: { type: 'keyword' },
           reference_urls: { type: 'keyword', index: false },
-          group_id: { type: 'keyword' },
           work_title: {
             properties: {
               en: { type: 'text' },

@@ -67,7 +67,6 @@ export function videoAssetsMetaMappingProperties(
         country: { type: 'keyword' },
         tags: { type: 'keyword' },
         tags_key: { type: 'keyword' },
-        group_id: { type: 'keyword' },
         /**
          * Organizational index partition (selected at ingest, editable later).
          * Hard filter at search — not a content facet and not copied to

@@ -11,11 +11,6 @@ import {
   type IngestChunkingFields,
 } from '@/lib/ingest/chunking-request';
 import type { ChunkingConfig } from '@/lib/ingest/chunk-presets';
-import {
-  ingestGroupIdField,
-  parseGroupIdFromFormData,
-  resolveIngestGroupId,
-} from '@/lib/ingest/group-request';
 import { IngestError, toIngestError } from '@/lib/ingest/errors';
 import {
   ingestGroupIdField,
