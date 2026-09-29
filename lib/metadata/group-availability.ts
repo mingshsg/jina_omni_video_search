@@ -16,6 +16,7 @@ import {
   groupLabel,
   normalizeGroupId,
 } from './catalogs';
+import { GROUP_AVAILABILITY_UNAVAILABLE, sanitizeCatalogError } from './catalog-errors';
 import type {
   GroupAvailability,
   GroupAvailabilityEntry,
@@ -27,6 +28,13 @@ export const GROUP_TERMS_SIZE = 1000;
 export const GROUP_REQUESTED_MAX = 30;
 /** Distinct ready variants reported per group. */
 const READY_VARIANT_TERMS_SIZE = 50;
+/**
+ * Cap on the top-level `ready_variant_ids` option source (todo/40 R1). The
+ * result is still bounded so a pathological index cannot return thousands of
+ * ids; variants of explicitly requested groups are folded in first so a
+ * selected group's switch target is never dropped by the cap.
+ */
+export const GROUP_VARIANT_OPTION_MAX = 200;
 
 type VariantBucket = { key: string | number };
 type GroupBucket = {
@@ -93,11 +101,6 @@ function readBuckets(
   };
 }
 
-function safeError(err: unknown): string {
-  const message = err instanceof Error ? err.message : 'Group enumeration failed';
-  return message.replace(/ApiKey\s+\S+/gi, 'ApiKey [redacted]');
-}
-
 /**
  * Distinct `meta.group_id` values with the ready variants behind each of them.
  * Never throws on Elasticsearch failure — returns `status: 'unavailable'`
@@ -109,6 +112,11 @@ export async function listGroupAvailability(opts: {
   includeIds?: string[];
   /** Exact group name lookup (search-as-you-type fallback). */
   q?: string;
+  /**
+   * Receives a sanitized (credential-redacted) failure message on an ES
+   * error. Never place its argument in a response body (todo/40 R4).
+   */
+  log?: (message: string) => void;
 } = {}): Promise<GroupAvailability> {
   const locale = opts.locale ?? 'en';
   const byId = new Map<string, GroupAvailabilityEntry>();
@@ -129,6 +137,28 @@ export async function listGroupAvailability(opts: {
         .filter((id): id is string => Boolean(id)),
     ),
   ].slice(0, GROUP_REQUESTED_MAX);
+
+  /**
+   * Complete server-backed ready-variant option source (todo/40 R1). Explicitly
+   * requested groups are folded in first so a selected group's compatible
+   * variant is offered even when the top-N terms aggregation truncated.
+   */
+  const collectVariantOptions = (entries: GroupAvailabilityEntry[]): string[] => {
+    const requestedSet = new Set(requested);
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const bucket of [true, false]) {
+      for (const entry of entries) {
+        if (requestedSet.has(entry.id) !== bucket) continue;
+        for (const id of entry.ready_variant_ids) {
+          if (seen.has(id)) continue;
+          seen.add(id);
+          if (out.length < GROUP_VARIANT_OPTION_MAX) out.push(id);
+        }
+      }
+    }
+    return out;
+  };
 
   try {
     const client = getEsClient();
@@ -197,19 +227,23 @@ export async function listGroupAvailability(opts: {
     );
     const truncated = main.other > 0 || distinct > returned;
 
+    const entries = [...byId.values()];
     return {
       status: truncated ? 'partial' : 'ok',
-      groups: [...byId.values()],
+      groups: entries,
       total_groups: distinct,
       truncated,
+      ready_variant_ids: collectVariantOptions(entries),
     };
   } catch (err) {
+    opts.log?.(`group availability enumeration failed: ${sanitizeCatalogError(err)}`);
     return {
       status: 'unavailable',
       groups: [...byId.values()],
       total_groups: 0,
       truncated: false,
-      error: safeError(err),
+      ready_variant_ids: [],
+      error: GROUP_AVAILABILITY_UNAVAILABLE,
     };
   }
 }

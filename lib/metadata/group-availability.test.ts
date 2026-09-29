@@ -133,20 +133,123 @@ describe('listGroupAvailability (G1/G5)', () => {
     ]);
   });
 
-  it('fails soft to suggestions with an unavailable status and a redacted error', async () => {
+  it('fails soft to suggestions with an unavailable status and a fixed public code', async () => {
     mocks.search.mockRejectedValue(
       new Error('connect ECONNREFUSED Authorization: ApiKey abc.def'),
     );
 
-    const result = await listGroupAvailability();
+    const logs: string[] = [];
+    const result = await listGroupAvailability({ log: (m) => logs.push(m) });
 
     expect(result.status).toBe('unavailable');
-    expect(result.error).toContain('[redacted]');
+    // R4: only a fixed code in the response; the detail is logged, redacted.
+    expect(result.error).toBe('GROUP_AVAILABILITY_UNAVAILABLE');
     expect(result.error).not.toContain('abc.def');
+    expect(logs.join(' ')).toContain('[redacted]');
+    expect(logs.join(' ')).not.toContain('abc.def');
+    expect(result.ready_variant_ids).toEqual([]);
     // All stays usable: the starter suggestions are still returned.
     expect(result.groups.map((g) => g.id)).toEqual(
       expect.arrayContaining(['trailer', 'demo']),
     );
+  });
+
+  it('returns the server-backed ready variant option source (R1)', async () => {
+    mocks.search.mockResolvedValue(
+      aggResponse([
+        { id: 'recent', count: 5, readyVariants: ['var-new'] },
+        { id: 'old-group', count: 1, readyVariants: ['var-old'] },
+      ]),
+    );
+
+    const result = await listGroupAvailability();
+
+    expect(result.ready_variant_ids).toEqual(
+      expect.arrayContaining(['var-new', 'var-old']),
+    );
+  });
+
+  it('folds explicitly requested (selected) groups into the variant options', async () => {
+    // The top-N terms agg truncated and does not contain the rare group; the
+    // bounded `requested` terms agg returns it. Its variant must still be in
+    // the option source so the selected group stays switchable (R1).
+    mocks.search.mockResolvedValue({
+      aggregations: {
+        groups: {
+          buckets: [
+            {
+              key: 'common',
+              doc_count: 9,
+              variants: { ready: { variant_ids: { buckets: [{ key: 'var-new' }] } } },
+            },
+          ],
+          sum_other_doc_count: 4,
+        },
+        requested: {
+          buckets: [
+            {
+              key: 'rare-old-group',
+              doc_count: 1,
+              variants: { ready: { variant_ids: { buckets: [{ key: 'var-old' }] } } },
+            },
+          ],
+        },
+        distinct_groups: { value: 5 },
+      },
+    });
+
+    const result = await listGroupAvailability({ includeIds: ['rare-old-group'] });
+
+    expect(result.status).toBe('partial');
+    expect(result.ready_variant_ids).toContain('var-old');
+  });
+
+  it('offers an older group variant absent from the newest-200 library page (R1)', async () => {
+    // 201 newer assets in 200 newer groups (the terms agg truncates to the top
+    // 200) plus one older grouped asset on a distinct variant. The library page
+    // only exposes `var-new`, but the endpoint must still surface `var-old`.
+    const newer = Array.from({ length: 200 }, (_, i) => ({
+      id: `g${i}`,
+      count: 1,
+      readyVariants: ['var-new'],
+    }));
+    const older = { id: 'old-group', count: 1, readyVariants: ['var-old'] };
+    mocks.search.mockResolvedValue({
+      aggregations: {
+        groups: {
+          buckets: newer.map((g) => ({
+            key: g.id,
+            doc_count: g.count,
+            variants: {
+              ready: { variant_ids: { buckets: g.readyVariants.map((v) => ({ key: v })) } },
+            },
+          })),
+          // The 201st distinct group (the older asset) fell outside the top-N.
+          sum_other_doc_count: 1,
+        },
+        requested: {
+          buckets: [
+            {
+              key: older.id,
+              doc_count: older.count,
+              variants: {
+                ready: { variant_ids: { buckets: older.readyVariants.map((v) => ({ key: v })) } },
+              },
+            },
+          ],
+        },
+        distinct_groups: { value: 201 },
+      },
+    });
+
+    const result = await listGroupAvailability({ includeIds: ['old-group'] });
+
+    expect(result.status).toBe('partial');
+    // Server-backed option source beats the library page's newest-200 window.
+    expect(result.ready_variant_ids).toContain('var-old');
+    expect(
+      result.groups.find((g) => g.id === 'old-group')?.ready_variant_ids,
+    ).toEqual(['var-old']);
   });
 
   it('bounds the explicit include list and dedupes ids', async () => {

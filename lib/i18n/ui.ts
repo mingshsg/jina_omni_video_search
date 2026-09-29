@@ -45,6 +45,8 @@ export type UiMessages = {
   groupFilterVariantSuggest: string;
   groupFilterVariantSwitch: string;
   groupFilterVariantUnknown: string;
+  /** todo/40 R1 — a server-confirmed variant the page cannot select yet. */
+  groupFilterVariantOptionUnavailable: string;
   /** G5 — searchable catalog lookup. `{name}` is the typed group name. */
   groupFilterSearchNoMatch: string;
   resultsTitle: string;
@@ -284,6 +286,8 @@ export type UiMessages = {
   metaYear: string;
   metaActors: string;
   metaActorsHelp: string;
+  /** todo/40 R4 — person catalog failed; choices are not silently emptied. */
+  metaActorsUnavailable: string;
   metaVideoType: string;
   metaGroup: string;
   metaGroupHelp: string;
@@ -467,6 +471,8 @@ export const uiEn: UiMessages = {
   groupFilterVariantSwitch: 'Switch to',
   groupFilterVariantUnknown:
     'The group catalog was incomplete, so this empty result may be a catalog gap rather than a true mismatch.',
+  groupFilterVariantOptionUnavailable:
+    'Ready variant(s) {variants} match these groups, but their videos are outside the currently shown library list. Open Library to load them, then choose the variant.',
   groupFilterSearchNoMatch: 'No stored group matches “{name}”.',
   resultsTitle: 'Results',
   playerTitle: 'Player',
@@ -729,6 +735,8 @@ export const uiEn: UiMessages = {
   metaActors: 'Actors',
   metaActorsHelp:
     'Pick from the person catalog, or type a new name and press Enter (or click away) to add them.',
+  metaActorsUnavailable:
+    'The actor catalog could not be loaded, so catalog suggestions are unavailable. Typing still adds a new name.',
   metaVideoType: 'Video type',
   metaGroup: 'Index group',
   metaGroupHelp:
@@ -928,6 +936,8 @@ export const uiZh: UiMessages = {
   groupFilterVariantSwitch: '切换至',
   groupFilterVariantUnknown:
     '分组目录不完整，因此这次空结果可能是目录缺口，而非真正的变体不匹配。',
+  groupFilterVariantOptionUnavailable:
+    '这些分组有就绪变体 {variants}，但其视频不在当前显示的视频库列表中。请打开视频库加载后再选择该变体。',
   groupFilterSearchNoMatch: '没有匹配“{name}”的已存分组。',
   resultsTitle: '结果',
   playerTitle: '播放器',
@@ -1182,6 +1192,8 @@ export const uiZh: UiMessages = {
   metaActors: '演员',
   metaActorsHelp:
     '从人物目录选择;也可以直接输入新姓名,回车或点击别处即可作为新条目加入目录。',
+  metaActorsUnavailable:
+    '无法加载演员目录，因此暂时没有目录建议。仍可直接输入新姓名加入。',
   metaVideoType: '视频类型',
   metaGroup: '索引分组',
   metaGroupHelp: '自由命名的分区——可输入新名称，或从建议中选择。',

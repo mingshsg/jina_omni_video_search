@@ -17,12 +17,18 @@ import { useLocale } from '@/lib/i18n/locale-context';
 import {
   GROUP_SELECTION_LIMIT,
   capGroupSelection,
+  composeGroupAvailability,
   deriveGroupVariantNotice,
   groupAvailabilityQuery,
-  mergeSelectedGroupEntries,
-  selectableCompatibleVariants,
   selectedSearchGroupIds,
+  variantSelectableIds,
+  variantSwitchTargets,
 } from '@/lib/metadata/group-availability-ui';
+import {
+  isStaleExactLookup,
+  lookupMissName,
+  planExactLookup,
+} from '@/lib/metadata/exact-lookup';
 import type {
   GroupAvailability,
   GroupAvailabilityEntry,
@@ -41,6 +47,12 @@ type Props = {
   onSelectVariant?: (variantId: string) => void;
   /** Variant ids the page can actually select (lib variant select options). */
   knownVariantIds?: string[];
+  /**
+   * Called with server-confirmed ready variant ids the page does not know yet
+   * (todo/40 R1). The page must add them to its variant selector so an
+   * explicit switch targets an option the selector can actually render.
+   */
+  onReadyVariantsChange?: (ids: string[]) => void;
 };
 
 /**
@@ -56,6 +68,7 @@ export function SearchGroupFilter({
   variantId = '',
   onSelectVariant,
   knownVariantIds,
+  onReadyVariantsChange,
 }: Props) {
   const { t, locale } = useLocale();
   const [data, setData] = useState<GroupAvailability | null>(null);
@@ -64,7 +77,13 @@ export function SearchGroupFilter({
   const [limitHit, setLimitHit] = useState(false);
   const [lookup, setLookup] = useState<GroupAvailabilityEntry[]>([]);
   const [lookupMiss, setLookupMiss] = useState<string | null>(null);
+  // Sequence for exact-name lookups. Every input change advances it (including
+  // clear), which invalidates any in-flight response (todo/40 R5).
   const lookupSeq = useRef(0);
+  const lookupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Latest typed value, so a locale change mid-lookup can re-run the same name
+  // instead of leaving a stale-language option (todo/40 R5).
+  const lastLookupInput = useRef('');
 
   const selectedKey = selectedIds.join('\u0000');
 
@@ -92,48 +111,114 @@ export function SearchGroupFilter({
     void load();
   }, [load]);
 
-  const lookupGroup = useCallback(
-    async (raw: string) => {
-      const name = raw.normalize('NFKC').trim();
-      // Only exact names can be resolved server-side; short prefixes stay
-      // local (EUI filters the already-loaded options) to avoid a request per
-      // keystroke (G5).
-      if (name.length < 2) {
-        setLookup([]);
-        setLookupMiss(null);
-        return;
-      }
-      const seq = ++lookupSeq.current;
-      try {
-        const query = groupAvailabilityQuery({ locale, selectedIds: [], q: name });
-        const res = await fetch(`/api/metadata/group-availability?${query}`);
-        if (!res.ok) return;
-        const body = (await res.json()) as GroupAvailability;
-        if (seq !== lookupSeq.current) return;
-        const exact = (body.groups ?? []).filter((entry) => entry.id === name);
-        setLookup(exact);
-        setLookupMiss(exact.length === 0 && name.length >= 3 ? name : null);
-      } catch {
-        /* lookup is best-effort; the main list is unaffected */
-      }
+  const clearLookupTimer = useCallback(() => {
+    if (lookupTimer.current !== null) {
+      clearTimeout(lookupTimer.current);
+      lookupTimer.current = null;
+    }
+  }, []);
+
+  /**
+   * Exact-name lookup (G5). Every input change advances `lookupSeq` — including
+   * a clear — so a late response can never repopulate the options, and names
+   * shorter than the minimum clear instead of querying (todo/40 R5).
+   */
+  const runLookup = useCallback(
+    (name: string, seq: number, delayMs: number) => {
+      lookupTimer.current = setTimeout(() => {
+        lookupTimer.current = null;
+        void (async () => {
+          try {
+            const query = groupAvailabilityQuery({ locale, selectedIds: [], q: name });
+            const res = await fetch(`/api/metadata/group-availability?${query}`);
+            if (!res.ok) return;
+            const body = (await res.json()) as GroupAvailability;
+            // Superseded by a newer input change, a clear, or a locale change.
+            if (isStaleExactLookup(seq, lookupSeq.current)) return;
+            const exact = (body.groups ?? []).filter((entry) => entry.id === name);
+            setLookup(exact);
+            setLookupMiss(lookupMissName(name, exact));
+          } catch {
+            /* lookup is best-effort; the main list is unaffected */
+          }
+        })();
+      }, delayMs);
     },
     [locale],
   );
 
-  const entries = useMemo(() => {
-    const merged = mergeSelectedGroupEntries(
-      [...(data?.groups ?? []), ...lookup],
-      selectedIds,
-    );
-    return [...new Map(merged.map((e) => [e.id, e])).values()];
-  }, [data, lookup, selectedIds]);
+  const lookupGroup = useCallback(
+    (raw: string) => {
+      lastLookupInput.current = raw;
+      const seq = ++lookupSeq.current;
+      clearLookupTimer();
+      const plan = planExactLookup({ raw, seq });
+      if (plan.action === 'none') return;
+      if (plan.action === 'clear') {
+        setLookup([]);
+        setLookupMiss(null);
+        return;
+      }
+      runLookup(plan.name, plan.seq, plan.delayMs);
+    },
+    [clearLookupTimer, runLookup],
+  );
+
+  // Invalidate any in-flight lookup on unmount.
+  useEffect(() => clearLookupTimer, [clearLookupTimer]);
+
+  // R1: publish server-confirmed ready variants the page does not know yet so
+  // its selector can render an explicit switch target. Deferred to a microtask
+  // so the parent's setState never runs during this child's render.
+  const readyVariantIds = useMemo(
+    () => data?.ready_variant_ids ?? [],
+    [data],
+  );
+  useEffect(() => {
+    if (!onReadyVariantsChange || readyVariantIds.length === 0) return;
+    const known = new Set(knownVariantIds ?? []);
+    const missing = readyVariantIds.filter((id) => !known.has(id));
+    if (missing.length === 0) return;
+    queueMicrotask(() => onReadyVariantsChange(missing));
+  }, [onReadyVariantsChange, readyVariantIds, knownVariantIds]);
+
+  // A locale change re-runs the same name against the new language instead of
+  // showing a stale-language option; an empty input just clears (todo/40 R5).
+  const localeKey = useRef(locale);
+  useEffect(() => {
+    if (localeKey.current === locale) return;
+    localeKey.current = locale;
+    const raw = lastLookupInput.current;
+    const seq = ++lookupSeq.current;
+    clearLookupTimer();
+    const plan = planExactLookup({ raw, seq });
+    if (plan.action === 'clear') {
+      setLookup([]);
+      setLookupMiss(null);
+      return;
+    }
+    if (plan.action === 'debounce') runLookup(plan.name, plan.seq, plan.delayMs);
+  }, [locale, clearLookupTimer, runLookup]);
+
+  const composed = useMemo(
+    () =>
+      composeGroupAvailability({
+        data,
+        lookup,
+        selectedIds,
+        loading,
+        failed,
+      }),
+    [data, lookup, selectedIds, loading, failed],
+  );
+  const { entries, options: catalogEntries, resolution } = composed;
 
   const options = useMemo<EuiComboBoxOptionOption[]>(
     () => [
       { label: t.groupFilterAll, value: '' },
-      ...entries.map((group) => ({ label: group.label, value: group.id })),
+      ...catalogEntries.map((group) => ({ label: group.label, value: group.id })),
     ],
-    [entries, t.groupFilterAll],
+    [catalogEntries, t.groupFilterAll],
   );
 
   const selectedOptions = useMemo(
@@ -154,11 +239,65 @@ export function SearchGroupFilter({
     [onChange],
   );
 
-  const variantNotice = useMemo(
-    () =>
-      deriveGroupVariantNotice({ selectedIds, variantId, entries }),
+  const derivedNotice = useMemo(
+    () => deriveGroupVariantNotice({ selectedIds, variantId, entries }),
     [selectedIds, variantId, entries],
   );
+
+  // R2: a selected group absent from a complete response is a confirmed empty
+  // group. While loading, when the request failed, or when the response is
+  // truncated, the same absence is *unresolved* and must not read as
+  // "no ready video".
+  const variantNotice = useMemo(() => {
+    if (
+      derivedNotice.kind === 'incompatible' &&
+      resolution !== 'resolved' &&
+      resolution !== 'missing'
+    ) {
+      return { kind: 'unknown', groupIds: selectedIds } as const;
+    }
+    return derivedNotice;
+  }, [derivedNotice, resolution, selectedIds]);
+
+  // R1: the availability endpoint is the server-backed ready-variant source.
+  // It is merged into the page's known list so a group whose only ready asset
+  // is older than `/api/library`'s newest 200 still gets an explicit switch.
+  const availabilityVariantIds = data?.ready_variant_ids;
+  const selectableVariantIds = useMemo(
+    () => variantSelectableIds(knownVariantIds, availabilityVariantIds),
+    [knownVariantIds, availabilityVariantIds],
+  );
+
+  // Ready variants of the *selected* groups — the actual switch source, so a
+  // variant observed on an unrelated group is never offered.
+  const switchReadyVariants = useMemo(
+    () =>
+      selectedIds.flatMap(
+        (id) => data?.groups?.find((g) => g.id === id)?.ready_variant_ids ?? [],
+      ),
+    [selectedIds, data],
+  );
+
+  const switchTargets = useMemo(
+    () =>
+      variantSwitchTargets({
+        notice: variantNotice,
+        currentVariantId: variantId,
+        readyVariantIds: switchReadyVariants,
+        knownVariantIds: selectableVariantIds,
+      }),
+    [variantNotice, variantId, switchReadyVariants, selectableVariantIds],
+  );
+
+  // R1: the server confirmed a compatible variant for the selection, but the
+  // page cannot select it (`knownVariantIds` is authoritative). Surface the
+  // limitation instead of silently offering nothing.
+  const firstReadyVariant = switchReadyVariants[0];
+  const variantOptionUnavailable =
+    variantNotice.kind === 'incompatible' &&
+    firstReadyVariant !== undefined &&
+    switchTargets.length === 0 &&
+    !(selectableVariantIds ?? []).includes(firstReadyVariant);
 
   const status: 'loading' | 'ok' | 'partial' | 'unavailable' = loading
     ? 'loading'
@@ -166,13 +305,9 @@ export function SearchGroupFilter({
       ? 'unavailable'
       : (data?.status ?? 'ok');
 
-  const catalogLoaded = !loading && !failed;
-  // A selected id that the complete catalog does not list can only be a stale
-  // value; when the catalog itself is partial/unavailable we cannot say that.
-  const staleSelection =
-    catalogLoaded &&
-    status === 'ok' &&
-    selectedIds.some((id) => !(data?.groups ?? []).some((e) => e.id === id));
+  // A selected id the complete response omitted can only be a stale value;
+  // when the response is partial/unavailable we cannot say that.
+  const staleSelection = resolution === 'missing';
 
   const limitHelp = (
     <EuiText size="xs" color={limitHit ? 'danger' : 'subdued'}>
@@ -275,10 +410,7 @@ export function SearchGroupFilter({
             </EuiText>
             {onSelectVariant &&
               (() => {
-                const selectable = selectableCompatibleVariants(
-                  variantNotice.suggestedVariantIds,
-                  knownVariantIds,
-                );
+                const selectable = switchTargets;
                 if (selectable.length === 0) return null;
                 return (
                   <>
@@ -299,6 +431,19 @@ export function SearchGroupFilter({
                   </>
                 );
               })()}
+            {variantOptionUnavailable && (
+              <>
+                <EuiSpacer size="xs" />
+                <EuiText size="xs" color="subdued">
+                <p>
+                  {t.groupFilterVariantOptionUnavailable.replace(
+                    '{variants}',
+                    switchReadyVariants.join(', '),
+                  )}
+                </p>
+              </EuiText>
+              </>
+            )}
           </>
         )}
       </>

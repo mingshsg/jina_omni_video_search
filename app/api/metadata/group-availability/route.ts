@@ -26,6 +26,13 @@ export async function GET(request: Request) {
   const q = url.searchParams.get('q') ?? '';
   const includeIds = url.searchParams.getAll('include');
 
-  const result = await listGroupAvailability({ locale, includeIds, q });
+  const result = await listGroupAvailability({
+    locale,
+    includeIds,
+    q,
+    // Sanitized detail stays server-side; the response carries only a fixed
+    // public code (todo/40 R4, hard invariant 4).
+    log: (message) => console.warn(`[group-availability] ${message}`),
+  });
   return NextResponse.json(result);
 }

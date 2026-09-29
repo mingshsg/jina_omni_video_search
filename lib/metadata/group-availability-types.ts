@@ -32,6 +32,15 @@ export type GroupAvailability = {
   /** Distinct indexed groups (suggestions excluded). */
   total_groups: number;
   truncated: boolean;
-  /** Sanitized failure detail, present only when `status === 'unavailable'`. */
+  /**
+   * Union of the ready variant ids the enumeration actually saw (todo/40 R1).
+   * This is the server-backed variant option source: it can include a variant
+   * whose only ready asset is older than `/api/library`'s newest-200 window,
+   * so the search control can offer it instead of dropping it. Bounded by
+   * {@link GROUP_VARIANT_OPTION_MAX}; explicitly requested (selected/looked-up)
+   * groups are folded in first so their variants always survive the cap.
+   */
+  ready_variant_ids: string[];
+  /** Fixed public error code, present only when `status === 'unavailable'`. */
   error?: string;
 };

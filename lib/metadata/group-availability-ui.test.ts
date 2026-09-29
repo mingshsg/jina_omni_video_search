@@ -2,13 +2,32 @@ import { describe, expect, it } from 'vitest';
 import {
   GROUP_SELECTION_LIMIT,
   capGroupSelection,
+  composeGroupAvailability,
   deriveGroupVariantNotice,
   groupAvailabilityQuery,
   mergeSelectedGroupEntries,
-  selectableCompatibleVariants,
   selectedSearchGroupIds,
+  variantSelectableIds,
+  variantSwitchTargets,
 } from './group-availability-ui';
-import type { GroupAvailabilityEntry } from './group-availability-types';
+import type {
+  GroupAvailability,
+  GroupAvailabilityEntry,
+} from './group-availability-types';
+
+function availability(
+  groups: GroupAvailabilityEntry[],
+  overrides: Partial<GroupAvailability> = {},
+): GroupAvailability {
+  return {
+    status: 'ok',
+    groups,
+    total_groups: groups.length,
+    truncated: false,
+    ready_variant_ids: [],
+    ...overrides,
+  };
+}
 
 function entry(
   id: string,
@@ -152,15 +171,195 @@ describe('mergeSelectedGroupEntries (G3/G5)', () => {
   });
 });
 
-describe('selectableCompatibleVariants (G1)', () => {
-  it('drops compatible ids the page cannot select', () => {
-    expect(
-      selectableCompatibleVariants(['v-fine', 'v-hidden'], ['v-2s', 'v-fine']),
-    ).toEqual(['v-fine']);
+describe('variantSelectableIds (R1)', () => {
+  it('merges the server-backed option source so an older group variant is selectable', () => {
+    // The page only saw v-new in /api/library's newest 200; the availability
+    // endpoint knows the group's older asset uses v-old.
+    expect(variantSelectableIds(['v-new'], ['v-old'])).toEqual([
+      'v-new',
+      'v-old',
+    ]);
   });
 
-  it('returns all suggestions when no known list is supplied', () => {
-    expect(selectableCompatibleVariants(['a', 'b'])).toEqual(['a', 'b']);
+  it('dedupes and preserves the page order', () => {
+    expect(variantSelectableIds(['v-new', 'v-old'], ['v-old', 'v-older'])).toEqual(
+      ['v-new', 'v-old', 'v-older'],
+    );
+  });
+
+  it('stays undefined when the page has no known list', () => {
+    expect(variantSelectableIds(undefined, ['v-old'])).toBeUndefined();
+  });
+
+  it('handles a missing option source', () => {
+    expect(variantSelectableIds(['v-new'], undefined)).toEqual(['v-new']);
+  });
+});
+
+describe('variantSwitchTargets (R1)', () => {
+  const incompatible = {
+    kind: 'incompatible' as const,
+    groupIds: ['old-group'],
+    suggestedVariantIds: [],
+  };
+
+  it('offers a ready variant of the selected group even when the notice has none', () => {
+    // The older group's entry is present, but its label/notice lists no variant
+    // because the page never derived one; the raw ready ids still drive the
+    // switch, and the server-backed option source makes it selectable.
+    expect(
+      variantSwitchTargets({
+        notice: incompatible,
+        currentVariantId: 'v-2s',
+        readyVariantIds: ['v-old'],
+        knownVariantIds: variantSelectableIds(['v-new'], ['v-old']),
+      }),
+    ).toEqual(['v-old']);
+  });
+
+  it('never offers the current variant and respects the known list', () => {
+    expect(
+      variantSwitchTargets({
+        notice: incompatible,
+        currentVariantId: 'v-old',
+        readyVariantIds: ['v-old', 'v-other'],
+        knownVariantIds: ['v-2s', 'v-old'],
+      }),
+    ).toEqual([]);
+  });
+
+  it('is inert unless the notice is incompatible', () => {
+    expect(
+      variantSwitchTargets({
+        notice: { kind: 'unknown', groupIds: ['x'] },
+        currentVariantId: 'v-2s',
+        readyVariantIds: ['v-old'],
+      }),
+    ).toEqual([]);
+  });
+});
+
+describe('composeGroupAvailability (R2)', () => {
+  const selected = ['old-group'];
+
+  it('reports loading while a request is in flight and hides incompatibility', () => {
+    const composed = composeGroupAvailability({
+      data: null,
+      lookup: [],
+      selectedIds: selected,
+      loading: true,
+      failed: false,
+    });
+    expect(composed.resolution).toBe('loading');
+    const notice = deriveGroupVariantNotice({
+      selectedIds: selected,
+      variantId: 'v-2s',
+      entries: composed.entries,
+    });
+    // The placeholder has no ready variants, but the resolution is not
+    // `resolved`, so the component must not claim incompatibility.
+    expect(notice.kind).toBe('incompatible');
+    expect(composed.resolution).not.toBe('resolved');
+  });
+
+  it('reports unavailable when the request failed, whatever the body', () => {
+    const composed = composeGroupAvailability({
+      data: null,
+      lookup: [],
+      selectedIds: selected,
+      loading: false,
+      failed: true,
+    });
+    expect(composed.resolution).toBe('unavailable');
+    expect(composed.verifiedEmptyGroupIds).toEqual([]);
+  });
+
+  it('reports a failed-status response as unavailable (starter-only body)', () => {
+    const composed = composeGroupAvailability({
+      data: availability(
+        [entry('trailer', []), entry('demo', [])],
+        { status: 'unavailable', total_groups: 0 },
+      ),
+      lookup: [],
+      selectedIds: selected,
+      loading: false,
+      failed: false,
+    });
+    expect(composed.resolution).toBe('unavailable');
+    expect(composed.unresolvedGroupIds).toEqual(['old-group']);
+  });
+
+  it('reports truncated-with-selected as truncated, not a confirmed empty group', () => {
+    const composed = composeGroupAvailability({
+      data: availability([entry('common', ['v-2s'])], {
+        status: 'partial',
+        truncated: true,
+        total_groups: 500,
+      }),
+      lookup: [],
+      selectedIds: selected,
+      loading: false,
+      failed: false,
+    });
+    expect(composed.resolution).toBe('truncated');
+    expect(composed.verifiedEmptyGroupIds).toEqual([]);
+    // The selected id still has a placeholder so it can be cleared.
+    expect(composed.entries.find((e) => e.id === 'old-group')).toMatchObject({
+      label: 'old-group',
+      ready_variant_ids: [],
+    });
+    // The placeholder is not offered as a new option.
+    expect(composed.options.map((e) => e.id)).not.toContain('old-group');
+  });
+
+  it('reports a complete response that omits the selection as missing', () => {
+    const composed = composeGroupAvailability({
+      data: availability([entry('common', ['v-2s'])]),
+      lookup: [],
+      selectedIds: selected,
+      loading: false,
+      failed: false,
+    });
+    expect(composed.resolution).toBe('missing');
+    expect(composed.unresolvedGroupIds).toEqual(['old-group']);
+    expect(composed.verifiedEmptyGroupIds).toEqual(['old-group']);
+  });
+
+  it('reports a genuinely empty but resolved group as resolved (verified empty)', () => {
+    const composed = composeGroupAvailability({
+      data: availability([entry('old-group', [])]),
+      lookup: [],
+      selectedIds: selected,
+      loading: false,
+      failed: false,
+    });
+    expect(composed.resolution).toBe('resolved');
+    expect(composed.unresolvedGroupIds).toEqual([]);
+    expect(composed.verifiedEmptyGroupIds).toEqual([]);
+    const notice = deriveGroupVariantNotice({
+      selectedIds: selected,
+      variantId: 'v-2s',
+      entries: composed.entries,
+    });
+    expect(notice).toEqual({
+      kind: 'incompatible',
+      groupIds: ['old-group'],
+      suggestedVariantIds: [],
+    });
+  });
+
+  it('includes exact-lookup hits in the options but not as variant sources', () => {
+    const composed = composeGroupAvailability({
+      data: availability([entry('common', ['v-2s'])]),
+      lookup: [entry('old-group', ['v-old'], { suggested: false })],
+      selectedIds: [],
+      loading: false,
+      failed: false,
+    });
+    expect(composed.options.map((e) => e.id)).toEqual(
+      expect.arrayContaining(['common', 'old-group']),
+    );
+    expect(composed.resolution).toBe('resolved');
   });
 });
 

@@ -954,6 +954,12 @@ person-catalog failure degrades only `people` (→ `[]`, `people_status:
 catalogs are unaffected (todo/39 G3). The route never returns 500 for a
 group or people catalog failure.
 
+`people_error` / `groups_error` are **fixed public codes**
+(`PEOPLE_CATALOG_UNAVAILABLE`, `GROUP_CATALOG_UNAVAILABLE`) — never a raw
+exception message or path (todo/40 R4, hard invariant 4). Every actor client
+must read `people_status: "unavailable"` and show a failure rather than
+silently emptying its actor options.
+
 ### `GET /api/metadata/group-availability`
 
 Group → ready-variant availability for the search Group control, backed by a
@@ -967,13 +973,17 @@ Query:
 - `q=<exact group name>` — exact lookup so a group outside the top-N stays
   selectable.
 
-**200:** `{ "status": "ok"|"partial"|"unavailable", "groups": [{ id, label, suggested, indexed_assets, ready_variant_ids: string[] }], "total_groups": number, "truncated": boolean, "error"?: string }`.
+**200:** `{ "status": "ok"|"partial"|"unavailable", "groups": [{ id, label, suggested, indexed_assets, ready_variant_ids: string[] }], "total_groups": number, "truncated": boolean, "ready_variant_ids": string[], "error"?: string }`.
 
-`ready_variant_ids` are the variants with at least one `ready` asset in that
-group and are what the control offers as an explicit switch when the current
-variant has none. Always 200: `unavailable` (ES failure; only starter
-suggestions, `error` redacted) is a client-visible state with a retry, never a
-silent empty list.
+Each group's `ready_variant_ids` are the variants with at least one `ready`
+asset in that group. The **top-level** `ready_variant_ids` is the union over
+the enumeration (capped; selected/looked-up groups folded in first) and is the
+server-backed variant option source — it can include a variant whose only ready
+asset is older than `/api/library`'s newest-200 window, so the control can
+offer it as an explicit switch (todo/40 R1). Always 200: `unavailable` (ES
+failure; only starter suggestions, `ready_variant_ids: []`) is a client-visible
+state with a retry, never a silent empty list. `error` is the fixed code
+`GROUP_AVAILABILITY_UNAVAILABLE`, never a raw exception.
 
 ### `POST /api/metadata/catalogs/people`
 
