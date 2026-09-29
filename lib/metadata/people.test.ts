@@ -185,6 +185,28 @@ describe('meta patch validation', () => {
     });
   });
 
+  it('strips credentials from links and provenance before persisting metadata', () => {
+    const parsed = parseMetaPatchBody({
+      expected_revision: 0,
+      description: 'Reviewed description',
+      reference_urls: [
+        'https://user:password@example.com/page?token=secret&lang=ko',
+      ],
+      field_provenance: {
+        description: {
+          source_url: 'https://user:password@en.wikipedia.org/wiki/Work?api_key=secret',
+        },
+      },
+    });
+    expect(parsed.fields.reference_urls).toEqual([
+      'https://example.com/page?lang=ko',
+    ]);
+    expect(parsed.review?.description?.source_url).toBe(
+      'https://en.wikipedia.org/wiki/Work',
+    );
+    expect(JSON.stringify(parsed)).not.toMatch(/password|secret/);
+  });
+
   it('drops malformed reference_urls instead of rejecting the PATCH', () => {
     const ok = parseMetaPatchBody({
       expected_revision: 0,

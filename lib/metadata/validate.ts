@@ -6,6 +6,7 @@ import {
   canonicalizePrimaryLanguage,
 } from './catalogs';
 import { expandActorIds, getPerson } from './people';
+import { sanitizeExternalUrl } from './url-safety';
 
 export type MetaFieldSource = 'manual' | 'suggestion';
 export type MetaProvenanceProvider =
@@ -150,32 +151,16 @@ const EVIDENCE_MAX = 500;
 
 /** Soft URL gate: never reject a PATCH because of a bad link — drop it. */
 function softHttpsUrl(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined;
-  const trimmed = value.trim();
-  if (!trimmed || trimmed.length > 2048) return undefined;
-  if (!trimmed.startsWith('https://')) return undefined;
-  try {
-    // eslint-disable-next-line no-new
-    new URL(trimmed);
-    return trimmed;
-  } catch {
-    return undefined;
-  }
+  return sanitizeExternalUrl(value, {
+    maxLength: 2048,
+    protocols: ['https:'],
+  }) ?? undefined;
 }
 
 function softHttpUrl(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined;
-  const trimmed = value.trim();
-  if (!trimmed || trimmed.length > META_BOUNDS.referenceUrlMaxLen) return undefined;
-  try {
-    const parsed = new URL(trimmed);
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      return undefined;
-    }
-    return trimmed;
-  } catch {
-    return undefined;
-  }
+  return sanitizeExternalUrl(value, {
+    maxLength: META_BOUNDS.referenceUrlMaxLen,
+  }) ?? undefined;
 }
 
 const reviewSchema = z
