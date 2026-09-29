@@ -5,6 +5,7 @@ import {
   EuiButton,
   EuiCallOut,
   EuiCheckbox,
+  type EuiComboBoxOptionOption,
   EuiFieldText,
   EuiFilePicker,
   EuiFlexGroup,
@@ -19,6 +20,7 @@ import {
   EuiText,
   EuiTitle,
 } from '@elastic/eui';
+import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppShell } from '@/components/AppShell';
 import {
@@ -26,6 +28,11 @@ import {
   type ImportChunkPreset,
 } from '@/lib/ingest/chunk-presets';
 import { useLocale } from '@/lib/i18n/locale-context';
+
+const CreatableGroupCombo = dynamic(
+  () => import('@/components/CreatableGroupCombo').then((m) => m.CreatableGroupCombo),
+  { ssr: false, loading: () => <EuiFieldText disabled /> },
+);
 
 type ImportScope = 'single' | 'batch';
 type IngestMode = 'url' | 'local' | 'upload';
@@ -79,6 +86,8 @@ export default function IngestPage() {
   const [localPath, setLocalPath] = useState('');
   const [folderPath, setFolderPath] = useState('');
   const [title, setTitle] = useState('');
+  const [selectedGroup, setSelectedGroup] = useState<EuiComboBoxOptionOption[]>([]);
+  const [groupOptions, setGroupOptions] = useState<EuiComboBoxOptionOption[]>([]);
   const [chunkPreset, setChunkPreset] =
     useState<ImportChunkPreset>('2s');
   const [autoStart, setAutoStart] = useState(true);
@@ -132,6 +141,7 @@ export default function IngestPage() {
     setUrl('');
     setLocalPath('');
     setTitle('');
+    setSelectedGroup([]);
     setFile(null);
     setFilePickerKey((k) => k + 1);
     setJobId(null);
@@ -146,6 +156,7 @@ export default function IngestPage() {
     setBatchFiles([]);
     setBatchPickerKey((k) => k + 1);
     setFolderPath('');
+    setSelectedGroup([]);
     setBatchRows([]);
     setBatchErrors([]);
     setBatchDoneCount(0);
@@ -157,6 +168,32 @@ export default function IngestPage() {
     setApiError(null);
     setSubmitting(false);
   }, [closeBatchStreams]);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch(`/api/metadata/catalogs?locale=${locale}`);
+        const data = (await res.json()) as { groups?: Array<{ id: string; label: string }> };
+        if (res.ok && data.groups) {
+          setGroupOptions(data.groups.map((g) => ({ label: g.label, value: g.id })));
+        }
+      } catch {
+        // Free-form input remains available if the catalog is unavailable.
+      }
+    })();
+  }, [locale]);
+
+  const groupId = selectedGroup[0]
+    ? String(selectedGroup[0].value ?? selectedGroup[0].label).trim()
+    : '';
+  const onCreateGroup = useCallback((raw: string) => {
+    const id = raw.trim().replace(/\s+/g, ' ');
+    if (!id || id.length > 64) return false;
+    const option = { label: id, value: id };
+    setGroupOptions((prev) => prev.some((entry) => entry.value === id) ? prev : [...prev, option]);
+    setSelectedGroup([option]);
+    return true;
+  }, []);
 
   useEffect(
     () => () => {
@@ -351,6 +388,7 @@ export default function IngestPage() {
         if (title.trim()) fd.append('title', title.trim());
         fd.append('auto_start', autoStart ? 'true' : 'false');
         fd.append('chunk_preset', chunkPreset);
+        if (groupId) fd.append('group_id', groupId);
         res = await fetch('/api/ingest/upload', {
           method: 'POST',
           headers: { 'Accept-Language': locale },
@@ -369,6 +407,7 @@ export default function IngestPage() {
             title: title.trim() || undefined,
             auto_start: autoStart,
             chunk_preset: chunkPreset,
+            group_id: groupId || undefined,
           }),
         });
       }
@@ -423,6 +462,7 @@ export default function IngestPage() {
         }
         fd.append('auto_start', autoStart ? 'true' : 'false');
         fd.append('chunk_preset', chunkPreset);
+        if (groupId) fd.append('group_id', groupId);
         res = await fetch('/api/ingest/batch', {
           method: 'POST',
           headers: { 'Accept-Language': locale },
@@ -440,6 +480,7 @@ export default function IngestPage() {
             path: folderPath.trim(),
             auto_start: autoStart,
             chunk_preset: chunkPreset,
+            group_id: groupId || undefined,
           }),
         });
       }
@@ -723,6 +764,18 @@ export default function IngestPage() {
             )}
           </>
         )}
+
+        <EuiFormRow label={t.groupLabel} helpText={t.groupHelp}>
+          <CreatableGroupCombo
+            placeholder={t.groupLabel}
+            options={groupOptions}
+            selectedOptions={selectedGroup}
+            onChange={setSelectedGroup}
+            onCreateOption={onCreateGroup}
+            isDisabled={formBusy}
+            aria-label={t.groupLabel}
+          />
+        </EuiFormRow>
 
         <EuiFormRow
           label={t.chunkPresetSelectLabel}

@@ -61,6 +61,7 @@ const CLEARABLE_META_KEYS = [
   'tags_key',
   'work_title',
   'reference_urls',
+  'group_id',
   'description_semantic',
   'abstract_semantic',
   'work_title_semantic',
@@ -77,6 +78,7 @@ const REVIEW_FIELD_KEYS = [
   'tags',
   'work_title',
   'reference_urls',
+  'group_id',
 ] as const;
 
 /**

@@ -116,6 +116,8 @@ export interface IngestJob {
   chunking: ChunkingConfig;
   /** Prevent double pipeline starts. */
   pipelineRunning: boolean;
+  /** Seeded into editorial metadata only when the asset is first created. */
+  groupId?: string;
 }
 
 const jobs = new Map<string, IngestJob>();
@@ -242,7 +244,7 @@ export function subscribeJob(
 }
 
 function jobToAssetDoc(job: IngestJob): VideoAssetDocument {
-  return {
+  const doc: VideoAssetDocument = {
     video_id: job.videoId,
     title: job.title,
     source_mode: job.mode,
@@ -280,6 +282,15 @@ function jobToAssetDoc(job: IngestJob): VideoAssetDocument {
     created_at: job.createdAt,
     updated_at: job.updatedAt,
   };
+  if (job.groupId) {
+    doc.meta = {
+      group_id: job.groupId,
+      revision: 1,
+      updated_at: job.createdAt,
+      review: { group_id: { source: 'manual', confirmed: true } },
+    };
+  }
+  return doc;
 }
 
 /**
@@ -300,6 +311,7 @@ export function createIngestJob(input: {
   autoStart?: boolean;
   videoId?: string;
   chunking: ChunkingConfig;
+  groupId?: string;
 }): IngestJob {
   const id = randomUUID();
   const videoId = input.videoId ?? randomUUID();
@@ -330,6 +342,7 @@ export function createIngestJob(input: {
     autoStart: input.autoStart !== false,
     chunking: input.chunking,
     pipelineRunning: false,
+    groupId: input.groupId,
   };
   jobs.set(id, job);
   videoToJob.set(videoId, id);

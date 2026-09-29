@@ -17,6 +17,7 @@ import {
   ingestChunkingFields,
   resolveJobChunking,
 } from '@/lib/ingest/chunking-request';
+import { ingestGroupIdField, resolveIngestGroupId } from '@/lib/ingest/group-request';
 import { ingestErrorMessage, resolveLocale } from '@/lib/i18n';
 
 export const runtime = 'nodejs';
@@ -28,6 +29,7 @@ const bodySchema = z.discriminatedUnion('mode', [
     title: z.string().optional(),
     auto_start: z.boolean().optional().default(true),
     ...ingestChunkingFields,
+    ...ingestGroupIdField,
   }),
   z.object({
     mode: z.literal('local'),
@@ -35,6 +37,7 @@ const bodySchema = z.discriminatedUnion('mode', [
     title: z.string().optional(),
     auto_start: z.boolean().optional().default(true),
     ...ingestChunkingFields,
+    ...ingestGroupIdField,
   }),
 ]).superRefine((data, ctx) => {
   const hasW = data.window_ms !== undefined;
@@ -76,6 +79,7 @@ function statusForCode(code: IngestError['code']): number {
       return 504;
     case 'INGEST_INVALID_MODE':
     case 'INGEST_INVALID_CHUNKING':
+    case 'INGEST_INVALID_GROUP':
       return 400;
     default:
       return 400;
@@ -102,9 +106,10 @@ export async function POST(request: Request) {
           i.path.includes('min_ms') ||
           i.message.includes('window_ms'),
       );
+      const groupIssue = parsed.error.issues.some((i) => i.path.includes('group_id'));
       return errorResponse(
         new IngestError(
-          chunkIssue ? 'INGEST_INVALID_CHUNKING' : 'INGEST_INVALID_MODE',
+          chunkIssue ? 'INGEST_INVALID_CHUNKING' : groupIssue ? 'INGEST_INVALID_GROUP' : 'INGEST_INVALID_MODE',
         ),
         locale,
         400,
@@ -122,6 +127,7 @@ export async function POST(request: Request) {
       overlap_ms: body.overlap_ms,
       min_ms: body.min_ms,
     });
+    const groupId = resolveIngestGroupId(body.group_id);
 
     if (body.mode === 'url') {
       const result = await importFromUrl(body.source, cfg);
@@ -133,6 +139,7 @@ export async function POST(request: Request) {
         probe: result.probe,
         autoStart: body.auto_start,
         chunking,
+        groupId,
       });
       await prepareJobEstimate(job);
       startPipelineAsync(job);
@@ -148,6 +155,7 @@ export async function POST(request: Request) {
       probe: local.probe,
       autoStart: body.auto_start,
       chunking,
+      groupId,
     });
     await prepareJobEstimate(job);
     startPipelineAsync(job);

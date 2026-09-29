@@ -13,6 +13,7 @@ import {
   parseChunkingFromFormData,
   resolveJobChunking,
 } from '@/lib/ingest/chunking-request';
+import { parseGroupIdFromFormData } from '@/lib/ingest/group-request';
 import { ingestErrorMessage, resolveLocale } from '@/lib/i18n';
 
 export const runtime = 'nodejs';
@@ -56,6 +57,7 @@ export async function POST(request: Request) {
     }
 
     const chunking = resolveJobChunking(parseChunkingFromFormData(form));
+    const groupId = parseGroupIdFromFormData(form);
 
     const webStream = file.stream();
     const nodeStream = Readable.fromWeb(
@@ -80,6 +82,7 @@ export async function POST(request: Request) {
       probe: result.probe,
       autoStart: parseAutoStart(form.get('auto_start')),
       chunking,
+      groupId,
     });
     await prepareJobEstimate(job);
     startPipelineAsync(job);

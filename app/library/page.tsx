@@ -34,6 +34,8 @@ type LibraryAsset = {
   job_id?: string;
   job_stage?: string;
   progress_pct?: number;
+  group_id?: string;
+  suggested_group_id?: 'trailer' | 'demo';
   created_at: string;
   updated_at: string;
   variants: Array<{
@@ -91,6 +93,7 @@ export default function LibraryPage() {
   const [removeTarget, setRemoveTarget] = useState<LibraryAsset | null>(null);
   const [batchMode, setBatchMode] = useState<BatchMode | null>(null);
   const [editTarget, setEditTarget] = useState<LibraryAsset | null>(null);
+  const [backfillTarget, setBackfillTarget] = useState<LibraryAsset | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -164,6 +167,44 @@ export default function LibraryPage() {
     [t.libraryError, t.removeDone, load],
   );
 
+  const backfillGroup = useCallback(
+    async (asset: LibraryAsset) => {
+      if (!asset.suggested_group_id) return;
+      setBusyId(asset.video_id);
+      setError(null);
+      setToast(null);
+      try {
+        const res = await fetch(
+          `/api/library/${encodeURIComponent(asset.video_id)}/group/backfill`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept-Language': locale,
+            },
+            body: JSON.stringify({ expected_group_id: asset.suggested_group_id }),
+          },
+        );
+        if (!res.ok) {
+          throw new Error(res.status === 409 || res.status === 422
+            ? t.backfillGroupChanged
+            : t.libraryError);
+        }
+        setToast(fillTemplate(t.backfillGroupDone, {
+          group: asset.suggested_group_id,
+        }));
+        setBackfillTarget(null);
+        await load();
+      } catch (err) {
+        await load();
+        setError(err instanceof Error ? err.message : t.libraryError);
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [locale, t.backfillGroupChanged, t.backfillGroupDone, t.libraryError, load],
+  );
+
   const removeBatch = useCallback(
     async (mode: BatchMode) => {
       const targets = mode === 'all' ? assets : selected;
@@ -230,6 +271,7 @@ export default function LibraryPage() {
             <EuiText size="xs" color="subdued">
               {item.width}×{item.height} · {item.source_mode}
               {item.has_audio ? '' : ' · no audio'}
+              {item.group_id ? ` · ${t.metaGroup}: ${item.group_id}` : ''}
             </EuiText>
           </div>
         ),
@@ -282,6 +324,17 @@ export default function LibraryPage() {
         name: t.colActions,
         width: '260px',
         actions: [
+          {
+            name: t.actionBackfillGroup,
+            description: t.actionBackfillGroup,
+            type: 'icon',
+            icon: 'plusCircle',
+            available: (item: LibraryAsset) =>
+              !item.group_id && Boolean(item.suggested_group_id),
+            enabled: (item: LibraryAsset) =>
+              !batchBusy && busyId !== item.video_id,
+            onClick: (item: LibraryAsset) => setBackfillTarget(item),
+          },
           {
             name: t.actionEditMeta,
             description: t.actionEditMeta,
@@ -451,6 +504,25 @@ export default function LibraryPage() {
           isLoading={batchBusy}
         >
           <p>{fillTemplate(t.batchRemoveConfirm, { count: batchCount })}</p>
+        </EuiConfirmModal>
+      )}
+
+      {backfillTarget?.suggested_group_id && (
+        <EuiConfirmModal
+          title={t.actionBackfillGroup}
+          onCancel={() => setBackfillTarget(null)}
+          onConfirm={() => void backfillGroup(backfillTarget)}
+          cancelButtonText={t.cancelConfirm}
+          confirmButtonText={t.actionBackfillGroup}
+          defaultFocusedButton="cancel"
+          isLoading={busyId === backfillTarget.video_id}
+        >
+          <p>
+            {fillTemplate(t.backfillGroupConfirm, {
+              title: backfillTarget.title || backfillTarget.video_id,
+              group: backfillTarget.suggested_group_id,
+            })}
+          </p>
         </EuiConfirmModal>
       )}
 

@@ -25,6 +25,7 @@ export const ingestErrorsZh: Record<IngestErrorCode, string> = {
   INGEST_INVALID_MODE: '无效的导入模式。',
   INGEST_INVALID_CHUNKING:
     '无效的分块预设或窗口/重叠参数。请使用 standard、60s、30s、20s、fine、2s，或提供合法的 window_ms + overlap_ms。',
+  INGEST_INVALID_GROUP: '无效的索引分组名称（空值或超过 64 个字符）。',
   INGEST_BATCH_EMPTY: '本批次未找到视频文件。',
   INGEST_BATCH_TOO_LARGE: '单批文件过多，请拆成更小的批次。',
   INGEST_INTERNAL: '导入过程中发生意外错误。',

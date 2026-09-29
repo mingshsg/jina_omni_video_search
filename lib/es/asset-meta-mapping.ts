@@ -67,6 +67,7 @@ export function videoAssetsMetaMappingProperties(
         country: { type: 'keyword' },
         tags: { type: 'keyword' },
         tags_key: { type: 'keyword' },
+        group_id: { type: 'keyword' },
         /**
          * Reference/source page links (Wikipedia, IMDb, …). Stored but not
          * used for filtering/aggregation — `index: false` avoids wasted
@@ -101,6 +102,7 @@ export function videoAssetsMetaMappingProperties(
             tags: reviewField,
             work_title: reviewField,
             reference_urls: reviewField,
+            group_id: reviewField,
           },
         },
         revision: { type: 'long' },

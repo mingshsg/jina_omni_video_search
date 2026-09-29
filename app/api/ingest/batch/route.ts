@@ -11,6 +11,11 @@ import {
   type IngestChunkingFields,
 } from '@/lib/ingest/chunking-request';
 import type { ChunkingConfig } from '@/lib/ingest/chunk-presets';
+import {
+  ingestGroupIdField,
+  parseGroupIdFromFormData,
+  resolveIngestGroupId,
+} from '@/lib/ingest/group-request';
 import { IngestError, toIngestError } from '@/lib/ingest/errors';
 import { createIngestJob, type IngestJob } from '@/lib/ingest/job-store';
 import {
@@ -34,6 +39,7 @@ const folderBodySchema = z
     path: z.string().min(1),
     auto_start: z.boolean().optional().default(true),
     ...ingestChunkingFields,
+    ...ingestGroupIdField,
   })
   .superRefine((data, ctx) => {
     const hasW = data.window_ms !== undefined;
@@ -99,6 +105,7 @@ async function acceptLocalFileJob(opts: {
   chunking: ChunkingConfig;
   autoStart: boolean;
   cfg: ReturnType<typeof getConfig>;
+  groupId?: string;
 }): Promise<IngestJob> {
   const local = await importFromLocalPath(opts.sourcePath, opts.cfg);
   const mediaPath = await copyLocalToOriginals(local.mediaPath, opts.cfg);
@@ -109,6 +116,7 @@ async function acceptLocalFileJob(opts: {
     probe: local.probe,
     autoStart: opts.autoStart,
     chunking: opts.chunking,
+    groupId: opts.groupId,
   });
   await prepareJobEstimate(job);
   startPipelineAsync(job);
@@ -120,6 +128,7 @@ async function acceptUploadFileJob(opts: {
   chunking: ChunkingConfig;
   autoStart: boolean;
   cfg: ReturnType<typeof getConfig>;
+  groupId?: string;
 }): Promise<IngestJob> {
   const webStream = opts.file.stream();
   const nodeStream = Readable.fromWeb(
@@ -137,6 +146,7 @@ async function acceptUploadFileJob(opts: {
     probe: result.probe,
     autoStart: opts.autoStart,
     chunking: opts.chunking,
+    groupId: opts.groupId,
   });
   await prepareJobEstimate(job);
   startPipelineAsync(job);
@@ -207,9 +217,10 @@ async function handleFolderBatch(
           i.path.includes('min_ms') ||
           i.message.includes('window_ms'),
       );
+      const groupIssue = parsed.error.issues.some((i) => i.path.includes('group_id'));
       return errorResponse(
         new IngestError(
-          chunkIssue ? 'INGEST_INVALID_CHUNKING' : 'INGEST_INVALID_MODE',
+          chunkIssue ? 'INGEST_INVALID_CHUNKING' : groupIssue ? 'INGEST_INVALID_GROUP' : 'INGEST_INVALID_MODE',
         ),
         locale,
         400,
@@ -226,6 +237,7 @@ async function handleFolderBatch(
     overlap_ms: body.overlap_ms,
     min_ms: body.min_ms,
   });
+  const groupId = resolveIngestGroupId(body.group_id);
 
   const files = await listVideoFilesInImportFolder(body.path, cfg);
   const jobs: IngestJob[] = [];
@@ -238,6 +250,7 @@ async function handleFolderBatch(
         chunking,
         autoStart: body.auto_start,
         cfg,
+        groupId,
       });
       jobs.push(job);
     } catch (err) {
@@ -266,6 +279,7 @@ async function handleUploadBatch(
   const chunkFields: IngestChunkingFields = parseChunkingFromFormData(form);
   const chunking = resolveJobChunking(chunkFields);
   const autoStart = parseAutoStart(form.get('auto_start'));
+  const groupId = parseGroupIdFromFormData(form);
 
   const collected: File[] = [];
   for (const key of ['files', 'file']) {
@@ -299,6 +313,7 @@ async function handleUploadBatch(
         chunking,
         autoStart,
         cfg,
+        groupId,
       });
       jobs.push(job);
     } catch (err) {

@@ -10,6 +10,7 @@
     "lint": "next lint",
     "probe": "tsx scripts/probe-capabilities.ts",
     "setup-indices": "tsx scripts/setup-indices.ts",
+    "backfill-group-id": "tsx scripts/backfill-group-id.ts",
     "setup-live-indices": "tsx scripts/setup-live-indices.ts",
     "probe-live-worker": "tsx scripts/probe-live-worker.ts",
     "live-rtsp-fixture-smoke": "tsx scripts/live-rtsp-fixture-smoke.ts",

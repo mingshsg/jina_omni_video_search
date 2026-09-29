@@ -4,6 +4,7 @@ import {
   META_BOUNDS,
   VIDEO_TYPE_SET,
   canonicalizePrimaryLanguage,
+  normalizeGroupId,
 } from './catalogs';
 import { expandActorIds, getPerson } from './people';
 import { sanitizeExternalUrl } from './url-safety';
@@ -38,6 +39,7 @@ export type MetaReviewMap = {
   tags?: MetaFieldReview;
   work_title?: MetaFieldReview;
   reference_urls?: MetaFieldReview;
+  group_id?: MetaFieldReview;
 };
 
 /** The actual work/production title — distinct from `title` (filename-derived). */
@@ -63,6 +65,7 @@ export interface AssetMeta {
   country?: string;
   tags?: string[];
   tags_key?: string[];
+  group_id?: string;
   work_title?: WorkTitle;
   /**
    * Reference/source page links (Wikipedia, IMDb, …) kept as durable
@@ -94,6 +97,7 @@ export interface AssetMetaEditorDto {
     tags?: string[];
     work_title?: WorkTitle;
     reference_urls?: string[];
+    group_id?: string;
     review?: MetaReviewMap;
   };
   meta_revision: number;
@@ -269,6 +273,7 @@ export const metaPatchBodySchema = z
     reference_urls: z
       .union([referenceUrlListSchema, z.null()])
       .optional(),
+    group_id: z.union([z.string(), z.null()]).optional(),
     /** Optional per-field provenance when saving accepted suggestions. */
     field_sources: z
       .object({
@@ -282,6 +287,7 @@ export const metaPatchBodySchema = z
         tags: fieldSourceSchema.optional(),
         work_title: fieldSourceSchema.optional(),
         reference_urls: fieldSourceSchema.optional(),
+        group_id: fieldSourceSchema.optional(),
       })
       .strict()
       .optional(),
@@ -298,6 +304,7 @@ export const metaPatchBodySchema = z
         tags: fieldProvenanceSchema.optional(),
         work_title: fieldProvenanceSchema.optional(),
         reference_urls: fieldProvenanceSchema.optional(),
+        group_id: fieldProvenanceSchema.optional(),
       })
       .strict()
       .optional(),
@@ -325,6 +332,7 @@ const EDITABLE_KEYS = [
   'tags',
   'work_title',
   'reference_urls',
+  'group_id',
 ] as const;
 
 export function parseMetaPatchBody(
@@ -518,6 +526,25 @@ export function parseMetaPatchBody(
     }
   }
 
+  if (body.group_id !== undefined) {
+    if (body.group_id === null || !body.group_id.trim()) {
+      fields.group_id = null;
+    } else {
+      const value = normalizeGroupId(body.group_id);
+      if (!value) {
+        fields.group_id = null;
+      } else if (value.length > META_BOUNDS.groupIdMaxLen) {
+        throw new MetaValidationError(
+          'META_INVALID_GROUP',
+          `group_id exceeds ${META_BOUNDS.groupIdMaxLen} characters`,
+        );
+      } else {
+        fields.group_id = value;
+        review.group_id = reviewEntry('group_id');
+      }
+    }
+  }
+
   return {
     expected_revision: body.expected_revision,
     fields,
@@ -547,6 +574,7 @@ export function toEditorDto(
       tags: meta?.tags,
       work_title: meta?.work_title,
       reference_urls: meta?.reference_urls,
+      group_id: meta?.group_id,
       review: meta?.review,
     },
   };

@@ -137,6 +137,8 @@ export type UiMessages = {
   uploadLabel: string;
   titleLabel: string;
   titlePlaceholder: string;
+  groupLabel: string;
+  groupHelp: string;
   autoStartLabel: string;
   autoStartHelp: string;
   chunkPresetSelectLabel: string;
@@ -187,6 +189,10 @@ export type UiMessages = {
   actionRemove: string;
   actionSearch: string;
   actionEditMeta: string;
+  actionBackfillGroup: string;
+  backfillGroupConfirm: string;
+  backfillGroupDone: string;
+  backfillGroupChanged: string;
   removeConfirm: string;
   removeNote: string;
   chunksLabel: string;
@@ -217,6 +223,8 @@ export type UiMessages = {
   metaActors: string;
   metaActorsHelp: string;
   metaVideoType: string;
+  metaGroup: string;
+  metaGroupHelp: string;
   metaLanguage: string;
   metaCountry: string;
   metaTags: string;
@@ -495,6 +503,8 @@ export const uiEn: UiMessages = {
   uploadLabel: 'Video file',
   titleLabel: 'Title (optional)',
   titlePlaceholder: 'Display name',
+  groupLabel: 'Index group',
+  groupHelp: 'Type a new name or pick an existing one (e.g. trailer, demo). Used to filter at search.',
   autoStartLabel: 'Start immediately',
   autoStartHelp: 'Off = show workload estimate and wait for confirm',
   chunkPresetSelectLabel: 'Chunk window',
@@ -544,6 +554,12 @@ export const uiEn: UiMessages = {
   actionRemove: 'Remove',
   actionSearch: 'Search',
   actionEditMeta: 'Edit metadata',
+  actionBackfillGroup: 'Backfill group',
+  backfillGroupConfirm:
+    'Assign the inferred group “{group}” to “{title}”? This updates only this video and never overwrites an existing group.',
+  backfillGroupDone: 'Assigned group “{group}”',
+  backfillGroupChanged:
+    'The video or its group changed. Refresh and review the suggestion again.',
   removeConfirm: 'Remove this video from the search index? Media files on disk are kept.',
   removeNote: 'Removes Elasticsearch docs only; files stay on disk.',
   chunksLabel: 'chunks',
@@ -577,6 +593,8 @@ export const uiEn: UiMessages = {
   metaActorsHelp:
     'Pick from the person catalog, or type a new name and press Enter (or click away) to add them.',
   metaVideoType: 'Video type',
+  metaGroup: 'Index group',
+  metaGroupHelp: 'Free-form partition name — type a new one or pick from suggestions.',
   metaLanguage: 'Primary language',
   metaCountry: 'Production country/region',
   metaTags: 'Tags',
@@ -870,6 +888,8 @@ export const uiZh: UiMessages = {
   uploadLabel: '视频文件',
   titleLabel: '标题（可选）',
   titlePlaceholder: '显示名称',
+  groupLabel: '索引分组',
+  groupHelp: '输入新名称或选择已有分组（如 trailer、demo）。检索时可按组过滤。',
   autoStartLabel: '立即开始',
   autoStartHelp: '关闭后先显示工作量估算，确认后再索引',
   chunkPresetSelectLabel: '分块窗口',
@@ -919,6 +939,11 @@ export const uiZh: UiMessages = {
   actionRemove: '移除',
   actionSearch: '检索',
   actionEditMeta: '编辑元数据',
+  actionBackfillGroup: '回填分组',
+  backfillGroupConfirm:
+    '将视频“{title}”的分组设为推断值“{group}”？仅更新此视频，不覆盖已有分组。',
+  backfillGroupDone: '已设置分组“{group}”',
+  backfillGroupChanged: '视频或分组已变化，请刷新后重新确认。',
   removeConfirm: '从检索索引中移除此视频？磁盘上的媒体文件会保留。',
   removeNote: '仅删除 Elasticsearch 文档；磁盘文件保留。',
   chunksLabel: '片段',
@@ -950,6 +975,8 @@ export const uiZh: UiMessages = {
   metaActorsHelp:
     '从人物目录选择;也可以直接输入新姓名,回车或点击别处即可作为新条目加入目录。',
   metaVideoType: '视频类型',
+  metaGroup: '索引分组',
+  metaGroupHelp: '自由命名的分区——可输入新名称，或从建议中选择。',
   metaLanguage: '主要语言',
   metaCountry: '制作国家/地区',
   metaTags: '标签',

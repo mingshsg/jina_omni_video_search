@@ -1,4 +1,5 @@
 import { getConfig } from '../config';
+import { inferGroupFromVariants } from '../metadata/groups';
 import { getEsClient } from './client';
 import type { VideoAssetDocument } from './index-assets';
 
@@ -15,6 +16,8 @@ export interface LibraryAssetSummary {
   job_id?: string;
   job_stage?: string;
   progress_pct?: number;
+  group_id?: string;
+  suggested_group_id?: 'trailer' | 'demo';
   created_at: string;
   updated_at: string;
   variants: Array<{
@@ -31,6 +34,9 @@ export interface LibraryAssetSummary {
 }
 
 function toSummary(doc: VideoAssetDocument): LibraryAssetSummary {
+  const suggestedGroup = doc.meta?.group_id
+    ? null
+    : inferGroupFromVariants(doc.variants ?? []);
   return {
     video_id: doc.video_id,
     title: doc.title,
@@ -44,6 +50,8 @@ function toSummary(doc: VideoAssetDocument): LibraryAssetSummary {
     job_id: doc.job?.job_id,
     job_stage: doc.job?.stage,
     progress_pct: doc.job?.progress_pct,
+    ...(doc.meta?.group_id ? { group_id: doc.meta.group_id } : {}),
+    ...(suggestedGroup ? { suggested_group_id: suggestedGroup } : {}),
     created_at: doc.created_at,
     updated_at: doc.updated_at,
     variants: (doc.variants ?? []).map((v) => ({

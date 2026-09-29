@@ -200,6 +200,7 @@ JSON body (discriminated by `mode`):
 | `auto_start` | `true` | If `false`, job stops at `awaiting_confirm` until confirm |
 | `chunk_preset` | env `CHUNK_PRESET` | Named window: `standard` (64s/4s), `60s` (60s/4s), `30s` (30s/4s), `20s` (20s/2s), `fine` (10s/2s), `2s` (2s/1s). Hashes into `variant_id` so presets coexist. |
 | `window_ms` + `overlap_ms` | — | Optional free-form alternative (both required together); optional `min_ms`. Labels as `custom` unless `chunk_preset` is also set. |
+| `group_id` | — | Optional free-form group (≤ 64 characters). Seeds `meta.group_id` only on first asset create; search can hard-filter by group. Also accepted by upload and batch ingest. |
 
 **200 response:**
 
@@ -365,6 +366,7 @@ AND across fields; **ANY** within each array. Cap 20 values per array. Missing m
 | `primary_language` | Pinned BCP-47 tags (case-insensitive; stored canonical) |
 | `country` | ISO alpha-2 from the 20-option catalog |
 | `tags` | Normalized to `meta.tags_key` |
+| `group_id` | Exact organizational group filter on `meta.group_id` |
 
 Overflow (>10,000 matching assets): **422** `FILTER_SCOPE_TOO_LARGE`. Empty eligibility returns zero hits before embedding.
 
@@ -646,6 +648,27 @@ Same `hits[]` fields as `POST /api/search`. `meta`:
 ```
 
 `variant_ids` is the deduped set of **ready** variant ids (for the search UI).
+Each asset may include `group_id`. An ungrouped asset with matching variants
+includes `suggested_group_id` (`trailer` for 10 s/`fine`, `demo` for 2 s/`2s`).
+
+### `POST /api/library/{videoId}/group/backfill`
+
+Explicit single-video backfill. The Library asks for confirmation before the
+request. The server recomputes the inferred group, never overwrites an
+existing `meta.group_id`, and changes no other video or chunk vectors.
+No backfill runs automatically.
+
+**Request:** `{ "expected_group_id": "trailer" }` (or `"demo"`).
+**200:** `{ "video_id": "uuid", "group_id": "trailer" }`.
+
+| Code | HTTP | When |
+| --- | --- | --- |
+| `GROUP_BACKFILL_INVALID` | 400 | Invalid expected group |
+| `GROUP_BACKFILL_NOT_FOUND` | 404 | Missing video |
+| `GROUP_BACKFILL_ALREADY_SET` | 409 | Existing group or concurrent assignment |
+| `GROUP_BACKFILL_CHANGED` | 409 | Proposal changed before confirmation |
+| `GROUP_BACKFILL_NO_MATCH` | 422 | Variants do not imply a group |
+| `GROUP_BACKFILL_FAILED` | 500 | Index update failed |
 
 ### `DELETE /api/library/{videoId}`
 
