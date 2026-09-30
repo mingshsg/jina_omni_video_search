@@ -6,6 +6,14 @@ loses an action item.
 
 ## Current — project level
 
+- [`pending-commits-readiness-review-2026-09-30.md`](./pending-commits-readiness-review-2026-09-30.md)
+  — **Historical 17-commit hold; four P2 findings repaired.** Long CJK
+  filenames, metadata-editor load failure, Group availability races, and
+  encoded URL titles are fixed in the follow-up. The original review and its
+  744-test result remain the pre-fix snapshot; current scoped gates are in
+  `todo/43`.
+  → [`todo/43`](../todo/43-pending-commits-readiness-2026-09-30.md)
+
 - [`drama-implementation-followup-code-review-2026-09-28.md`](./drama-implementation-followup-code-review-2026-09-28.md)
   — **Follow-up fixes still need repair.** Strict asset mapping omits terminal
   drama fields; retry can retain stale subtitle cues; failed enrichment still
