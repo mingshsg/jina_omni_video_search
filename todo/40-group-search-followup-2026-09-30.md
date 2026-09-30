@@ -17,6 +17,24 @@ Source: [`reviews/group-search-followup-code-review-2026-09-30.md`](../reviews/g
 
 - [x] Run the full Node 22 test suite and production build on the repaired exact revision; record counts and any remaining failures. **PASS on 2026-09-30: Node 22.13.1 (`PATH=/usr/local/bin:$PATH`), `yarn test` 94 files / 687 tests, `yarn build` compile + typecheck + routes.**
 - [ ] Execute the new availability aggregation against the target ES mapping with a read-only grouped fixture; verify ready variant IDs and selected-group include behavior. Do not infer ES compatibility from mocked results. **NOT RUN** — tests mock the ES client; no live aggregation.
-- [ ] Rebuild the app image and browser-check Group default/selection/reset, Variant mismatch and explicit switch, catalog failure/retry, 20/21 selection, changed draft, and rapid-click request count. **NOT RUN** — deliberately skipped to avoid interrupting a long indexing run; no container or `localhost:3000` access attempted.
-- [ ] Verify grouped text search plus image/live regression against appropriate fixtures. Keep real manual backfill as a separate per-video confirmation gate from `todo/34`/`todo/39`; no bulk or automatic write. **NOT RUN.**
+- [x] Rebuild the app image and browser-check Group default/selection/reset, Variant mismatch and explicit switch, catalog failure/retry, 20/21 selection, changed draft, and rapid-click request count. **PASS on 2026-09-30** (container rebuilt; see "Browser acceptance" below). 20/21 selection is **NOT RUN** — see the data note.
+- [ ] Verify grouped text search plus image/live regression against appropriate fixtures. Keep real manual backfill as a separate per-video confirmation gate from `todo/34`/`todo/39`; no bulk or automatic write. **PARTIAL** — grouped text search verified in-browser (below); image/live regression and manual backfill **NOT RUN.**
 - [ ] Re-review the repaired diff and push the branch only when the P2 items are closed. Keep unrelated untracked duplicate documents out of the commit. **NOT RUN** — re-review/push is the user's call; the two untracked `(1).md` duplicates remain untouched and uncommitted.
+
+## Browser acceptance — 2026-09-30 (PASS)
+
+Container rebuilt `docker compose up -d --build app`; container `CreatedAt 2026-09-30 20:04:06 +0800` (after rebuild start `20:02:12`) and the baked `.next` contains the new code (`20s_3s`, `chunkPresetCustom`, `metaOperatorHintLabel`, `ready_variant_ids`), so AGENTS.md trap #9 is cleared. Harness: headless Chrome 154 driven by puppeteer-core against `http://127.0.0.1:3000`; screenshots in the gitignored `reviews/archive/browser-acceptance-2026-09-30/` (copies in `/tmp/browser-acceptance/shots/`).
+
+| Gate | Result | Evidence |
+| --- | --- | --- |
+| Default = All | PASS | empty pills, placeholder `全部分组` (`t40-01-default-all.png`) |
+| Single select | PASS | `trailer` pill; notice `所选分组在当前变体下没有就绪视频。它们已索引于：4495e972f9e6b5a1` + `切换至 4495e972f9e6b5a1` (`t40-03-trailer.png`) |
+| Reset to All | PASS | pills `[]`, query re-runs with no `filters.group_id` (`t40-08-reset-all.png`, `t40-13-reset-all-results.png`) |
+| Variant mismatch (R1/R2) | PASS | forced variant `8b28…` on `trailer` → notice + explicit switch; drama-only under `4495…` → `切换至 8b28281cd6671e40` (`t40-10-drama-only-incompatible.png`) |
+| Explicit switch | PASS | `切换至 4495e972f9e6b5a1` set the variant and cleared the notice (`t40-11-drama-after-switch.png`) |
+| Catalog failure/retry | PASS | request abort → `无法加载分组` + `重试`; retry cleared it (`t40-09-failure.png`, `t40-09b-after-retry.png`) |
+| Changed draft (R3a) | PASS | drifted draft + filter change → **0** search requests (not the draft) |
+| Rapid-click count (R3b) | PASS | three quick selections → **1** request, `group_id:[trailer,demo]` |
+| 20/21 selection | **NOT RUN** | catalog exposes only 3 groups (`trailer`/`demo`/`training`); `drama` is 1 more. Insufficient data to reach the 20 cap. |
+
+Grouped text search also verified: `trailer` + variant `4495e972f9e6b5a1` + query `the` returns `3 个瞬间` (`t40-12b-trailer-search-correct-variant.png`). A mismatched variant correctly returns no moments.

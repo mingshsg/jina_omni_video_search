@@ -174,6 +174,8 @@ D 节的「现有 Suggest 不支持生成标题」**表述有误**，它把两�
 
 - `yarn test`（Node 22）：**98 files / 744 tests 通过**（含 B 的 9 例）。
 - `yarn build`（Node 22）：**通过**。
-- **NOT RUN**：浏览器目视检查（textarea 布局 / flyout 滚动）、真实 Agent Builder
-  端到端提示效果、`operator_hint` cacheKey 隔离的运行时验证（容器禁令）。
+- **浏览器验收 2026-09-30：PASS**（容器已重建，`20:04:06`；截图 `reviews/archive/browser-acceptance-2026-09-30/`）。`/library` 的「操作者提示（可选）」EuiTextArea 已目视确认：label「操作者提示（可选）」、help 文案（ephemeral、不写入资产、不是已核实证据）、placeholder「剧名：甄嬛传 · 用中文输出」、`rows=2`、宽度 672px；输入「剧名：甄嬛传」可正常回显（`t41-04-operator-hint.png`、`t41-05-operator-hint-filled.png`）。`建议填写` 按钮存在但**未点击**（避免真实 Agent Builder 调用）。
+- **浏览器验收 F：work_title tooltip PASS**。悬停 `N_EarlySpring…` → tooltip「作品名称 / The Early Spring」；`K_MadeInKorea2…` →「作品名称 / Made in Korea (TV series)」；无 `work_title` 的 `Q_ZhenHuanZhuan…` 行只有行选择 tooltip、无标题 tooltip（`t41-01c`/`t41-01d`）。
+- **NOT RUN**：真实 Agent Builder 端到端提示效果、`operator_hint` cacheKey 隔离的运行时验证（需要真实调用，本次刻意不触发）。
+- 观察（非本任务缺陷，见下）：`/library` 控制台有 React hydration 报错 #418/#423，根因是 EUI `EuiBasicTable` 的 copy-marker，与本任务无关，未修。
 

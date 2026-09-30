@@ -174,9 +174,16 @@ E 完成后立即启动本任务。
 
 - `yarn test`（Node 22）：**98 files / 744 tests 通过**。
 - `yarn build`（Node 22）：**通过**。
-- **NOT RUN**：浏览器目视检查自定义输入与禁用态、真实 custom 导入的端到端
-  `variant_id` 生成与搜索验证（容器禁令）。自定义 preset 的 `min_ms` 缺省
-  `min(4s, max(1s, floor(window/5)))` 仅由单测覆盖，未经真实索引验证。
+- **浏览器验收 2026-09-30：PASS**（容器已重建；截图 `reviews/archive/browser-acceptance-2026-09-30/`）：
+  | 门禁 | 结果 | 证据 |
+  | --- | --- | --- |
+  | 下拉含 `5s` / `20s_3s` / `自定义`（及原有 6 项） | PASS | 选项值 `["standard","60s","30s","20s","20s_3s","fine","5s","2s","custom"]`，标签 `5s — 5 秒窗口 / 2 秒重叠`、`20s/3s — 20 秒窗口 / 3 秒重叠`、`自定义 — 自行填写窗口与重叠秒数`（`t42-01-preset-list.png`） |
+  | 选 custom 出现窗口/重叠两个数字输入，默认 20/3 | PASS | `窗口（秒）=20`、`重叠（秒）=3`，均带 aria-label（`t42-02-custom-defaults.png`） |
+  | 客户端校验：`overlap==window`（5/5）非法 | PASS | 「重叠（秒）」`aria-invalid=true`，显示 `窗口必须为正整数秒；重叠必须为整数秒，范围从 0 到小于窗口值。`（`t42-03-invalid-equal.png`） |
+  | 客户端校验：`overlap>window`（5/7）非法 | PASS | 同上（`t42-05-invalid-greater.png`） |
+  | 非法时阻止提交 | PASS | 填合法 URL 后点「开始导入」→ **0 个 POST**，并出现 warning callout（`t42-04-submit-blocked.png`） |
+  | 合法 5/2 | PASS | 无错误文案，`重叠（秒）` `aria-invalid` 清空（`t42-06-legal-5-2.png`） |
+- **NOT RUN**：真实 custom 导入的端到端 `variant_id` 生成与搜索验证（本次刻意不上传视频）。自定义 preset 的 `min_ms` 缺省 `min(4s, max(1s, floor(window/5)))` 仍仅由单测覆盖。
 
 
 ## 阻塞与前置
