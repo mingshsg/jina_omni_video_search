@@ -244,6 +244,8 @@ export type UiMessages = {
   libraryEmpty: string;
   libraryEmptyAction: string;
   colTitle: string;
+  /** todo/41 F — library title cell tooltip label for `meta.work_title`. */
+  workTitleTooltipLabel: string;
   colStatus: string;
   colDuration: string;
   colVariants: string;
@@ -688,6 +690,7 @@ export const uiEn: UiMessages = {
   libraryEmpty: 'No videos indexed yet.',
   libraryEmptyAction: 'Go to import',
   colTitle: 'Title',
+  workTitleTooltipLabel: 'Work title',
   colStatus: 'Status',
   colDuration: 'Duration',
   colVariants: 'Variants',
@@ -1148,6 +1151,7 @@ export const uiZh: UiMessages = {
   libraryEmpty: '尚未索引任何视频。',
   libraryEmptyAction: '去导入',
   colTitle: '标题',
+  workTitleTooltipLabel: '作品名称',
   colStatus: '状态',
   colDuration: '时长',
   colVariants: '变体',

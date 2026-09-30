@@ -67,11 +67,80 @@
 
 ## 验证
 
-- `yarn test`（Node 22）：**96 files / 710 tests 全部通过**（基线 94/687 → 新增 2 文件 23 例）。
-- `yarn build`：通过（~123s）。
+- `yarn test`（Node 22）：**97 files / 716 tests 通过**（F 新增 1 文件 6 例）。
+- `yarn build`：通过（F 后 ~120s）。
 - 未跑的门禁：见 `reviews/README.md` 约定；本任务无新增 review 文件。
+  浏览器目视检查（tooltip 悬停渲染）与直连 ES 的 `listAssets` 冒烟
+  **NOT RUN**（容器禁令）。
+
 
 ## 提交
 
 - 环境：全程未触碰 Docker/容器；未向 `127.0.0.1:3000|3001` 发任何请求。
 - 未提交：`reviews/suggest-metadata-editor-session-review-2026-09-23 (1).md`、`todo/32-suggest-metadata-editor-session-2026-09-23 (1).md`（历史遗留未跟踪文件）。
+
+---
+
+## D 节更正（2026-09-30 09:38，用户指出后核实）
+
+D 节的「现有 Suggest 不支持生成标题」**表述有误**，它把两个不同的标题混为一谈：
+
+| | ingest `title` | `meta.work_title` |
+| --- | --- | --- |
+| 来源 | 文件名 | **Suggest / 人工** |
+| 结构 | 单字符串 | `{ en, zh?, native?{lang,name} }`（即 English/Chinese title） |
+| 写入通道 | ingest-owned，`EDITABLE_KEYS` **不含** | ✅ `EDITABLE_KEYS` **含**（`validate.ts:349`） |
+| 搜索结果显示 | 回退值 | **优先显示**（`app/page.tsx:133-139`） |
+| Library 列表 | ✅ 显示 `item.title` | ✗ 不显示 |
+
+**事实：Suggest 已经会产出并写入 work_title。** 证据
+`components/EditMetadataFlyout.tsx:884-913`：从 allowlist 校验过的
+`web.candidates[0].title`（仅 `status==='ok'`）自动填入 `workTitleEn`，
+并把 `work_title` 标为 suggestion 来源；`PATCH /meta` 已支持写 `work_title`。
+
+所以 D 节的「缺口 1（需要新增 PATCH title）」**对 work_title 而言不存在**。
+它只在讨论「是否要改 ingest `title`（文件名那个）」时成立——而用户已决定
+**不改**，因为文件名要保留作原始线索（呼应 D 节需求「文件名是重要信息」）。
+
+### 用户决策（2026-09-30 09:38）
+
+| 项 | 决策 |
+| --- | --- |
+| 新增 PATCH title | **否** —— 文件名 `title` 保持原样，作为原始线索 |
+| 主动让 Suggest 生成中文 work title | **否** —— 改由**提示词控制**（即 E 的输入框） |
+| Library 列表展示 work_title | **用 tooltip**（不替换主显示的 `title`） |
+
+## 据此确定的两项工作
+
+### F. Library 列表 tooltip 显示 work_title（小）— ✅ 已实现（2026-09-30）
+
+- `lib/es/list-assets.ts` 的 `LibraryAssetSummary` 新增**加法**只读字段
+  `work_title?: WorkTitle`（类型取自 `lib/metadata/validate.ts`），
+  `toSummary` 从 `doc.meta?.work_title` 赋值，缺失则不出现该键；
+  **未改动排序 / 过滤 / 分页**（`listAssets` 的 `sort` 与 `size` 原样）。
+  不泄露 `meta` 下其他字段。
+- `lib/metadata/work-title-display.ts`（新增，纯函数）：
+  `workTitleTooltipLines()` 按 `en` → `zh` → `native.name (lang)`
+  输出非空行，缺失/空白变体省略，无 `work_title` 返回 `[]`。
+- `app/library/page.tsx`：标题单元格主文本仍是 ingest `title`（文件名），
+  仅当 tooltip 行非空时用 `EuiToolTip` 包裹；无 `work_title` 时渲染路径与原先一致。
+- i18n：新增 `workTitleTooltipLabel`（`lib/i18n/ui.ts` 类型 + `en.ts`/`zh.ts`）。
+- 测试：`lib/metadata/work-title-display.test.ts`（6 例：仅 en、en+zh、
+  含 native、空白省略、native 无语言、无 work_title）。
+
+
+### E. Edit metadata 提示输入框（用户既定决策不变）
+
+- **ephemeral**：仅本次 Suggest 运行有效，不落库、不新增资产字段。
+- 作为 `POST /api/library/{videoId}/meta/suggest` 的**请求体字段**；
+  job `cacheKey` **必须纳入**，避免 A 的提示命中 B 的缓存。
+- **作用范围 search_and_output**：① 检索引导（如补剧名）② 输出语言。
+- **优先复用现有参数**而非改 agent 契约：
+  - 「剧名：X」→ 映射到既有 `work_title` 输入参数；
+  - 「output in Chinese」→ 映射到 locale，从而影响 description/abstract 语言。
+  - 若确需扩 agent 输入，须另行说明并评估对已部署 skill 的影响
+    （`scripts/ensure-suggest-agent.ts`、`reference/agent-builder/*`）。
+- **安全**：提示是操作者本人输入的合法引导，但仍按不可信数据处理——
+  限长、转义、**独立参数通道**（不得与被检索页面内容同流），
+  **不得借此绕过既有 source policy**（IMDb 等边界不变）。
+  UI 需标明这是「操作者提示」，而非已核实的媒体标签/引用证据。

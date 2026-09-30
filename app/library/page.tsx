@@ -14,6 +14,7 @@ import {
   EuiFlexItem,
   EuiSpacer,
   EuiText,
+  EuiToolTip,
 } from '@elastic/eui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppShell, formatDurationMs } from '@/components/AppShell';
@@ -24,10 +25,17 @@ import { GroupBackfillModal } from '@/components/GroupBackfillModal';
 import type { DramaSummaryDto } from '@/lib/drama/safe-dto';
 import { formatChunkPresetLabel } from '@/lib/ingest/chunk-presets';
 import { useLocale } from '@/lib/i18n/locale-context';
+import { workTitleTooltipLines } from '@/lib/metadata/work-title-display';
 
 type LibraryAsset = {
   video_id: string;
   title: string;
+  /** todo/41 F — read-only display metadata; never replaces `title`. */
+  work_title?: {
+    en: string;
+    zh?: string;
+    native?: { lang: string; name: string };
+  };
   source_mode: string;
   duration_ms: number;
   width: number;
@@ -271,30 +279,57 @@ export default function LibraryPage() {
         field: 'title',
         name: t.colTitle,
         truncateText: true,
-        render: (_: string, item: LibraryAsset) => (
-          <div>
+        render: (_: string, item: LibraryAsset) => {
+          // todo/41 F: `title` is the filename-derived, ingest-owned value and
+          // stays the cell's primary text. `meta.work_title` (suggested or
+          // typed by an operator) is shown as a tooltip only — the two are
+          // different fields and must not be conflated visually.
+          const workTitleLines = workTitleTooltipLines(item.work_title);
+          const titleText = (
             <EuiText size="s">
               <strong>{item.title || item.video_id}</strong>
             </EuiText>
-            <EuiText size="xs" color="subdued">
-              {item.width}×{item.height} · {item.source_mode}
-              {item.has_audio ? '' : ' · no audio'}
-              {item.group_id ? ` · ${t.metaGroup}: ${item.group_id}` : ''}
-            </EuiText>
-            {item.drama && (
-              <EuiText size="xs">
-                <EuiBadge color={dramaColor(item.drama.status)}>
-                  {item.drama.status}
-                </EuiBadge>
-                {item.drama.synopsis_status === 'provisional' && (
-                  <EuiBadge color="warning">
-                    {item.drama.synopsis_status}
-                  </EuiBadge>
-                )}
+          );
+          return (
+            <div>
+              {workTitleLines.length > 0 ? (
+                <EuiToolTip
+                  title={t.workTitleTooltipLabel}
+                  content={
+                    <span>
+                      {workTitleLines.map((line, index) => (
+                        <span key={`${index}:${line}`} style={{ display: 'block' }}>
+                          {line}
+                        </span>
+                      ))}
+                    </span>
+                  }
+                >
+                  {titleText}
+                </EuiToolTip>
+              ) : (
+                titleText
+              )}
+              <EuiText size="xs" color="subdued">
+                {item.width}×{item.height} · {item.source_mode}
+                {item.has_audio ? '' : ' · no audio'}
+                {item.group_id ? ` · ${t.metaGroup}: ${item.group_id}` : ''}
               </EuiText>
-            )}
-          </div>
-        ),
+              {item.drama && (
+                <EuiText size="xs">
+                  <EuiBadge color={dramaColor(item.drama.status)}>
+                    {item.drama.status}
+                  </EuiBadge>
+                  {item.drama.synopsis_status === 'provisional' && (
+                    <EuiBadge color="warning">
+                      {item.drama.synopsis_status}
+                    </EuiBadge>
+                  )}
+                </EuiText>
+              )}
+            </div>
+          );
+        },
       },
       {
         field: 'status',

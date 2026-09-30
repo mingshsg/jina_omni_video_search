@@ -1,5 +1,6 @@
 import { getConfig } from '../config';
 import { inferGroupFromVariants } from '../metadata/groups';
+import type { WorkTitle } from '../metadata/validate';
 import type { DramaSummaryDto } from '../drama/safe-dto';
 import { dramaSummaryFromAsset } from '../drama/safe-dto';
 import { getEsClient } from './client';
@@ -8,6 +9,12 @@ import type { VideoAssetDocument } from './index-assets';
 export interface LibraryAssetSummary {
   video_id: string;
   title: string;
+  /**
+   * Read-only projection of `meta.work_title` for the library tooltip
+   * (todo/41 F). Present only when the asset carries one — omitting the key
+   * keeps existing consumers of this DTO unchanged (additive field).
+   */
+  work_title?: WorkTitle;
   source_mode: string;
   duration_ms: number;
   width: number;
@@ -54,6 +61,7 @@ function toSummary(doc: VideoAssetDocument): LibraryAssetSummary {
     job_id: doc.job?.job_id,
     job_stage: doc.job?.stage,
     progress_pct: doc.job?.progress_pct,
+    ...(doc.meta?.work_title ? { work_title: doc.meta.work_title } : {}),
     ...(doc.meta?.group_id ? { group_id: doc.meta.group_id } : {}),
     ...(suggestedGroup ? { suggested_group_id: suggestedGroup } : {}),
     created_at: doc.created_at,
