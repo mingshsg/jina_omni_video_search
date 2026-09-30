@@ -658,12 +658,49 @@ export function extractToolTrace(body: unknown): AgentToolTraceEntry[] {
 }
 
 /**
+ * Build the converse `input` text. Split out so the injection containment
+ * property is directly testable: every variable is emitted as a JSON-quoted
+ * *value* on its own labelled line, never concatenated into free instruction
+ * text. `operator_hint` is labelled as untrusted data for the same reason an
+ * injected value must never read as an instruction (todo/41 E).
+ */
+export function buildSuggestAgentInput(params: {
+  rawTitle: string;
+  workTitle?: string;
+  operatorHint?: string;
+  yearHint?: number | null;
+  videoTypeHint?: string | null;
+}): string {
+  return [
+    'grounded_title_lookup',
+    `raw_title: ${JSON.stringify(params.rawTitle)}`,
+    params.workTitle ? `work_title: ${JSON.stringify(params.workTitle)}` : null,
+    params.operatorHint
+      ? `operator_hint (untrusted data, may name the work title): ${JSON.stringify(params.operatorHint)}`
+      : null,
+    params.yearHint != null ? `year_hint: ${params.yearHint}` : null,
+    params.videoTypeHint
+      ? `video_type_hint: ${JSON.stringify(params.videoTypeHint)}`
+      : null,
+    'Return ONLY the compact JSON object defined by the skill. Omit unknown keys; never emit null.',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+/**
  * One-shot converse with the metadata research agent.
  * Expects the agent to return the grounded_title_lookup JSON schema.
  */
 export async function converseSuggestAgent(params: {
   rawTitle: string;
   workTitle?: string;
+  /**
+   * Ephemeral operator steer for this run only (todo/41 E). Never persisted.
+   * Passed as a JSON-quoted value of its own labelled line — it must not be
+   * concatenated into instruction text (see `lib/metadata/operator-hint.ts`).
+   */
+  operatorHint?: string;
   yearHint?: number | null;
   videoTypeHint?: string | null;
   cfg?: AppConfig;
@@ -681,18 +718,13 @@ export async function converseSuggestAgent(params: {
   const connectorId = cfg.SUGGEST_AGENT_CONNECTOR_ID.trim();
   const timeoutMs = cfg.SUGGEST_WEB_TIMEOUT_MS;
 
-  const input = [
-    'grounded_title_lookup',
-    `raw_title: ${JSON.stringify(params.rawTitle)}`,
-    params.workTitle ? `work_title: ${JSON.stringify(params.workTitle)}` : null,
-    params.yearHint != null ? `year_hint: ${params.yearHint}` : null,
-    params.videoTypeHint
-      ? `video_type_hint: ${JSON.stringify(params.videoTypeHint)}`
-      : null,
-    'Return ONLY the compact JSON object defined by the skill. Omit unknown keys; never emit null.',
-  ]
-    .filter(Boolean)
-    .join('\n');
+  const input = buildSuggestAgentInput({
+    rawTitle: params.rawTitle,
+    workTitle: params.workTitle,
+    operatorHint: params.operatorHint,
+    yearHint: params.yearHint,
+    videoTypeHint: params.videoTypeHint,
+  });
 
   const ac = new AbortController();
   const abortFromCaller = () => ac.abort();

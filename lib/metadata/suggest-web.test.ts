@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   extractConsensusYear,
   applyAgentPayloadToLocal,
+  enrichSuggestionsWithWeb,
   isAllowlistedUrl,
   normalizeAgentActorCandidates,
   pickReadableCandidates,
@@ -615,5 +616,31 @@ describe('normalizeAgentActorCandidates', () => {
     });
     expect(result.web?.actor_candidates).toHaveLength(1);
     expect(result.web?.actor_candidates_dropped).toBe(2);
+  });
+});
+
+describe('enrichSuggestionsWithWeb — operator hint (todo/41 E)', () => {
+  it('runs the enrichment instead of skipping when a hint names the work', async () => {
+    // `untitled clip` abstains locally; the hint supplies the work title.
+    const local = buildLocalSuggestions({ title: 'untitled clip' });
+    expect(local.title_clues.abstained).toBe(true);
+    const result = await enrichSuggestionsWithWeb({
+      local,
+      cfg: { SUGGEST_WEB_PROVIDER: 'none' } as never,
+      operatorWorkTitle: 'Empresses in the Palace',
+    });
+    // Provider is off, so no web read happens — but the skip reason must not
+    // be `no_work_title`, which is exactly what the hint was there to prevent.
+    expect(result.web?.reason).toBe('provider_off');
+    expect(result.web?.reason).not.toBe('no_work_title');
+  });
+
+  it('still skips when neither the hint nor the title supplies a work', async () => {
+    const local = buildLocalSuggestions({ title: 'untitled clip' });
+    const result = await enrichSuggestionsWithWeb({
+      local,
+      cfg: { SUGGEST_WEB_PROVIDER: 'none' } as never,
+    });
+    expect(result.web?.reason).toBe('no_work_title');
   });
 });

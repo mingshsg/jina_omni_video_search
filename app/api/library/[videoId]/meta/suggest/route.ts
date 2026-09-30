@@ -16,6 +16,10 @@ import {
   SuggestRateLimitError,
   type SuggestJobSnapshot,
 } from '@/lib/metadata/suggest-jobs';
+import {
+  normalizeOperatorHint,
+  resolveOperatorHint,
+} from '@/lib/metadata/operator-hint';
 
 export const runtime = 'nodejs';
 
@@ -50,6 +54,20 @@ const suggestBodySchema = z
       .optional(),
     /** Optional caller language hint; labeled caller_hint, never media_tag. */
     media_language: z.union([z.string(), z.null()]).optional(),
+    /**
+     * Ephemeral operator steer for this run only (todo/41 E). Never persisted
+     * and never added to the asset. Length-bounded by *truncation* rather than
+     * rejection — a long paste should degrade to a usable hint, not fail the
+     * request — and parsed into existing Suggest inputs by
+     * `resolveOperatorHint` (see that module on why the raw string is treated
+     * as untrusted data).
+     */
+    operator_hint: z
+      .union([z.string(), z.null()])
+      .optional()
+      .transform((value) =>
+        value == null ? value : normalizeOperatorHint(value),
+      ),
   })
   .strict()
   .optional();
@@ -140,8 +158,13 @@ export async function POST(request: Request, { params }: Params) {
       draft,
       locale: localeFromRequest(request),
     });
+    // Ephemeral operator hint (todo/41 E): steers retrieval through the
+    // existing work_title input and may override the output locale. It is
+    // per-run state only — no asset field, no `meta` write.
+    const hint = resolveOperatorHint(parsed.data?.operator_hint);
     assertSuggestRateLimit(clientKey(request, videoId));
-    const locale = localeFromRequest(request);
+    const locale =
+      hint.locale ?? localeFromRequest(request);
     const cacheKey = JSON.stringify([
       videoId,
       dto.meta_revision,
@@ -151,6 +174,10 @@ export async function POST(request: Request, { params }: Params) {
       cfg.SUGGEST_WEB_PROVIDER,
       cfg.SUGGEST_AGENT_ID,
       cfg.SUGGEST_AGENT_CONNECTOR_ID,
+      // Must be part of the key: a different hint is a different run, and
+      // without this operator A's hint would hit operator B's cached result.
+      hint.workTitle,
+      hint.locale,
     ]);
     const job = createSuggestJob({
       videoId,
@@ -161,6 +188,8 @@ export async function POST(request: Request, { params }: Params) {
           local,
           cfg,
           signal,
+          operatorHint: parsed.data?.operator_hint ?? undefined,
+          operatorWorkTitle: hint.workTitle ?? undefined,
           onProgress: report,
         });
         const count = Object.keys(enriched.suggestions).length;

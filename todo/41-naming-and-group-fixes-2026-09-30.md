@@ -131,6 +131,8 @@ D 节的「现有 Suggest 不支持生成标题」**表述有误**，它把两�
 
 ### E. Edit metadata 提示输入框（用户既定决策不变）
 
+**状态：✅ 已实现（2026-09-30，本 worker 补完 UI）**
+
 - **ephemeral**：仅本次 Suggest 运行有效，不落库、不新增资产字段。
 - 作为 `POST /api/library/{videoId}/meta/suggest` 的**请求体字段**；
   job `cacheKey` **必须纳入**，避免 A 的提示命中 B 的缓存。
@@ -144,3 +146,34 @@ D 节的「现有 Suggest 不支持生成标题」**表述有误**，它把两�
   限长、转义、**独立参数通道**（不得与被检索页面内容同流），
   **不得借此绕过既有 source policy**（IMDb 等边界不变）。
   UI 需标明这是「操作者提示」，而非已核实的媒体标签/引用证据。
+
+#### 实现落点（本 worker）
+
+- `lib/metadata/operator-hint.ts`（新，纯函数）：`normalizeOperatorHint`
+  （NFKC → 去控制字符 → 折叠空白 → 截断 200）、`resolveOperatorHint`
+  （受标签约束的 `workTitle` 抽取 + `locale` 覆盖，歧义双语时弃权并记 `locale:ambiguous`）。
+  仅把提示作为 **JSON 值**传给既有 `work_title` 输入，绝不拼进指令正文；
+  未加标签的长散文不会被当成剧名（防止凭空编造作品身份）。
+- `app/api/library/[videoId]/meta/suggest/route.ts`：请求体新增 `operator_hint`
+  （`z.union([z.string(), z.null()]).optional()`，`transform` 走 normalize，
+  **截断而非拒绝**）；`hint.workTitle` / `hint.locale` 纳入 `cacheKey`；
+  通传 `operatorWorkTitle` 给 web/agent enrich。
+- `lib/metadata/agent-builder-suggest.ts` + `suggest-web.ts`：向下传递
+  `operatorWorkTitle`（不扩 agent 输入契约）。
+- `components/EditMetadataFlyout.tsx`：`operatorHint` state + 提交时仅在非空时
+  附带 `operator_hint`（不回填、不进 PATCH body）；**新增**渲染
+  `EuiFormRow(label=metaOperatorHintLabel, helpText=metaOperatorHintHelp)`
+  包裹 `EuiTextArea`（placeholder + `setOperatorHint`），位置在 work_title 区块
+  之后、description 之前——与它引导的检索同区，但明确是 Suggest 输入而非资产字段。
+- i18n：`ui.ts` 类型 + `uiEn`/`uiZh` 三键（`metaOperatorHintLabel/Help/Placeholder`）。
+- 测试：`lib/metadata/operator-hint.test.ts`（标题抽取、语言覆盖、注入串、
+  截断、控制字符、notes 不回显原文）；`agent-builder-suggest.test.ts` /
+  `suggest-web.test.ts` 覆盖 `operatorWorkTitle` 传递。
+
+#### 门禁
+
+- `yarn test`（Node 22）：**98 files / 744 tests 通过**（含 B 的 9 例）。
+- `yarn build`（Node 22）：**通过**。
+- **NOT RUN**：浏览器目视检查（textarea 布局 / flyout 滚动）、真实 Agent Builder
+  端到端提示效果、`operator_hint` cacheKey 隔离的运行时验证（容器禁令）。
+

@@ -709,17 +709,20 @@ async function enrichViaAgentBuilder(params: {
   local: LocalSuggestResult;
   cfg: AppConfig;
   work: string;
+  /** Ephemeral operator steer for this run only (todo/41 E); never persisted. */
+  operatorHint?: string;
   t0: number;
   signal?: AbortSignal;
   onProgress?: (stage: SuggestProgressStage) => void;
 }): Promise<EnrichedSuggestResult> {
-  const { local, cfg, work, t0, signal, onProgress } = params;
+  const { local, cfg, work, operatorHint, t0, signal, onProgress } = params;
   let toolTrace: AgentToolTraceEntry[] | undefined;
   try {
     onProgress?.('researching');
     const payload = await converseSuggestAgent({
       rawTitle: local.title_clues.normalized || work,
       workTitle: work,
+      operatorHint,
       yearHint: local.suggestions.year?.value ?? null,
       videoTypeHint: local.suggestions.video_type?.value ?? null,
       cfg,
@@ -911,14 +914,21 @@ export async function enrichSuggestionsWithWeb(params: {
   local: LocalSuggestResult;
   cfg?: AppConfig;
   signal?: AbortSignal;
+  /** Ephemeral operator steer for this run only (todo/41 E); never persisted. */
+  operatorHint?: string;
+  /** Work title the operator hint named — steers retrieval when present. */
+  operatorWorkTitle?: string;
   onProgress?: (stage: SuggestProgressStage) => void;
 }): Promise<EnrichedSuggestResult> {
   const cfg = params.cfg ?? getConfig();
   const local = params.local;
   const t0 = performance.now();
 
-  const work = local.title_clues.work_title?.trim();
-  if (!work || local.title_clues.abstained) {
+  // An operator-named title outranks the filename-derived clue, including
+  // when the filename alone abstained (a UUID upload with a hint).
+  const hintedWork = params.operatorWorkTitle?.trim();
+  const work = hintedWork || local.title_clues.work_title?.trim();
+  if (!work || (!hintedWork && local.title_clues.abstained)) {
     return skipped(local, 'no_work_title', Math.round(performance.now() - t0));
   }
 
@@ -930,6 +940,7 @@ export async function enrichSuggestionsWithWeb(params: {
       local,
       cfg,
       work,
+      operatorHint: params.operatorHint,
       t0,
       signal: params.signal,
       onProgress: params.onProgress,

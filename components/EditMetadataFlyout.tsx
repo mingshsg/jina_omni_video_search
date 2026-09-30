@@ -291,6 +291,9 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
   const [workTitleZh, setWorkTitleZh] = useState('');
   const [workTitleNativeLang, setWorkTitleNativeLang] = useState('');
   const [workTitleNativeName, setWorkTitleNativeName] = useState('');
+  // todo/41 E — ephemeral operator hint. Local component state only: it is
+  // sent with the Suggest request and discarded, never part of the PATCH body.
+  const [operatorHint, setOperatorHint] = useState('');
   const [selectedActors, setSelectedActors] = useState<
     EuiComboBoxOptionOption[]
   >([]);
@@ -659,6 +662,9 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
           },
           signal: ac.signal,
           body: JSON.stringify({
+            // Ephemeral per-run steer; omitted when empty so the server and
+            // its cache key are unaffected for operators who never use it.
+            ...(operatorHint.trim() ? { operator_hint: operatorHint } : {}),
             draft: {
               year: year.trim() === '' ? null : Number(year),
               video_type: videoType === '' ? null : videoType,
@@ -1689,6 +1695,25 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
               </EuiFlexGroup>
             </EuiFormRow>
             {renderPendingSuggestion('work_title')}
+            {/* todo/41 E — ephemeral operator hint. Rendered next to the
+                work title because it steers the same retrieval: it is an
+                input to the Suggest run, not an editable asset field, so it
+                stays out of the PATCH body. */}
+            <EuiFormRow
+              label={t.metaOperatorHintLabel}
+              helpText={t.metaOperatorHintHelp}
+              fullWidth
+            >
+              <EuiTextArea
+                value={operatorHint}
+                onChange={(e) => setOperatorHint(e.target.value)}
+                placeholder={t.metaOperatorHintPlaceholder}
+                rows={2}
+                compressed
+                fullWidth
+                aria-label={t.metaOperatorHintLabel}
+              />
+            </EuiFormRow>
             <EuiFormRow
               label={t.metaDescription}
               helpText={evidenceHelp('description')}
