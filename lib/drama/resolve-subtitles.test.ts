@@ -109,6 +109,25 @@ describe('resolveSubtitlesForLanguage P4 policies', () => {
     expect(transcribeOpenAiMock).toHaveBeenCalledTimes(1);
   });
 
+  it('auto reads a host MLX SRT before configured ASR', async () => {
+    findSidecarSrtMock.mockReturnValue(undefined);
+    extractEmbeddedSrtForLanguageMock.mockResolvedValue(null);
+    fs.writeFileSync(path.join(dir, 'host_zh.srt'), SRT_BODY);
+    const res = await resolveSubtitlesForLanguage(base());
+    expect(res.origin).toBe('mlx_host');
+    expect(res.cues[0].text).toBe('line');
+    expect(fs.readFileSync(path.join(dir, 'zh.srt'), 'utf8')).toBe(SRT_BODY);
+    expect(transcribeOpenAiMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects an invalid host SRT instead of silently using another ASR', async () => {
+    findSidecarSrtMock.mockReturnValue(undefined);
+    extractEmbeddedSrtForLanguageMock.mockResolvedValue(null);
+    fs.writeFileSync(path.join(dir, 'host_zh.srt'), 'untimed text');
+    await expect(resolveSubtitlesForLanguage(base())).rejects.toThrow(/no valid timed cues/);
+    expect(transcribeOpenAiMock).not.toHaveBeenCalled();
+  });
+
   // --- existing_only ---
 
   it('existing_only uses sidecar and skips ASR', async () => {
@@ -138,6 +157,7 @@ describe('resolveSubtitlesForLanguage P4 policies', () => {
   it('existing_only errors visibly and never calls ASR when no source', async () => {
     findSidecarSrtMock.mockReturnValue(undefined);
     extractEmbeddedSrtForLanguageMock.mockResolvedValue(null);
+    fs.writeFileSync(path.join(dir, 'host_zh.srt'), SRT_BODY);
     await expect(
       resolveSubtitlesForLanguage(base({ subtitleSource: 'existing_only' })),
     ).rejects.toThrow(/existing_only/);
@@ -145,6 +165,15 @@ describe('resolveSubtitlesForLanguage P4 policies', () => {
   });
 
   // --- force_asr ---
+
+  it('force_asr accepts the host MLX SRT and skips sidecar and embedded', async () => {
+    fs.writeFileSync(path.join(dir, 'host_zh.srt'), SRT_BODY);
+    const res = await resolveSubtitlesForLanguage(base({ subtitleSource: 'force_asr' }));
+    expect(res.origin).toBe('mlx_host');
+    expect(findSidecarSrtMock).not.toHaveBeenCalled();
+    expect(extractEmbeddedSrtForLanguageMock).not.toHaveBeenCalled();
+    expect(transcribeOpenAiMock).not.toHaveBeenCalled();
+  });
 
   it('force_asr skips sidecar and embedded even when present', async () => {
     const sidecar = path.join(dir, 'episode.zh.srt');

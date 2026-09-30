@@ -2,8 +2,8 @@
  * Resolve SRT for one language: sidecar → embedded → optional ASR.
  * Per-run policy (P4) controls which sources are allowed:
  * - `existing_only`: sidecar → embedded only; never ASR.
- * - `force_asr`: skip sidecar/embedded; ASR only.
- * - `auto` (default): sidecar → embedded → ASR.
+ * - `force_asr`: skip sidecar/embedded; host-produced or configured ASR only.
+ * - `auto` (default): sidecar → embedded → host-produced SRT → configured ASR.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -24,6 +24,7 @@ import { parseSrt, type SrtCue } from './srt';
 export type SubtitleOrigin =
   | 'sidecar'
   | 'embedded'
+  | 'mlx_host'
   | 'openai'
   | 'whisper_cli';
 
@@ -148,6 +149,19 @@ export async function resolveSubtitlesForLanguage(opts: {
   }
 
   if (source !== 'existing_only') {
+    // A Mac host can transcribe the already-extracted audio into this
+    // language-specific file in the shared run workspace. Keep it separate
+    // from the app's output SRT so retries never mistake an old output for
+    // an explicitly supplied host transcript.
+    const hostSrtPath = path.join(opts.subtitlesDir, `host_${opts.lang}.srt`);
+    if (fs.existsSync(hostSrtPath)) {
+      const cues = parseSrt(fs.readFileSync(hostSrtPath, 'utf8'));
+      if (cues.length === 0) {
+        throw new Error(`Host ASR SRT has no valid timed cues: ${hostSrtPath}`);
+      }
+      fs.copyFileSync(hostSrtPath, outSrtPath);
+      return { lang: opts.lang, srtPath: outSrtPath, cues, origin: 'mlx_host' };
+    }
     const asr = await tryAsr({
       videoPath: opts.videoPath,
       lang: opts.lang,
