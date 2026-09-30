@@ -122,7 +122,7 @@ const envSchema = z
     LOCAL_EMBED_URL: z.string().optional().default(''),
 
     CHUNK_PRESET: z
-      .enum(['standard', '60s', '30s', '20s', 'fine', '2s'])
+      .enum(['standard', '60s', '30s', '20s', '20s_3s', 'fine', '5s', '2s'])
       .optional()
       .default('2s'),
     CHUNK_WINDOW_MS: positiveInt(2000),

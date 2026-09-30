@@ -65,7 +65,7 @@ Optional:
 | `LOCAL_IMPORT_ROOT` | Enable local-path import mode |
 | `JINA_API_KEY` | Hosted Jina provider (+ set `EMBED_PROVIDER=jina`) |
 | `LOCAL_EMBED_URL` | Local provider (+ set `EMBED_PROVIDER=local`) |
-| `CHUNK_PRESET` | Process default when request omits `chunk_preset`: `2s` (2s/1s), `standard` (64s/4s), `60s`, `30s`, `20s`, or `fine` (10s/2s). Per-import UI/API overrides this. |
+| `CHUNK_PRESET` | Process default when request omits `chunk_preset`: `2s` (2s/1s), `standard` (64s/4s), `60s`, `30s`, `20s` (20s/2s), `20s_3s` (20s/3s), `5s` (5s/2s), or `fine` (10s/2s). Per-import UI/API overrides this, including a free-form `window_ms` + `overlap_ms`. |
 
 ---
 

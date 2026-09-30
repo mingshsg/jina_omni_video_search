@@ -7,6 +7,7 @@ import {
   EuiCheckbox,
   EuiComboBox,
   type EuiComboBoxOptionOption,
+  EuiFieldNumber,
   EuiFieldText,
   EuiFilePicker,
   EuiFlexGroup,
@@ -26,6 +27,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppShell } from '@/components/AppShell';
 import {
   IMPORT_CHUNK_PRESET_NAMES,
+  formatChunkPresetLabel,
+  resolveCustomChunkingDraft,
   type ImportChunkPreset,
 } from '@/lib/ingest/chunk-presets';
 import { titleFromFilename } from '@/lib/ingest/media-name';
@@ -45,6 +48,13 @@ const CreatableGroupCombo = dynamic(
 type ImportScope = 'single' | 'batch';
 type IngestMode = 'url' | 'local' | 'upload';
 type BatchSource = 'upload' | 'folder';
+
+/** `custom` is not a named preset — it switches on the free-form inputs. */
+type ChunkPresetChoice = ImportChunkPreset | 'custom';
+
+/** Defaults pre-filled when the operator picks the custom option. */
+const DEFAULT_CUSTOM_WINDOW_S = '20';
+const DEFAULT_CUSTOM_OVERLAP_S = '3';
 
 type Workload = {
   windows: number;
@@ -120,7 +130,9 @@ export default function IngestPage() {
     [],
   );
   const [chunkPreset, setChunkPreset] =
-    useState<ImportChunkPreset>('2s');
+    useState<ChunkPresetChoice>('2s');
+  const [customWindowS, setCustomWindowS] = useState(DEFAULT_CUSTOM_WINDOW_S);
+  const [customOverlapS, setCustomOverlapS] = useState(DEFAULT_CUSTOM_OVERLAP_S);
   const [autoStart, setAutoStart] = useState(true);
   const [dramaEnabled, setDramaEnabled] = useState(false);
   const [dramaLanguages, setDramaLanguages] = useState<
@@ -260,6 +272,22 @@ export default function IngestPage() {
       'drama_modules',
       JSON.stringify(dramaModules.map((o) => String(o.value ?? o.label))),
     );
+  };
+
+  /** Append `chunk_preset` or the custom `window_ms`/`overlap_ms` pair. */
+  const appendChunkingToFormData = (
+    fd: FormData,
+    fields: NonNullable<ReturnType<typeof chunkingRequestFields>>,
+  ) => {
+    if (fields.chunk_preset !== undefined) {
+      fd.append('chunk_preset', fields.chunk_preset);
+    }
+    if (fields.window_ms !== undefined) {
+      fd.append('window_ms', String(fields.window_ms));
+    }
+    if (fields.overlap_ms !== undefined) {
+      fd.append('overlap_ms', String(fields.overlap_ms));
+    }
   };
 
   const dramaJsonPayload = () => {
@@ -479,6 +507,31 @@ export default function IngestPage() {
     return true;
   };
 
+  /**
+   * Chunking fields for the request body. `custom` sends `window_ms` +
+   * `overlap_ms` (the server also accepts an optional `min_ms`, deliberately
+   * not exposed here); named presets keep sending only `chunk_preset`, so
+   * their behavior is unchanged. Returns null when the custom inputs are
+   * invalid — the caller surfaces `chunkPresetCustomInvalid` and blocks.
+   */
+  const chunkingRequestFields = ():
+    | { chunk_preset?: ImportChunkPreset; window_ms?: number; overlap_ms?: number }
+    | null => {
+    if (chunkPreset !== 'custom') return { chunk_preset: chunkPreset };
+    const draft = resolveCustomChunkingDraft(customWindowS, customOverlapS);
+    if (!draft) return null;
+    return { window_ms: draft.windowMs, overlap_ms: draft.overlapMs };
+  };
+
+  /** Validate the chunking selection; sets the message and returns false on error. */
+  const validateChunkingClient = (): boolean => {
+    if (chunkingRequestFields() === null) {
+      setClientError(t.chunkPresetCustomInvalid);
+      return false;
+    }
+    return true;
+  };
+
   const validateSingleClient = (): boolean => {
     setClientError(null);
     if (mode === 'url') {
@@ -496,7 +549,7 @@ export default function IngestPage() {
       setClientError(t.clientUploadRequired);
       return false;
     }
-    return validateDramaClient();
+    return validateDramaClient() && validateChunkingClient();
   };
 
   const validateBatchClient = (): boolean => {
@@ -510,7 +563,7 @@ export default function IngestPage() {
       setClientError(t.clientBatchFolderRequired);
       return false;
     }
-    return validateDramaClient();
+    return validateDramaClient() && validateChunkingClient();
   };
 
   // Mirrors the server-side fallback (lib/ingest/media-name.resolveIngestTitle)
@@ -541,6 +594,8 @@ export default function IngestPage() {
 
   const startSingleImport = async () => {
     if (!validateSingleClient()) return;
+    const chunkFields = chunkingRequestFields();
+    if (!chunkFields) return;
     clearSuccessResetTimer();
     setSubmitting(true);
     setApiError(null);
@@ -554,7 +609,7 @@ export default function IngestPage() {
         fd.append('file', file!);
         if (title.trim()) fd.append('title', title.trim());
         fd.append('auto_start', autoStart ? 'true' : 'false');
-        fd.append('chunk_preset', chunkPreset);
+        appendChunkingToFormData(fd, chunkFields);
         if (groupId) fd.append('group_id', groupId);
         appendDramaToFormData(fd);
         res = await fetch('/api/ingest/upload', {
@@ -574,7 +629,7 @@ export default function IngestPage() {
             source: mode === 'url' ? url.trim() : localPath.trim(),
             title: title.trim() || undefined,
             auto_start: autoStart,
-            chunk_preset: chunkPreset,
+            ...chunkFields,
             group_id: groupId || undefined,
             drama: dramaJsonPayload(),
           }),
@@ -610,6 +665,8 @@ export default function IngestPage() {
 
   const startBatchImport = async () => {
     if (!validateBatchClient()) return;
+    const chunkFields = chunkingRequestFields();
+    if (!chunkFields) return;
     closeBatchStreams();
     setSubmitting(true);
     setApiError(null);
@@ -630,7 +687,7 @@ export default function IngestPage() {
           fd.append('files', f);
         }
         fd.append('auto_start', autoStart ? 'true' : 'false');
-        fd.append('chunk_preset', chunkPreset);
+        appendChunkingToFormData(fd, chunkFields);
         if (groupId) fd.append('group_id', groupId);
         appendDramaToFormData(fd);
         res = await fetch('/api/ingest/batch', {
@@ -649,7 +706,7 @@ export default function IngestPage() {
             mode: 'folder',
             path: folderPath.trim(),
             auto_start: autoStart,
-            chunk_preset: chunkPreset,
+            ...chunkFields,
             group_id: groupId || undefined,
             drama: dramaJsonPayload(),
           }),
@@ -818,11 +875,34 @@ export default function IngestPage() {
       '60s': t.chunkPreset60s,
       '30s': t.chunkPreset30s,
       '20s': t.chunkPreset20s,
+      '20s_3s': t.chunkPreset20s3s,
       fine: t.chunkPresetFine,
+      '5s': t.chunkPreset5s,
       '2s': t.chunkPreset2s,
     };
     return { value: id, text: labels[id] };
   });
+  // Free-form option appended after the named presets; it is not part of
+  // IMPORT_CHUNK_PRESET_NAMES because it maps to window_ms/overlap_ms.
+  const chunkPresetSelectOptions = [
+    ...chunkPresetOptions,
+    { value: 'custom', text: t.chunkPresetCustom },
+  ];
+  const customChunkingInvalid =
+    chunkPreset === 'custom' &&
+    resolveCustomChunkingDraft(customWindowS, customOverlapS) === null;
+
+  /**
+   * Human label for the chunking actually submitted. The server echoes only
+   * `chunk_preset` (`custom` for free-form), so the window/overlap pair is
+   * labeled client-side to keep the progress/回显 readable.
+   */
+  const chunkingLabel = (
+    fields: NonNullable<ReturnType<typeof chunkingRequestFields>>,
+  ): string =>
+    fields.chunk_preset !== undefined
+      ? formatChunkPresetLabel(fields.chunk_preset)
+      : formatChunkPresetLabel('custom', fields.window_ms, fields.overlap_ms);
 
   const awaiting =
     progress?.status === 'awaiting_confirm' ||
@@ -1080,15 +1160,50 @@ export default function IngestPage() {
           helpText={t.chunkPresetHelp}
         >
           <EuiSelect
-            options={chunkPresetOptions}
+            options={chunkPresetSelectOptions}
             value={chunkPreset}
             onChange={(e) =>
-              setChunkPreset(e.target.value as ImportChunkPreset)
+              setChunkPreset(e.target.value as ChunkPresetChoice)
             }
             disabled={formBusy}
             aria-label={t.chunkPresetSelectLabel}
           />
         </EuiFormRow>
+
+        {chunkPreset === 'custom' && (
+          <>
+            <EuiFormRow
+              label={t.chunkPresetCustomWindowLabel}
+              helpText={t.chunkPresetCustomHelp}
+              isInvalid={customChunkingInvalid}
+              error={customChunkingInvalid ? t.chunkPresetCustomInvalid : undefined}
+            >
+              <EuiFieldNumber
+                value={customWindowS}
+                onChange={(e) => setCustomWindowS(e.target.value)}
+                min={1}
+                step={1}
+                disabled={formBusy}
+                isInvalid={customChunkingInvalid}
+                aria-label={t.chunkPresetCustomWindowLabel}
+              />
+            </EuiFormRow>
+            <EuiFormRow
+              label={t.chunkPresetCustomOverlapLabel}
+              isInvalid={customChunkingInvalid}
+            >
+              <EuiFieldNumber
+                value={customOverlapS}
+                onChange={(e) => setCustomOverlapS(e.target.value)}
+                min={0}
+                step={1}
+                disabled={formBusy}
+                isInvalid={customChunkingInvalid}
+                aria-label={t.chunkPresetCustomOverlapLabel}
+              />
+            </EuiFormRow>
+          </>
+        )}
 
         <EuiFormRow helpText={t.autoStartHelp}>
           <EuiCheckbox
@@ -1308,7 +1423,7 @@ export default function IngestPage() {
               <p>
                 {t.batchJobsLabel}: {batchRows.length} · {t.batchDoneLabel}:{' '}
                 {batchDoneCount} · {t.batchFailedLabel}: {batchFailedCount} ·{' '}
-                {t.chunkPresetLabel}: {chunkPreset}
+                {t.chunkPresetLabel}: {chunkingLabel(chunkingRequestFields() ?? {})}
               </p>
             </EuiText>
 

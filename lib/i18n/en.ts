@@ -24,7 +24,7 @@ export const ingestErrorsEn: Record<IngestErrorCode, string> = {
   INGEST_PROBE_ZERO_DURATION: 'The file has no playable video duration.',
   INGEST_INVALID_MODE: 'Invalid import mode.',
   INGEST_INVALID_CHUNKING:
-    'Invalid chunk preset or window/overlap values. Use standard, 60s, 30s, 20s, fine, 2s — or valid window_ms + overlap_ms.',
+    'Invalid chunk preset or window/overlap values. Use standard, 60s, 30s, 20s, 20s_3s, fine, 5s, 2s — or valid window_ms + overlap_ms.',
   INGEST_INVALID_GROUP:
     'Invalid index group name (empty or longer than 64 characters).',
   INGEST_DRAMA_EMPTY:

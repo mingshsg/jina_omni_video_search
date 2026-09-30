@@ -18,6 +18,7 @@ export {
   formatChunkPresetLabel,
   isImportChunkPreset,
   resolveChunkingFromRequest,
+  resolveCustomChunkingDraft,
 } from './chunk-presets';
 
 /** Resolution long-edge rungs (outer loop in proxy encoder). */

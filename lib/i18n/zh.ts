@@ -24,7 +24,7 @@ export const ingestErrorsZh: Record<IngestErrorCode, string> = {
   INGEST_PROBE_ZERO_DURATION: '文件没有可播放的视频时长。',
   INGEST_INVALID_MODE: '无效的导入模式。',
   INGEST_INVALID_CHUNKING:
-    '无效的分块预设或窗口/重叠参数。请使用 standard、60s、30s、20s、fine、2s，或提供合法的 window_ms + overlap_ms。',
+    '无效的分块预设或窗口/重叠参数。请使用 standard、60s、30s、20s、20s_3s、fine、5s、2s，或提供合法的 window_ms + overlap_ms。',
   INGEST_INVALID_GROUP:
     '无效的索引分组名（为空或超过 64 个字符）。',
   INGEST_DRAMA_EMPTY: '按剧处理至少需要选择一个增强模块。',

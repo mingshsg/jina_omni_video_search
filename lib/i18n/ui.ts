@@ -211,8 +211,16 @@ export type UiMessages = {
   chunkPreset60s: string;
   chunkPreset30s: string;
   chunkPreset20s: string;
+  chunkPreset20s3s: string;
   chunkPresetFine: string;
+  chunkPreset5s: string;
   chunkPreset2s: string;
+  chunkPresetCustom: string;
+  /** Custom option: window/overlap numeric inputs (seconds) and its errors. */
+  chunkPresetCustomWindowLabel: string;
+  chunkPresetCustomOverlapLabel: string;
+  chunkPresetCustomHelp: string;
+  chunkPresetCustomInvalid: string;
   submitImport: string;
   confirmWorkload: string;
   cancelConfirm: string;
@@ -303,6 +311,10 @@ export type UiMessages = {
   metaEmptyOption: string;
   metaSaved: string;
   metaSuggest: string;
+  /** todo/41 E — ephemeral operator hint textarea (drives Suggest only). */
+  metaOperatorHintLabel: string;
+  metaOperatorHintHelp: string;
+  metaOperatorHintPlaceholder: string;
   metaSuggesting: string;
   metaSuggestCancel: string;
   metaSuggestEmpty: string;
@@ -654,13 +666,22 @@ export const uiEn: UiMessages = {
   autoStartHelp: 'Off = show workload estimate and wait for confirm',
   chunkPresetSelectLabel: 'Chunk window',
   chunkPresetHelp:
-    'Overlap keeps adjacent windows sharing a few seconds so cuts are not missed. standard 64s/4s · 60s/4s · 30s/4s · 20s/2s · fine 10s/2s · 2s/1s. Each choice creates a distinct searchable variant.',
+    'Overlap keeps adjacent windows sharing a few seconds so cuts are not missed. standard 64s/4s · 60s/4s · 30s/4s · 20s/2s · 20s/3s · fine 10s/2s · 5s/2s · 2s/1s, or custom. Each choice creates a distinct searchable variant.',
   chunkPresetStandard: 'standard — 64 s window / 4 s overlap',
   chunkPreset60s: '60s — 60 s window / 4 s overlap',
   chunkPreset30s: '30s — 30 s window / 4 s overlap',
   chunkPreset20s: '20s — 20 s window / 2 s overlap',
+  chunkPreset20s3s: '20s/3s — 20 s window / 3 s overlap',
   chunkPresetFine: 'fine — 10 s window / 2 s overlap',
+  chunkPreset5s: '5s — 5 s window / 2 s overlap',
   chunkPreset2s: '2s — 2 s window / 1 s overlap (default)',
+  chunkPresetCustom: 'custom — set window and overlap (seconds)',
+  chunkPresetCustomWindowLabel: 'Window (seconds)',
+  chunkPresetCustomOverlapLabel: 'Overlap (seconds)',
+  chunkPresetCustomHelp:
+    'Window must be greater than 0 and overlap must be at least 0 and smaller than the window. The minimum window length uses the server default.',
+  chunkPresetCustomInvalid:
+    'Window must be a positive whole number of seconds, and overlap must be a whole number from 0 up to (but not including) the window.',
   submitImport: 'Start import',
   confirmWorkload: 'Confirm and start',
   cancelConfirm: 'Dismiss',
@@ -755,6 +776,10 @@ export const uiEn: UiMessages = {
   metaEmptyOption: '—',
   metaSaved: 'Metadata saved',
   metaSuggest: 'Suggest',
+  metaOperatorHintLabel: 'Operator hint (optional)',
+  metaOperatorHintHelp:
+    'Sent with this Suggest run only — never saved to the asset and never indexed. Steers the research (for example a work title such as “Empresses in the Palace”) and the output language. This is your own note, not verified media evidence; sources still have to pass the usual policy.',
+  metaOperatorHintPlaceholder: 'Work title: Empresses in the Palace · output in Chinese',
   metaSuggesting: 'Suggesting…',
   metaSuggestCancel: 'Cancel suggest',
   metaSuggestEmpty: 'No local clues in the title (year / type / work name).',
@@ -1115,13 +1140,22 @@ export const uiZh: UiMessages = {
   autoStartHelp: '关闭后先显示工作量估算，确认后再索引',
   chunkPresetSelectLabel: '分块窗口',
   chunkPresetHelp:
-    '重叠段让相邻窗口共享若干秒，避免切点漏检。standard 64s/4s · 60s/4s · 30s/4s · 20s/2s · fine 10s/2s · 2s/1s。每次选择会生成独立的可检索变体，便于对比。',
+    '重叠段让相邻窗口共享若干秒，避免切点漏检。standard 64s/4s · 60s/4s · 30s/4s · 20s/2s · 20s/3s · fine 10s/2s · 5s/2s · 2s/1s，或自定义。每次选择会生成独立的可检索变体，便于对比。',
   chunkPresetStandard: 'standard — 64 秒窗口 / 4 秒重叠',
   chunkPreset60s: '60s — 60 秒窗口 / 4 秒重叠',
   chunkPreset30s: '30s — 30 秒窗口 / 4 秒重叠',
   chunkPreset20s: '20s — 20 秒窗口 / 2 秒重叠',
+  chunkPreset20s3s: '20s/3s — 20 秒窗口 / 3 秒重叠',
   chunkPresetFine: 'fine — 10 秒窗口 / 2 秒重叠',
+  chunkPreset5s: '5s — 5 秒窗口 / 2 秒重叠',
   chunkPreset2s: '2s — 2 秒窗口 / 1 秒重叠（默认）',
+  chunkPresetCustom: '自定义 — 自行填写窗口与重叠秒数',
+  chunkPresetCustomWindowLabel: '窗口（秒）',
+  chunkPresetCustomOverlapLabel: '重叠（秒）',
+  chunkPresetCustomHelp:
+    '窗口必须大于 0，重叠必须大于等于 0 且小于窗口。最小窗口长度使用服务端默认值。',
+  chunkPresetCustomInvalid:
+    '窗口必须为正整数秒；重叠必须为整数秒，范围从 0 到小于窗口值。',
   submitImport: '开始导入',
   confirmWorkload: '确认并开始',
   cancelConfirm: '关闭',
@@ -1212,6 +1246,10 @@ export const uiZh: UiMessages = {
   metaEmptyOption: '—',
   metaSaved: '元数据已保存',
   metaSuggest: '建议填写',
+  metaOperatorHintLabel: '操作者提示（可选）',
+  metaOperatorHintHelp:
+    '仅随本次「建议填写」发送——不写入资产、不进索引。用于引导检索（例如剧名「甄嬛传」）与输出语言。这是你自己输入的提示，不是已核实的媒体证据；资料来源仍需通过既有策略。',
+  metaOperatorHintPlaceholder: '剧名：甄嬛传 · 用中文输出',
   metaSuggesting: '正在建议…',
   metaSuggestCancel: '取消建议',
   metaSuggestEmpty: '标题中没有可用的本地线索（年份/类型/作品名）。',

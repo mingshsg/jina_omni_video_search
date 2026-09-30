@@ -102,7 +102,7 @@ first progress facts when `auto_start` is true):
 | `inference_calls` | `windows` if no audio; `2 * windows` if `has_audio` |
 | `has_audio` | from ffprobe |
 | `variant_id` | derived from current config |
-| `chunk_preset` | `standard` \| `60s` \| `30s` \| `20s` \| `fine` \| `2s` \| `custom` |
+| `chunk_preset` | `standard` \| `60s` \| `30s` \| `20s` \| `20s_3s` \| `fine` \| `5s` \| `2s` \| `custom` |
 
 This is a **workload** estimate (windows / inference calls), not currency cost.
 
@@ -198,7 +198,7 @@ JSON body (discriminated by `mode`):
 | Field | Default | Notes |
 | --- | --- | --- |
 | `auto_start` | `true` | If `false`, job stops at `awaiting_confirm` until confirm |
-| `chunk_preset` | env `CHUNK_PRESET` | Named window: `standard` (64s/4s), `60s` (60s/4s), `30s` (30s/4s), `20s` (20s/2s), `fine` (10s/2s), `2s` (2s/1s). Hashes into `variant_id` so presets coexist. |
+| `chunk_preset` | env `CHUNK_PRESET` | Named window: `standard` (64s/4s), `60s` (60s/4s), `30s` (30s/4s), `20s` (20s/2s), `20s_3s` (20s/3s), `fine` (10s/2s), `5s` (5s/2s), `2s` (2s/1s). Hashes into `variant_id` so presets coexist. |
 | `window_ms` + `overlap_ms` | — | Optional free-form alternative (both required together); optional `min_ms`. Labels as `custom` unless `chunk_preset` is also set. |
 | `group_id` | — | Optional free-form name (≤ 64 chars). Seeds `meta.group_id` on first asset create for search hard-filters. Empty omitted; over-long → `INGEST_INVALID_GROUP`. Suggested starters: `trailer`, `demo`. |
 | `drama` | — | Optional `{ enabled, languages?, modules? }`. When `enabled: true`, queues follow-on drama enrichment **after** embed `ready` (plan/12). `modules`: `subtitles` \| `structure` \| `directors_script` \| `key_actors` \| `key_scenes` (non-empty). `languages`: `zh` \| `en` \| `ko` \| `th` (required if `subtitles` selected). Select the spoken language: `ko` requests Korean transcription, `th` requests Thai transcription. Multiple selections run separately; no translation or automatic language detection is implied. **v1:** URL mode → `INGEST_DRAMA_URL_NOT_SUPPORTED` (use upload/local; Library later). Duration over `DRAMA_MAX_DURATION_MS` (default 210 min) → `INGEST_DRAMA_TOO_LONG`. Empty modules → `INGEST_DRAMA_EMPTY`. |
