@@ -18,7 +18,7 @@ Source: [`reviews/pending-commits-readiness-review-2026-09-30.md`](../reviews/pe
 - [ ] Real encoded/long filename ingest remains NOT RUN until a safe media fixture is available. The byte limit and URL title transformation are covered by focused tests; do not infer actual media processing from them.
 - [ ] Verify grouped text/image/live search and one real custom ingest/search. Manual Group backfill requires an explicit per-video choice; do not bulk or automatically backfill.
 - [x] Re-reviewed the repaired diff and staged/committed only the reviewed code and tests as `b2f7442`; no additional scoped blocker found. The two unrelated duplicate docs remain untracked and untouched.
-- [ ] Push this branch as a reviewable backup. Its existing 19-commit history spans Group search, naming, Suggest UI, and chunk presets; prepare one PR per concern against `live-video-search` before merge.
+- [x] Pushed this branch to `git@github.com:mingsorg/jina_omni_drama.git` as a reviewable backup (`7226d22..2bc2061`). Its existing 19-commit history spans Group search, naming, Suggest UI, and chunk presets; prepare one PR per concern against `live-video-search` before merge.
 
 ## Resolution note — 2026-09-30
 
