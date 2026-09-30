@@ -8,6 +8,7 @@ import {
   startPipelineAsync,
 } from '@/lib/ingest/pipeline';
 import { importFromUploadStream } from '@/lib/ingest/sources';
+import { resolveIngestTitle } from '@/lib/ingest/media-name';
 import { IngestError, toIngestError } from '@/lib/ingest/errors';
 import {
   parseChunkingFromFormData,
@@ -73,10 +74,14 @@ export async function POST(request: Request) {
     );
 
     const titleField = form.get('title');
-    const title =
+    const explicitTitle =
       typeof titleField === 'string' && titleField.trim()
         ? titleField.trim()
         : undefined;
+    // No explicit title: fall back to the original filename (minus extension)
+    // so a UUID-named body never becomes the display title. Mirrors the batch
+    // upload path; shared helper lives in lib/ingest/media-name.
+    const title = resolveIngestTitle(explicitTitle, file.name);
 
     const drama = acceptDramaForIngest({
       mode: 'upload',

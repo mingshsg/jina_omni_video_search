@@ -161,7 +161,12 @@ export async function importFromUploadStream(
 
   const ext = extensionOf(originalFilename) || '.mp4';
   ensureDir(uploadsDir(cfg));
-  const mediaPath = path.join(uploadsDir(cfg), newMediaFilename(ext));
+  // Keep the original stem in the on-disk name for recognizability; the random
+  // suffix inside newMediaFilename keeps it unique.
+  const mediaPath = path.join(
+    uploadsDir(cfg),
+    newMediaFilename(ext, originalFilename),
+  );
   const tmpPath = `${mediaPath}.part`;
   ensureDir(path.dirname(tmpPath));
 
@@ -186,7 +191,10 @@ export async function copyLocalToOriginals(
 ): Promise<string> {
   const ext = extensionOf(sourcePath) || '.mp4';
   ensureDir(originalsDir(cfg));
-  const dest = path.join(originalsDir(cfg), newMediaFilename(ext));
+  const dest = path.join(
+    originalsDir(cfg),
+    newMediaFilename(ext, path.basename(sourcePath)),
+  );
   await fsp.copyFile(sourcePath, dest);
   return dest;
 }

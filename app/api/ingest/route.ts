@@ -12,6 +12,7 @@ import {
   importFromLocalPath,
   importFromUrl,
 } from '@/lib/ingest/sources';
+import { titleFromFilename } from '@/lib/ingest/media-name';
 import { IngestError, toIngestError } from '@/lib/ingest/errors';
 import {
   ingestChunkingFields,
@@ -165,7 +166,12 @@ export async function POST(request: Request) {
       const job = createIngestJob({
         mode: 'url',
         mediaPath: result.mediaPath,
-        title: body.title,
+        // No explicit title: use the URL's last path segment. `mediaPath` is a
+        // UUID-named download, so falling back to it would show a UUID.
+        title:
+          body.title ||
+          titleFromFilename(result.provenance.source_origin_path) ||
+          undefined,
         provenance: result.provenance,
         probe: result.probe,
         autoStart: body.auto_start,
@@ -187,7 +193,7 @@ export async function POST(request: Request) {
     const job = createIngestJob({
       mode: 'local',
       mediaPath,
-      title: body.title,
+      title: body.title || titleFromFilename(body.source) || undefined,
       probe: local.probe,
       autoStart: body.auto_start,
       chunking,

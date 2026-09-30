@@ -28,6 +28,7 @@ import {
   IMPORT_CHUNK_PRESET_NAMES,
   type ImportChunkPreset,
 } from '@/lib/ingest/chunk-presets';
+import { titleFromFilename } from '@/lib/ingest/media-name';
 import { useLocale } from '@/lib/i18n/locale-context';
 
 const CreatableGroupCombo = dynamic(
@@ -512,21 +513,28 @@ export default function IngestPage() {
     return validateDramaClient();
   };
 
+  // Mirrors the server-side fallback (lib/ingest/media-name.resolveIngestTitle)
+  // so the progress panel shows the same display name the asset will be created
+  // with — including for uploads that deliberately omit a title field.
   const resolveDisplayTitle = (): string => {
     if (title.trim()) return title.trim();
-    if (mode === 'upload' && file?.name) return file.name;
+    if (mode === 'upload' && file?.name) {
+      return titleFromFilename(file.name) || file.name;
+    }
     if (mode === 'url') {
       try {
         const path = new URL(url.trim()).pathname;
         const base = path.split('/').filter(Boolean).pop();
-        if (base) return decodeURIComponent(base);
+        if (base) {
+          return titleFromFilename(decodeURIComponent(base)) || base;
+        }
       } catch {
         /* ignore */
       }
     }
     if (mode === 'local') {
       const base = localPath.trim().split('/').filter(Boolean).pop();
-      if (base) return base;
+      if (base) return titleFromFilename(base) || base;
     }
     return '';
   };

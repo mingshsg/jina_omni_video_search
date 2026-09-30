@@ -36,6 +36,7 @@ import {
   importFromUploadStream,
   listVideoFilesInImportFolder,
 } from '@/lib/ingest/sources';
+import { titleFromFilename } from '@/lib/ingest/media-name';
 import { ingestErrorMessage, resolveLocale } from '@/lib/i18n';
 
 export const runtime = 'nodejs';
@@ -100,12 +101,6 @@ function parseAutoStart(raw: FormDataEntryValue | null): boolean {
   const v = raw.trim().toLowerCase();
   if (v === 'false' || v === '0' || v === 'no') return false;
   return true;
-}
-
-function titleFromFilename(name: string): string {
-  const base = name.split(/[/\\]/).pop() ?? name;
-  const dot = base.lastIndexOf('.');
-  return dot > 0 ? base.slice(0, dot) : base;
 }
 
 async function acceptLocalFileJob(opts: {

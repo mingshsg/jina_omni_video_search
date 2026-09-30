@@ -291,7 +291,19 @@ export async function downloadUrlToFile(
     }
 
     ensureDir(originalsDir(cfg));
-    const destPath = path.join(originalsDir(cfg), newMediaFilename(ext));
+    // Keep the URL's last path segment in the on-disk name for recognizability;
+    // the random suffix inside newMediaFilename keeps it unique and the stem is
+    // basename-only, so a hostile URL path cannot escape originalsDir.
+    let urlStem = current.pathname;
+    try {
+      urlStem = decodeURIComponent(urlStem);
+    } catch {
+      /* malformed percent-encoding — sanitizeFilenameStem handles the raw form */
+    }
+    const destPath = path.join(
+      originalsDir(cfg),
+      newMediaFilename(ext, urlStem),
+    );
     const bytes = await streamResponseToFile(
       res,
       destPath,
