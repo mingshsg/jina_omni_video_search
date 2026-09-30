@@ -6,8 +6,60 @@
  * pulls in the filesystem.
  */
 
-/** Cap for the human-readable stem; keeps the whole name well under 255 bytes. */
-export const MEDIA_FILENAME_STEM_MAX = 80;
+/**
+ * POSIX `NAME_MAX` for a single path component on the target filesystems
+ * (ext4/overlayfs in the container, APFS on macOS). Measured as 255 on the
+ * dev host and the deploy base image.
+ */
+export const MEDIA_FILENAME_NAME_MAX_BYTES = 255;
+
+/**
+ * Bytes appended after the stem in the longest path component, including
+ * failed-upload quarantine: `-` (1) + token (12) + longest extension (5) +
+ * `.part` (5) + `.` (1) + timestamp (14 reserved) + `.partial` (8) = 46.
+ */
+export const MEDIA_FILENAME_SUFFIX_RESERVE_BYTES = 46;
+
+/** Extra safety margin on top of the suffix reserve. */
+export const MEDIA_FILENAME_SAFETY_MARGIN_BYTES = 8;
+
+/**
+ * Cap for the human-readable stem **in UTF-8 bytes** (not code points):
+ * 255 − 46 suffix − 8 margin = 201 bytes. The previous code-point cap of 80
+ * allowed 80 Han characters = 240 bytes, and `-<token>.mp4.part` pushed the
+ * component to 262 bytes — over `NAME_MAX`. Budgeting by bytes keeps the
+ * complete quarantine name (including timestamp and `.partial`) ≤ 247.
+ */
+export const MEDIA_FILENAME_STEM_MAX_BYTES =
+  MEDIA_FILENAME_NAME_MAX_BYTES -
+  MEDIA_FILENAME_SUFFIX_RESERVE_BYTES -
+  MEDIA_FILENAME_SAFETY_MARGIN_BYTES;
+
+/** UTF-8 length of a single code point, without `Buffer`/`TextEncoder`. */
+function codePointUtf8Bytes(codePoint: number): number {
+  if (codePoint <= 0x7f) return 1;
+  if (codePoint <= 0x7ff) return 2;
+  if (codePoint <= 0xffff) return 3;
+  return 4;
+}
+
+/**
+ * Truncate `value` to at most `maxBytes` UTF-8 bytes without splitting a
+ * character: iteration is by code point, so a multi-byte character is either
+ * wholly kept or wholly dropped (never a broken half).
+ */
+export function truncateUtf8ToBytes(value: string, maxBytes: number): string {
+  if (maxBytes <= 0) return '';
+  let bytes = 0;
+  let out = '';
+  for (const char of value) {
+    const size = codePointUtf8Bytes(char.codePointAt(0) ?? 0);
+    if (bytes + size > maxBytes) break;
+    bytes += size;
+    out += char;
+  }
+  return out;
+}
 
 /**
  * Derive a display title from a filename or path: last path segment with the
@@ -40,8 +92,11 @@ export function sanitizeFilenameStem(raw: string): string {
     // `..`, `.-`, `_.` … collapse to a single `-`, so `..` cannot survive.
     .replace(/[-._]{2,}/g, '-')
     .replace(/^[-._]+|[-._]+$/g, '');
-  // Slice by code point so a multi-byte character is never cut in half.
-  return [...cleaned].slice(0, MEDIA_FILENAME_STEM_MAX).join('');
+  // Slice by UTF-8 bytes, never by code point: a code-point cap of 80 let
+  // 80 Han characters (240 bytes) through, and the `-<token>.mp4` suffix then
+  // overran the 255-byte component limit. The byte cap leaves room for that
+  // suffix, extension, upload `.part`, and quarantine timestamp/`.partial`.
+  return truncateUtf8ToBytes(cleaned, MEDIA_FILENAME_STEM_MAX_BYTES);
 }
 
 /**

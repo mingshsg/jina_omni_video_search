@@ -33,6 +33,7 @@ import type {
   GroupAvailability,
   GroupAvailabilityEntry,
 } from '@/lib/metadata/group-availability-types';
+import { createGroupAvailabilityLoader } from '@/lib/metadata/group-availability-load';
 
 type Props = {
   selectedIds: string[];
@@ -84,31 +85,40 @@ export function SearchGroupFilter({
   // Latest typed value, so a locale change mid-lookup can re-run the same name
   // instead of leaving a stale-language option (todo/40 R5).
   const lastLookupInput = useRef('');
+  const availabilityLoader = useRef(
+    createGroupAvailabilityLoader<GroupAvailability>((state) => {
+      if (state.status === 'loading') {
+        setLoading(true);
+        setFailed(false);
+      } else if (state.status === 'ready') {
+        setData(state.data);
+        setFailed(false);
+        setLoading(false);
+      } else {
+        setData(null);
+        setFailed(true);
+        setLoading(false);
+      }
+    }),
+  );
 
   const selectedKey = selectedIds.join('\u0000');
 
   const load = useCallback(async () => {
-    setLoading(true);
-    setFailed(false);
-    try {
+    await availabilityLoader.current.load(async () => {
       const query = groupAvailabilityQuery({
         locale,
         selectedIds: selectedKey ? selectedKey.split('\u0000') : [],
       });
       const res = await fetch(`/api/metadata/group-availability?${query}`);
       if (!res.ok) throw new Error('group availability failed');
-      const body = (await res.json()) as GroupAvailability;
-      setData(body);
-    } catch {
-      setFailed(true);
-      setData(null);
-    } finally {
-      setLoading(false);
-    }
+      return (await res.json()) as GroupAvailability;
+    });
   }, [locale, selectedKey]);
 
   useEffect(() => {
     void load();
+    return () => availabilityLoader.current.invalidate();
   }, [load]);
 
   const clearLookupTimer = useCallback(() => {

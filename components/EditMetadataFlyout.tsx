@@ -31,6 +31,11 @@ import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocale } from '@/lib/i18n/locale-context';
 import { peopleCatalogUnavailable } from '@/lib/metadata/catalogs-status';
+import {
+  classifyMetaLoad,
+  type FetchedJson,
+  metaEditorView,
+} from '@/lib/metadata/meta-load-state';
 
 const CreatableGroupCombo = dynamic(
   () =>
@@ -229,6 +234,31 @@ type Props = {
 function sameTags(a: string[], b: string[]): boolean {
   if (a.length !== b.length) return false;
   return a.every((v, i) => v === b[i]);
+}
+
+/**
+ * Fetch a URL and normalize every failure mode (rejected fetch, non-2xx, or a
+ * body that is not JSON) into a {@link FetchedJson} instead of throwing, so
+ * the editor can decide its two load requests independently (todo/43 F2).
+ */
+async function fetchJson<T>(url: string, locale: string): Promise<FetchedJson<T>> {
+  let res: Response;
+  try {
+    res = await fetch(url, { headers: { 'Accept-Language': locale } });
+  } catch {
+    return { ok: false, body: null, transportFailed: true };
+  }
+  let body: (T & { error?: { message?: string } }) | null = null;
+  try {
+    body = (await res.json()) as T & { error?: { message?: string } };
+  } catch {
+    return { ok: false, body: null, transportFailed: true };
+  }
+  const errorMessage =
+    body && typeof body === 'object' && body.error?.message
+      ? body.error.message
+      : undefined;
+  return { ok: res.ok, body, transportFailed: false, errorMessage };
 }
 
 function waitForPoll(ms: number, signal: AbortSignal): Promise<void> {
@@ -474,50 +504,47 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
     setLoading(true);
     setError(null);
     setConflict(null);
-    let metaLoadFailed = false;
+    // The two requests are independent: a metadata failure is an explicit
+    // error with retry, a catalogs failure keeps the metadata form usable and
+    // only degrades the actor/group selectors (todo/40 R4, todo/43 F2).
+    const [meta, catalogsResult] = await Promise.all([
+      fetchJson<MetaDto>(`/api/library/${encodeURIComponent(videoId)}`, locale),
+      fetchJson<Catalogs>(`/api/metadata/catalogs?locale=${locale}`, locale),
+    ]);
     try {
-      const [metaRes, catRes] = await Promise.all([
-        fetch(`/api/library/${encodeURIComponent(videoId)}`, {
-          headers: { 'Accept-Language': locale },
-        }),
-        fetch(`/api/metadata/catalogs?locale=${locale}`, {
-          headers: { 'Accept-Language': locale },
-        }),
-      ]);
-      const metaData = (await metaRes.json()) as MetaDto & {
-        error?: { message: string };
-      };
-      const catData = (await catRes.json()) as Catalogs & {
-        error?: { message: string };
-      };
-      if (!metaRes.ok) {
-        metaLoadFailed = true;
-        throw new Error(metaData.error?.message ?? t.metaLoadError);
+      const outcome = classifyMetaLoad(meta, catalogsResult, t.metaLoadError);
+      if (outcome.status === 'meta_error') {
+        // Leave `catalogs` null. The render decision comes from
+        // `metaEditorView`, and the error banner below offers a retry — this
+        // is never a permanent loading state.
+        setActorsUnavailable(false);
+        setDto(null);
+        setCatalogs(null);
+        setError(outcome.message);
+        return;
       }
-      if (!catRes.ok) {
-        // Only the actor catalog failed — surface it, keep the metadata form.
+      if (outcome.status === 'catalogs_warning') {
+        // A valid DTO but no catalogs: render the form degraded rather than
+        // discarding the metadata; the actor field shows the warning.
         setActorsUnavailable(true);
-        throw new Error(catData.error?.message ?? t.metaLoadError);
+        setCatalogs(null);
+        setActorOptions([]);
+        setGroupOptions([]);
+        applyDto(outcome.dto, []);
+        return;
       }
-      setCatalogs(catData);
-      setActorsUnavailable(peopleCatalogUnavailable(catData));
+      setCatalogs(outcome.catalogs);
+      setActorsUnavailable(peopleCatalogUnavailable(outcome.catalogs));
       setActorOptions(
-        catData.people.map((p) => ({ label: p.display, value: p.id })),
+        outcome.catalogs.people.map((p) => ({ label: p.display, value: p.id })),
       );
       setGroupOptions(
-        (catData.groups ?? []).map((g) => ({
+        (outcome.catalogs.groups ?? []).map((g) => ({
           label: g.label,
           value: g.id,
         })),
       );
-      applyDto(metaData, catData.people);
-    } catch (err) {
-      // A network failure that also reached the metadata request is a metadata
-      // load failure; a catalogs-only failure keeps the form usable and just
-      // flags the actor catalog (todo/40 R4).
-      if (metaLoadFailed) {
-        setError(err instanceof Error ? err.message : t.metaLoadError);
-      }
+      applyDto(outcome.dto, outcome.catalogs.people);
     } finally {
       setLoading(false);
     }
@@ -1578,7 +1605,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
           <>
             <EuiCallOut color="danger" size="s" title={error} />
             <EuiSpacer size="m" />
-            {conflict != null && (
+            {(conflict != null || (!loading && dto == null)) && (
               <>
                 <EuiButton size="s" onClick={() => void load()}>
                   {t.metaReload}
@@ -1634,9 +1661,10 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
             <EuiSpacer size="m" />
           </>
         )}
-        {loading || !catalogs ? (
+        {metaEditorView({ loading, hasDto: dto != null }) === 'loading' ? (
           <EuiText size="s">{t.metaLoading}</EuiText>
-        ) : (
+        ) : null}
+        {metaEditorView({ loading, hasDto: dto != null }) === 'form' ? (
           <EuiForm component="form" onSubmit={(e) => e.preventDefault()} fullWidth>
             <EuiFormRow
               label={t.metaWorkTitle}
@@ -2181,7 +2209,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
               <p>{t.metaSuggestHelp}</p>
             </EuiText>
           </EuiForm>
-        )}
+        ) : null}
       </EuiFlyoutBody>
       <EuiFlyoutFooter>
         <EuiFlexGroup justifyContent="spaceBetween">

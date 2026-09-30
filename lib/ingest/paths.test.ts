@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  MEDIA_FILENAME_STEM_MAX,
+  MEDIA_FILENAME_STEM_MAX_BYTES,
   resolveIngestTitle,
   sanitizeFilenameStem,
   titleFromFilename,
@@ -58,7 +58,24 @@ describe('sanitizeFilenameStem', () => {
 
   it('bounds the stem length', () => {
     const out = sanitizeFilenameStem(`${'x'.repeat(500)}.mp4`);
-    expect(out.length).toBeLessThanOrEqual(MEDIA_FILENAME_STEM_MAX);
+    expect(Buffer.byteLength(out, 'utf8')).toBeLessThanOrEqual(
+      MEDIA_FILENAME_STEM_MAX_BYTES,
+    );
+  });
+
+  it('reserves filename bytes for a long Chinese upload and quarantine suffix', () => {
+    const filename = newMediaFilename('.mp4', `${'甄'.repeat(100)}.mp4`);
+    expect(Buffer.byteLength(`${filename}.part`, 'utf8')).toBeLessThanOrEqual(255);
+    expect(
+      Buffer.byteLength(`${filename}.part.99999999999999.partial`, 'utf8'),
+    ).toBeLessThanOrEqual(255);
+    expect(filename).toMatch(/-\p{ASCII_Hex_Digit}{12}\.mp4$/u);
+  });
+
+  it('reserves filename bytes for a long multibyte local or URL name', () => {
+    const filename = newMediaFilename('.webm', `${'🎬片'.repeat(100)}.webm`);
+    expect(Buffer.byteLength(filename, 'utf8')).toBeLessThanOrEqual(255);
+    expect(filename).toMatch(/\.webm$/);
   });
 
   it('returns an empty string when nothing usable survives', () => {

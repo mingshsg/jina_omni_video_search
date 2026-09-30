@@ -13,6 +13,7 @@ import {
   importFromUrl,
 } from '@/lib/ingest/sources';
 import { titleFromFilename } from '@/lib/ingest/media-name';
+import { titleFromUrlPath } from '@/lib/ingest/url-title';
 import { IngestError, toIngestError } from '@/lib/ingest/errors';
 import {
   ingestChunkingFields,
@@ -170,7 +171,7 @@ export async function POST(request: Request) {
         // UUID-named download, so falling back to it would show a UUID.
         title:
           body.title ||
-          titleFromFilename(result.provenance.source_origin_path) ||
+          titleFromUrlPath(result.provenance.source_origin_path) ||
           undefined,
         provenance: result.provenance,
         probe: result.probe,
