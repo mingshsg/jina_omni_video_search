@@ -26,11 +26,13 @@ export const VIDEO_TYPE_SET: ReadonlySet<string> = new Set(VIDEO_TYPES);
  * hard-filtered at search. Distinct from content facets (`video_type`, tags).
  *
  * Starter suggestions (not a closed catalog): `trailer` (legacy 10 s / fine
- * chunks) and `demo` (legacy 2 s chunks). Operators may type any new name.
+ * chunks), `demo` (legacy 2 s chunks) and `training` (model/eval material).
+ * Operators may type any new name.
  */
 export const SUGGESTED_ASSET_GROUPS = [
   { id: 'trailer', name_en: 'trailer', name_zh: 'trailer（预告 / 10s）' },
   { id: 'demo', name_en: 'demo', name_zh: 'demo（演示 / 2s）' },
+  { id: 'training', name_en: 'training', name_zh: 'training（训练 / 评测素材）' },
 ] as const;
 
 export const SUGGESTED_ASSET_GROUP_IDS = SUGGESTED_ASSET_GROUPS.map((g) => g.id);

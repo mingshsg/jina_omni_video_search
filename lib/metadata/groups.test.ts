@@ -72,10 +72,12 @@ describe('listGroupCatalogResult (G3/G5)', () => {
     expect(result.status).toBe('ok');
     expect(result.truncated).toBe(false);
     expect(result.entries.map((e) => e.id)).toEqual(
-      expect.arrayContaining(['trailer', 'demo', 'drama']),
+      expect.arrayContaining(['trailer', 'demo', 'training', 'drama']),
     );
     // `trailer` is a starter; it keeps its localized suggestion label.
     expect(result.entries.find((e) => e.id === 'trailer')?.label).toBe('trailer');
+    // `training` is a starter suggestion alongside trailer/demo.
+    expect(result.entries.find((e) => e.id === 'training')?.label).toBe('training');
     const request = mocks.search.mock.calls[0]?.[0];
     expect(request.aggs.groups.terms.size).toBe(GROUP_CATALOG_TERMS_SIZE);
   });
