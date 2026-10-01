@@ -25,6 +25,8 @@ export type SubtitleOrigin =
   | 'sidecar'
   | 'embedded'
   | 'mlx_host'
+  | 'translated_en'
+  | 'translated_zh'
   | 'openai'
   | 'whisper_cli';
 
@@ -34,6 +36,8 @@ export interface ResolvedSubtitles {
   cues: SrtCue[];
   origin: SubtitleOrigin;
 }
+
+export class NoSubtitlesError extends Error {}
 
 async function tryAsr(opts: {
   videoPath: string;
@@ -106,6 +110,8 @@ export async function resolveSubtitlesForLanguage(opts: {
   allowEmbedded?: boolean;
   /** Per-run subtitle policy (P4); `auto` when omitted. */
   subtitleSource?: DramaSubtitleSource;
+  /** Probe available timed subtitles without guessing a spoken ASR language. */
+  allowConfiguredAsr?: boolean;
 }): Promise<ResolvedSubtitles> {
   const outSrtPath = path.join(opts.subtitlesDir, `${opts.lang}.srt`);
   const source = opts.subtitleSource ?? 'auto';
@@ -162,16 +168,21 @@ export async function resolveSubtitlesForLanguage(opts: {
       fs.copyFileSync(hostSrtPath, outSrtPath);
       return { lang: opts.lang, srtPath: outSrtPath, cues, origin: 'mlx_host' };
     }
-    const asr = await tryAsr({
-      videoPath: opts.videoPath,
-      lang: opts.lang,
-      audioDir: opts.audioDir,
-      outSrtPath,
-    });
-    if (asr) return asr;
+    if (opts.allowConfiguredAsr !== false) {
+      const asr = await tryAsr({
+        videoPath: opts.videoPath,
+        lang: opts.lang,
+        audioDir: opts.audioDir,
+        outSrtPath,
+      });
+      if (asr) return asr;
+    }
   }
 
-  throw new Error(
+  throw new NoSubtitlesError(
+    opts.allowConfiguredAsr === false
+      ? `No existing ${opts.lang} timed subtitle source; ASR language has not been selected`
+      :
     source === 'existing_only'
       ? `No subtitles for ${opts.lang}: no matching sidecar or embedded stream (existing_only — ASR skipped)`
       : source === 'force_asr'

@@ -16,6 +16,7 @@ import type { VideoAssetDocument } from '../es/index-assets';
 export interface DramaSummaryDto {
   status: string;
   subtitle_source?: string;
+  source_language?: string;
   director_coverage?: string;
   languages?: string[];
   modules?: string[];
@@ -103,6 +104,7 @@ export function dramaSummaryFromAsset(
     return {
       status: metaDrama.enrichment_status,
       ...(metaDrama.subtitle_source ? { subtitle_source: metaDrama.subtitle_source } : {}),
+      ...(metaDrama.source_language ? { source_language: metaDrama.source_language } : {}),
       ...(metaDrama.director_coverage ? { director_coverage: metaDrama.director_coverage } : {}),
       languages: metaDrama.languages,
       modules: metaDrama.modules,
@@ -117,6 +119,7 @@ export function dramaSummaryFromAsset(
   return {
     status: job.status,
     ...(job.subtitle_source ? { subtitle_source: job.subtitle_source } : {}),
+    ...(job.source_language ? { source_language: job.source_language } : {}),
     ...(job.director_coverage ? { director_coverage: job.director_coverage } : {}),
     languages: job.languages,
     modules: job.modules,

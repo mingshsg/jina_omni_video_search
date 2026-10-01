@@ -215,6 +215,23 @@ describe('I4 marker-failure recovery through asset state', () => {
     expect(job?.drama?.directorCoverage).toBe('sampled');
   });
 
+  it('restores the selected spoken language for bilingual retry', async () => {
+    findAssetByJobIdMock.mockResolvedValueOnce(
+      assetWithDrama('job-bilingual', undefined, {
+        status: 'failed',
+        languages: ['en', 'zh'],
+        modules: ['subtitles'],
+        modules_done: [],
+        subtitle_source: 'auto',
+        source_language: 'en',
+        director_coverage: 'sampled',
+      }),
+    );
+    const job = await resolveIngestJob('job-bilingual');
+    expect(job?.drama?.sourceLanguage).toBe('en');
+    expect(job?.drama?.status).toBe('failed');
+  });
+
   it('defaults the P4 policy for pre-P4 job records', async () => {
     findAssetByJobIdMock.mockResolvedValueOnce(
       assetWithDrama(

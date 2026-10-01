@@ -21,6 +21,7 @@ function fullPayload(): DramaMetaPayload {
     modules: ['structure', 'subtitles', 'directors_script', 'key_actors', 'key_scenes'],
     languages: ['zh', 'en'],
     subtitle_source: 'existing_only',
+    source_language: 'en',
     director_coverage: 'sampled',
     modules_done: ['structure', 'subtitles'],
     structure: [
@@ -135,6 +136,7 @@ describe('drama mapping/payload contract (I1)', () => {
       'run_id',
       // P4: per-run policy persisted for retry parity.
       'subtitle_source',
+      'source_language',
       'director_coverage',
       'error_code',
       'error_message',

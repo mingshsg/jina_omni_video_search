@@ -627,8 +627,13 @@ export default function LibraryPage() {
       {dramaViewTarget && dramaViewTarget.drama && (
         <DramaResultsFlyout
           videoId={dramaViewTarget.video_id}
+          jobId={dramaViewTarget.job_id}
           drama={dramaViewTarget.drama}
           onClose={() => setDramaViewTarget(null)}
+          onRetryStarted={() => {
+            setToast(t.retryStarted);
+            void load();
+          }}
         />
       )}
     </AppShell>

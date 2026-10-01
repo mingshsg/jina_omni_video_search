@@ -48,11 +48,13 @@ User framing (2026-09-26):
 
 When **Process as drama** is checked (default off):
 
-1. **Subtitle languages** — multi-select (`zh`, `en`, `ko`, `th`). Select the spoken
-   language: `ko` requests Korean ASR, `th` requests Thai ASR. Each selected
-   language is resolved separately (sidecar → matching embedded stream → ASR);
-   this does not translate or auto-detect the language. At least one language
-   is required when "subtitles" is selected.
+1. **Subtitle output languages** — multi-select (`zh`, `en`, `ko`, `th`). With
+   both `en` and `zh`, look for timed originals (sidecar → matching embedded
+   stream → host SRT) before translating a missing counterpart through EIS.
+   Never force ASR once per output language on the same audio. When no timed
+   original exists, ASR requires an explicit spoken-language choice. `ko`
+   requests Korean ASR and `th` requests Thai ASR; neither is translated.
+   At least one language is required when "subtitles" is selected.
 2. **Modules** — multi-select, all optional independently:
    - `subtitles` — extract / align SRT for selected languages
    - `structure` — label 片头 / 片尾 / recap / intro / body intervals
@@ -354,8 +356,8 @@ replacement (todo/38 I2), not an accidental overwrite.
 | Control | Behavior |
 | --- | --- |
 | Outputs | Checkboxes for timed subtitles, structure/credits, director's script plus synopsis, key scenes, and actor **candidates**. `key_actors` requires `directors_script`; do not label candidates verified until their review gate passes. |
-| Spoken subtitle languages | Multi-select `zh`, `en`, `ko`, `th`, empty by default. Required only for subtitles. `ko` requests Korean transcription and `th` Thai; neither means translation. |
-| Subtitle method | `auto` (matching sidecar → matching embedded stream → configured ASR), `existing subtitles only`, or `force ASR`. This is a per-run policy to implement; display the configured ASR backend without exposing credentials. Missing language-tagged subtitles or unavailable ASR fails that language visibly. |
+| Subtitle output languages | Multi-select `zh`, `en`, `ko`, `th`, empty by default. Required only for subtitles. An `en` + `zh` request uses a timed original first and EIS-translates the missing counterpart, preserving cue times and marking translation provenance. If both genuine language sources exist, retain both. `ko` and `th` remain source-language transcription, not translation. |
+| Subtitle method | `auto` (matching sidecar → matching embedded stream → host SRT → configured ASR), `existing subtitles only`, or `force ASR`. For `en` + `zh`, do not run ASR twice with forced languages: if no timed original exists, require an explicit spoken language for ASR. Display the configured backends without exposing credentials. Missing language-tagged subtitles or unavailable ASR/translation fails that language visibly. |
 | Director coverage | Show the current **sampled windows** cap and estimated work before starting. Do not offer “full episode” until full-coverage generation and audit are implemented. ZH/EN director output is distinct from the source-language transcript. |
 | Confirmation | Summarize selected modules, languages, method, limits, and expected generated artifacts. The start request responds immediately with a job/run ID; long work proceeds asynchronously. |
 

@@ -35,6 +35,7 @@ export function videoAssetsJobMappingProperties(): Record<string, unknown> {
         // P4: per-run policy persisted for retry parity. `index:false` —
         // stored for hydration, never queried.
         subtitle_source: { type: 'keyword', index: false },
+        source_language: { type: 'keyword', index: false },
         director_coverage: { type: 'keyword', index: false },
         error_code: { type: 'keyword', index: false },
         error_message: { type: 'text', index: false },

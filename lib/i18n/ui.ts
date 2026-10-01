@@ -194,6 +194,9 @@ export type UiMessages = {
   dramaSynopsisStatus: string;
   dramaProvisionalNote: string;
   dramaSubtitleSource: string;
+  dramaSpokenLanguage: string;
+  dramaSpokenLanguageHelp: string;
+  dramaSpokenLanguageRequired: string;
   dramaSubtitleSourceAuto: string;
   dramaSubtitleSourceExisting: string;
   dramaSubtitleSourceForceAsr: string;
@@ -613,7 +616,7 @@ export const uiEn: UiMessages = {
   dramaEnableHelp:
     'After embed finishes, optionally extract subtitles, structure (credits/recap/intro), directors script, key faces, and key scenes. Runs in Node with ffmpeg; optional Whisper API/CLI for ASR when no sidecar/embedded subs.',
   dramaLanguagesLabel: 'Subtitle languages',
-  dramaLanguagesHelp: 'Required for Subtitles. Select the spoken language: ko transcribes Korean, th transcribes Thai. Each selection runs separately; this does not translate audio.',
+  dramaLanguagesHelp: 'Select subtitle output languages. With en + zh, one available timed original is translated into the missing language; ASR still needs the actual spoken language. Korean and Thai remain source-language transcripts.',
   dramaModulesLabel: 'Drama modules',
   dramaModulesHelp:
     'Multi-select. Enrichment runs after the video is searchable (not forced).',
@@ -650,7 +653,10 @@ export const uiEn: UiMessages = {
   dramaProvisionalNote:
     'This synopsis is provisional and has not been audited yet — treat it as review-needed, not approved metadata.',
   dramaSubtitleSource: 'Subtitle method',
-  dramaSubtitleSourceAuto: 'Auto (sidecar → embedded → ASR)',
+  dramaSpokenLanguage: 'Spoken language for ASR',
+  dramaSpokenLanguageHelp: 'Used only when no timed English or Chinese original exists. Choose the language spoken in the video.',
+  dramaSpokenLanguageRequired: 'Choose the spoken language for an English + Chinese subtitle request.',
+  dramaSubtitleSourceAuto: 'Auto (sidecar → embedded → host transcript → ASR)',
   dramaSubtitleSourceExisting: 'Existing subtitles only',
   dramaSubtitleSourceForceAsr: 'Force ASR',
   dramaDirectorCoverage: 'Director coverage',
@@ -1091,7 +1097,7 @@ export const uiZh: UiMessages = {
   dramaEnableHelp:
     '嵌入完成（ready）后可选：抽取字幕、结构（片头/片尾/回顾/引子）、导演稿、关键演员脸、关键场景。用 Node + ffmpeg；无外挂/内嵌字幕时可配 Whisper API 或本地 CLI。',
   dramaLanguagesLabel: '字幕语言',
-  dramaLanguagesHelp: '勾选「字幕」模块时必选。请选原声语言：ko 转写韩语，th 转写泰语；多选会分别处理，不会自动翻译。',
+  dramaLanguagesHelp: '请选择字幕输出语言。勾选 en + zh 时，先取得一份有时间戳的原语字幕，再翻译缺少的语言；ASR 仍需明确实际原声语言。韩语和泰语仍按原语转写。',
   dramaModulesLabel: '剧集模块',
   dramaModulesHelp: '可多选。增强在视频可检索之后运行（不强制）。',
   dramaModuleSubtitles: '字幕（ASR）',
@@ -1126,7 +1132,10 @@ export const uiZh: UiMessages = {
   dramaProvisionalNote:
     '该简介为暂定版本，尚未经过审核——请视为待审内容，而非已确认的元数据。',
   dramaSubtitleSource: '字幕方式',
-  dramaSubtitleSourceAuto: '自动（外挂 → 内嵌 → ASR）',
+  dramaSpokenLanguage: 'ASR 原声语言',
+  dramaSpokenLanguageHelp: '仅在没有英文或中文原语时间轴时使用。请选择视频实际说话的语言。',
+  dramaSpokenLanguageRequired: '同时选择英文和中文字幕时，请选择实际原声语言。',
+  dramaSubtitleSourceAuto: '自动（外挂 → 内嵌 → 主机字幕 → ASR）',
   dramaSubtitleSourceExisting: '仅使用现有字幕',
   dramaSubtitleSourceForceAsr: '强制 ASR',
   dramaDirectorCoverage: '导演稿覆盖',

@@ -14,6 +14,7 @@ export interface DramaMetaPayload {
   languages: DramaLanguage[];
   /** Persist the selected policy so restart/retry cannot change providers. */
   subtitle_source?: DramaSubtitleSource;
+  source_language?: 'en' | 'zh';
   director_coverage?: DramaDirectorCoverage;
   structure?: StructureInterval[];
   synopsis_zh?: string;

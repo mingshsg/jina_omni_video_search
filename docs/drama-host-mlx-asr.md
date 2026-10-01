@@ -21,9 +21,10 @@ and refuses to overwrite an existing host transcript. Review the timed SRT
 before retrying. For Chinese, Korean, or Thai speech, use the matching
 `asr_zh.mp3`/`asr_ko.mp3`/`asr_th.mp3` and `--lang zh`/`ko`/`th`. `--lang`
 requests transcription in that language; it does **not** translate speech.
-Use only the languages actually spoken in the video. A retry keeps the original
-language selection, so a run originally requesting two languages needs both
-transcripts to complete its subtitle module.
+When a run requests both `en` and `zh`, the app can translate the missing
+language from one timed original through its configured EIS chat endpoint.
+Keep the host ASR language matched to the speech. A retry retains the original
+output-language selection.
 
 The default model is `mlx-community/whisper-large-v3-turbo`; use `--model` to
 choose a different locally available MLX Whisper model. The script runs only

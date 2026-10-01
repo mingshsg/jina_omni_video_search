@@ -201,7 +201,7 @@ JSON body (discriminated by `mode`):
 | `chunk_preset` | env `CHUNK_PRESET` | Named window: `standard` (64s/4s), `60s` (60s/4s), `30s` (30s/4s), `20s` (20s/2s), `20s_3s` (20s/3s), `fine` (10s/2s), `5s` (5s/2s), `2s` (2s/1s). Hashes into `variant_id` so presets coexist. |
 | `window_ms` + `overlap_ms` | — | Optional free-form alternative (both required together); optional `min_ms`. Labels as `custom` unless `chunk_preset` is also set. |
 | `group_id` | — | Optional free-form name (≤ 64 chars). Seeds `meta.group_id` on first asset create for search hard-filters. Empty omitted; over-long → `INGEST_INVALID_GROUP`. Suggested starters: `trailer`, `demo`. |
-| `drama` | — | Optional `{ enabled, languages?, modules? }`. When `enabled: true`, queues follow-on drama enrichment **after** embed `ready` (plan/12). `modules`: `subtitles` \| `structure` \| `directors_script` \| `key_actors` \| `key_scenes` (non-empty). `languages`: `zh` \| `en` \| `ko` \| `th` (required if `subtitles` selected). Select the spoken language: `ko` requests Korean transcription, `th` requests Thai transcription. Multiple selections run separately; no translation or automatic language detection is implied. **v1:** URL mode → `INGEST_DRAMA_URL_NOT_SUPPORTED` (use upload/local; Library later). Duration over `DRAMA_MAX_DURATION_MS` (default 210 min) → `INGEST_DRAMA_TOO_LONG`. Empty modules → `INGEST_DRAMA_EMPTY`. |
+| `drama` | — | Optional `{ enabled, languages?, modules?, source_language? }`. When `enabled: true`, queues follow-on drama enrichment **after** embed `ready` (plan/12). `modules`: `subtitles` \| `structure` \| `directors_script` \| `key_actors` \| `key_scenes` (non-empty). `languages`: `zh` \| `en` \| `ko` \| `th` (required if `subtitles` selected). With both `en` and `zh`, a timed original subtitle is used first and the missing counterpart is translated through the configured EIS chat endpoint; two genuine sources are retained as-is. If neither source exists, `source_language: "en"` or `"zh"` selects the actual speech for one ASR pass, followed by translation. Without a source or this choice, the run fails visibly. `ko` and `th` remain source-language transcription, not translation. **v1:** URL mode → `INGEST_DRAMA_URL_NOT_SUPPORTED` (use upload/local; Library later). Duration over `DRAMA_MAX_DURATION_MS` (default 210 min) → `INGEST_DRAMA_TOO_LONG`. Empty modules → `INGEST_DRAMA_EMPTY`. |
 
 **200 response:**
 
@@ -240,7 +240,8 @@ JSON body (discriminated by `mode`):
 (same names as JSON ingest) or `window_ms` + `overlap_ms` (+ optional `min_ms`),
 optional `group_id` (same catalog as JSON ingest), optional drama fields as
 form parts: `drama_enabled` (`true`/`false`), `drama_languages` and
-`drama_modules` (JSON array or comma-separated; same enums as JSON `drama`).
+`drama_modules` (JSON array or comma-separated; same enums as JSON `drama`),
+and optional `drama_source_language` (`en` or `zh` for bilingual ASR).
 URL-equivalent rejection codes apply via upload/local/batch only.
 
 Response shape matches JSON ingest (without `provenance`).

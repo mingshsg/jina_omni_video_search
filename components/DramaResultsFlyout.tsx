@@ -2,6 +2,7 @@
 
 import {
   EuiBadge,
+  EuiButton,
   EuiButtonEmpty,
   EuiCallOut,
   EuiFlexGroup,
@@ -37,16 +38,21 @@ function dramaColor(
 
 export function DramaResultsFlyout({
   videoId,
+  jobId,
   drama,
   onClose,
+  onRetryStarted,
 }: {
   videoId: string;
+  jobId?: string;
   drama: DramaSummaryDto;
   onClose: () => void;
+  onRetryStarted?: () => void;
 }) {
   const { t, locale } = useLocale();
   const [detail, setDetail] = useState<DramaResultsDto | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -64,6 +70,28 @@ export function DramaResultsFlyout({
       setError(err instanceof Error ? err.message : t.libraryError);
     }
   }, [videoId, locale, t.libraryError]);
+
+  const retry = useCallback(async () => {
+    if (!jobId || retrying) return;
+    setRetrying(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}/retry`, {
+        method: 'POST',
+        headers: { 'Accept-Language': locale },
+      });
+      const data = (await res.json()) as { error?: { message: string } };
+      if (!res.ok) throw new Error(data.error?.message ?? t.libraryError);
+      // The runner is asynchronous; show the accepted state immediately and
+      // keep polling rather than leaving the stale failure on screen.
+      setDetail((current) => ({ ...(current ?? drama), status: 'pending', error: undefined }));
+      onRetryStarted?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.libraryError);
+    } finally {
+      setRetrying(false);
+    }
+  }, [jobId, retrying, locale, t.libraryError, drama, onRetryStarted]);
 
   useEffect(() => {
     void load();
@@ -130,6 +158,11 @@ export function DramaResultsFlyout({
         <EuiButtonEmpty size="s" onClick={() => void load()}>
           {t.refresh}
         </EuiButtonEmpty>
+        {jobId && ['failed', 'partial'].includes(dto.status) && (
+          <EuiButton size="s" isLoading={retrying} onClick={() => void retry()}>
+            {t.dramaRetryLabel}
+          </EuiButton>
+        )}
         <EuiSpacer size="s" />
         <EuiText size="s">
           <p>
@@ -149,6 +182,7 @@ export function DramaResultsFlyout({
             {t.dramaLanguagesLabel}: {(dto.languages ?? []).join(', ') || '—'}
           </p>
           {dto.subtitle_source && <p>{t.dramaSubtitleSource}: {dto.subtitle_source}</p>}
+          {dto.source_language && <p>{t.dramaSpokenLanguage}: {dto.source_language}</p>}
           {dto.director_coverage && <p>{t.dramaDirectorCoverage}: {dto.director_coverage}</p>}
           {dto.synopsis_status && (
             <p>

@@ -13,6 +13,7 @@ import {
   type DramaWorkspace,
 } from './workspace';
 import { resolveSubtitlesForLanguage } from './resolve-subtitles';
+import { resolveEnglishChineseSubtitles } from './resolve-bilingual-subtitles';
 import {
   indexDramaSubtitles,
   reconcileSubtitleLang,
@@ -129,6 +130,7 @@ export async function prepareDramaHandoff(job: IngestJob): Promise<DramaWorkspac
       modules: job.drama.modules,
       languages: job.drama.languages,
       subtitle_source: job.drama.subtitleSource,
+      source_language: job.drama.sourceLanguage,
       director_coverage: job.drama.directorCoverage,
       modules_done: [],
     });
@@ -192,6 +194,7 @@ export async function runDramaEnrichment(job: IngestJob): Promise<void> {
         modules,
         languages,
         subtitle_source: job.drama.subtitleSource,
+        source_language: job.drama.sourceLanguage,
         director_coverage: job.drama.directorCoverage,
         modules_done: [],
       });
@@ -246,6 +249,15 @@ export async function runDramaEnrichment(job: IngestJob): Promise<void> {
     }
 
     if (modules.includes('subtitles')) {
+      const bilingual = languages.includes('en') && languages.includes('zh')
+        ? await resolveEnglishChineseSubtitles({
+            videoPath: job.mediaPath,
+            subtitlesDir: ws.subtitlesDir,
+            audioDir: ws.audioDir,
+            subtitleSource: job.drama?.subtitleSource,
+            sourceLanguage: job.drama?.sourceLanguage,
+          })
+        : null;
       // R8: embedded matching is per-language by stream tag, so every
       // requested language probes embedded streams independently.
       for (const lang of languages) {
@@ -255,7 +267,10 @@ export async function runDramaEnrichment(job: IngestJob): Promise<void> {
             `Drama: subtitles (${lang})…`,
             job.drama!,
           );
-          const resolved = await resolveSubtitlesForLanguage({
+          const pairError = lang === 'en' || lang === 'zh' ? bilingual?.errors[lang] : undefined;
+          if (pairError) throw pairError;
+          const pairResolved = lang === 'en' || lang === 'zh' ? bilingual?.resolved[lang] : undefined;
+          const resolved = pairResolved ?? await resolveSubtitlesForLanguage({
             videoPath: job.mediaPath,
             lang,
             subtitlesDir: ws.subtitlesDir,
@@ -466,6 +481,7 @@ export async function runDramaEnrichment(job: IngestJob): Promise<void> {
       modules,
       languages,
       subtitle_source: job.drama.subtitleSource,
+      source_language: job.drama.sourceLanguage,
       director_coverage: job.drama.directorCoverage,
       modules_done: modulesDone,
       structure,

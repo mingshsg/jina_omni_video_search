@@ -302,6 +302,7 @@ function jobToAssetDoc(job: IngestJob): VideoAssetDocument {
             // P4: persist per-run policy so a retry keeps the same
             // subtitle source / director coverage.
             subtitle_source: job.drama.subtitleSource,
+            ...(job.drama.sourceLanguage ? { source_language: job.drama.sourceLanguage } : {}),
             director_coverage: job.drama.directorCoverage,
             ...(job.drama.run_id ? { run_id: job.drama.run_id } : {}),
             ...(job.drama.error
@@ -457,6 +458,7 @@ interface AssetWithDramaMeta extends VideoAssetDocument {
  */
 function hydrateDramaPolicy(raw: unknown): {
   subtitleSource: DramaJobState['subtitleSource'];
+  sourceLanguage?: DramaJobState['sourceLanguage'];
   directorCoverage: DramaJobState['directorCoverage'];
 } {
   const d = (raw ?? {}) as Record<string, unknown>;
@@ -466,6 +468,9 @@ function hydrateDramaPolicy(raw: unknown): {
       isDramaSubtitleSource(d.subtitle_source)
         ? d.subtitle_source
         : 'auto',
+    ...((d.source_language === 'en' || d.source_language === 'zh')
+      ? { sourceLanguage: d.source_language }
+      : {}),
     directorCoverage:
       typeof d.director_coverage === 'string' &&
       isDramaDirectorCoverage(d.director_coverage)
@@ -514,6 +519,7 @@ function hydrateDramaRequest(
     modules_done: modulesDone,
     run_id: typeof raw.run_id === 'string' ? raw.run_id : undefined,
     subtitleSource: policy.subtitleSource,
+    sourceLanguage: policy.sourceLanguage,
     directorCoverage: policy.directorCoverage,
     error:
       typeof raw.error_message === 'string'
@@ -567,6 +573,7 @@ function hydrateDramaState(asset: VideoAssetDocument): DramaJobState | undefined
     modules_done: modulesDone,
     run_id: typeof d.run_id === 'string' ? d.run_id : undefined,
     subtitleSource: policy.subtitleSource,
+    sourceLanguage: policy.sourceLanguage,
     directorCoverage: policy.directorCoverage,
     error:
       err && typeof err.message === 'string'

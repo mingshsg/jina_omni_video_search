@@ -13,6 +13,7 @@ const requestSchema = z.object({
   // P4: per-run subtitle policy; validated here (cheap) and re-validated in
   // resolveDramaOptions (source of truth for IngestError semantics).
   subtitle_source: z.enum(['auto', 'existing_only', 'force_asr']).optional(),
+  source_language: z.enum(['en', 'zh']).optional(),
   // P4: director coverage — only `sampled` is offered; anything else (e.g.
   // `full`) must be rejected.
   director_coverage: z.enum(['sampled']).optional(),
@@ -46,6 +47,7 @@ export async function POST(request: Request, { params }: { params: { videoId: st
         ...started,
         status: 'pending',
         subtitle_source: options.subtitleSource,
+        source_language: options.sourceLanguage,
         director_coverage: options.directorCoverage,
       },
       { status: 202 },

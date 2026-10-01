@@ -62,6 +62,9 @@ vi.mock('./resolve-subtitles', () => ({
     throw new Error('ASR not configured');
   }),
 }));
+vi.mock('./resolve-bilingual-subtitles', () => ({
+  resolveEnglishChineseSubtitles: vi.fn(),
+}));
 
 vi.mock('./index-subtitles', () => ({
   indexDramaSubtitles: vi.fn(),
@@ -140,6 +143,7 @@ import {
   retireOldSubtitleGenerations,
 } from './index-subtitles';
 import { resolveSubtitlesForLanguage } from './resolve-subtitles';
+import { resolveEnglishChineseSubtitles } from './resolve-bilingual-subtitles';
 import { proposeStructure } from './structure';
 import { generateKeyActors } from './key-actors';
 import { extractKeyScenes } from './key-scenes';
@@ -526,16 +530,16 @@ describe('subtitle generation switching (I2)', () => {
   });
 
   it('reconciles and switches only the succeeded language', async () => {
-    vi.mocked(resolveSubtitlesForLanguage).mockImplementation(async (opts: {
-      lang: string;
-    }) => {
-      if (opts.lang !== 'zh') throw new Error('ASR not configured');
-      return {
+    vi.mocked(resolveEnglishChineseSubtitles).mockResolvedValue({
+      resolved: {
+        zh: {
         lang: 'zh',
         srtPath: '/tmp/zh.srt',
         cues: [{ index: 1, startMs: 0, endMs: 1000, text: 'x' }],
         origin: 'sidecar',
-      } as never;
+        },
+      },
+      errors: { en: new Error('Translation failed') },
     });
     vi.mocked(indexDramaSubtitles).mockResolvedValue({
       indexed: 1,

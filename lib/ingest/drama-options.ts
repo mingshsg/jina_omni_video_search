@@ -24,10 +24,12 @@ export type DramaEnrichmentStatus =
 
 /**
  * Per-run subtitle resolution policy (plan/12 P4).
- * - `auto`: matching sidecar → matching embedded stream → configured ASR.
+ * - `auto`: matching sidecar → matching embedded stream → host SRT → configured ASR.
  * - `existing_only`: sidecar/embedded only; never call ASR. Missing
  *   language-tagged source fails that language visibly.
- * - `force_asr`: skip sidecar/embedded; require ASR for every language.
+ * - `force_asr`: skip sidecar/embedded; require host/configured ASR.
+ *   When EN and ZH are both requested, an available timed original is
+ *   translated to the missing language rather than transcribing twice.
  */
 export const DRAMA_SUBTITLE_SOURCES = [
   'auto',
@@ -51,6 +53,8 @@ export interface DramaRequestOptions {
   modules: DramaModule[];
   /** Subtitle resolution policy; `auto` when omitted (matches P1). */
   subtitleSource: DramaSubtitleSource;
+  /** Spoken language for EN/ZH ASR only, when no timed source is available. */
+  sourceLanguage?: 'en' | 'zh';
   /** Director coverage; `sampled` when omitted. */
   directorCoverage: DramaDirectorCoverage;
 }
@@ -64,6 +68,7 @@ export interface DramaJobState {
   error?: { code: string; message: string };
   /** Per-run subtitle resolution policy (P4); persisted for retry parity. */
   subtitleSource: DramaSubtitleSource;
+  sourceLanguage?: 'en' | 'zh';
   /** Per-run director coverage (P4). */
   directorCoverage: DramaDirectorCoverage;
 }

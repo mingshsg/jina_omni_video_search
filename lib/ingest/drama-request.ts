@@ -29,6 +29,7 @@ const dramaBodySchema = z
     modules: z.array(z.string()).optional(),
     /** Per-run subtitle policy (P4): auto | existing_only | force_asr. */
     subtitle_source: z.string().optional(),
+    source_language: z.string().optional(),
     /** Per-run director coverage (P4): sampled (only supported mode). */
     director_coverage: z.string().optional(),
   })
@@ -124,11 +125,19 @@ export function resolveDramaOptions(
     // selection always fails at runtime, so reject it at accept time.
     throw new IngestError('INGEST_DRAMA_NEEDS_DIRECTORS');
   }
+  const sourceLanguage = raw.source_language;
+  if (sourceLanguage !== undefined && sourceLanguage !== 'en' && sourceLanguage !== 'zh') {
+    throw new IngestError('INGEST_DRAMA_INVALID');
+  }
+  if (sourceLanguage && !languages.includes(sourceLanguage)) {
+    throw new IngestError('INGEST_DRAMA_INVALID');
+  }
   return {
     enabled: true,
     languages,
     modules,
     subtitleSource: parseSubtitleSource(raw.subtitle_source),
+    ...(sourceLanguage ? { sourceLanguage } : {}),
     directorCoverage: parseDirectorCoverage(raw.director_coverage),
   };
 }
@@ -198,6 +207,7 @@ export function parseDramaFromFormData(
     languages,
     modules,
     subtitle_source: readOptionalFormString(form, 'drama_subtitle_source'),
+    source_language: readOptionalFormString(form, 'drama_source_language'),
     director_coverage: readOptionalFormString(
       form,
       'drama_director_coverage',
@@ -224,6 +234,7 @@ export function initialDramaJobState(
     modules: opts.modules,
     modules_done: [],
     subtitleSource: opts.subtitleSource,
+    ...(opts.sourceLanguage ? { sourceLanguage: opts.sourceLanguage } : {}),
     directorCoverage: opts.directorCoverage,
   };
 }

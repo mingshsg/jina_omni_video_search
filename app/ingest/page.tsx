@@ -138,6 +138,7 @@ export default function IngestPage() {
   const [dramaLanguages, setDramaLanguages] = useState<
     EuiComboBoxOptionOption[]
   >([]);
+  const [dramaSourceLanguage, setDramaSourceLanguage] = useState<'en' | 'zh' | ''>('');
   const [dramaModules, setDramaModules] = useState<EuiComboBoxOptionOption[]>(
     [],
   );
@@ -260,6 +261,9 @@ export default function IngestPage() {
     { label: t.dramaModuleKeyActors, value: 'key_actors' },
     { label: t.dramaModuleKeyScenes, value: 'key_scenes' },
   ];
+  const bilingualDrama = dramaModules.some((o) => o.value === 'subtitles') &&
+    dramaLanguages.some((o) => o.value === 'en') &&
+    dramaLanguages.some((o) => o.value === 'zh');
 
   const appendDramaToFormData = (fd: FormData) => {
     if (!dramaEnabled || !dramaAllowed) return;
@@ -272,6 +276,7 @@ export default function IngestPage() {
       'drama_modules',
       JSON.stringify(dramaModules.map((o) => String(o.value ?? o.label))),
     );
+    if (bilingualDrama && dramaSourceLanguage) fd.append('drama_source_language', dramaSourceLanguage);
   };
 
   /** Append `chunk_preset` or the custom `window_ms`/`overlap_ms` pair. */
@@ -296,6 +301,7 @@ export default function IngestPage() {
       enabled: true as const,
       languages: dramaLanguages.map((o) => String(o.value ?? o.label)),
       modules: dramaModules.map((o) => String(o.value ?? o.label)),
+      ...(bilingualDrama && dramaSourceLanguage ? { source_language: dramaSourceLanguage } : {}),
     };
   };
 
@@ -502,6 +508,10 @@ export default function IngestPage() {
     const mods = dramaModules.map((o) => String(o.value ?? o.label));
     if (mods.includes('subtitles') && dramaLanguages.length === 0) {
       setClientError(t.dramaClientNeedLanguages);
+      return false;
+    }
+    if (bilingualDrama && !dramaSourceLanguage) {
+      setClientError(t.dramaSpokenLanguageRequired);
       return false;
     }
     return true;
@@ -1144,6 +1154,17 @@ export default function IngestPage() {
                     aria-label={t.dramaModulesLabel}
                   />
                 </EuiFormRow>
+                {bilingualDrama && (
+                  <EuiFormRow label={t.dramaSpokenLanguage} helpText={t.dramaSpokenLanguageHelp}>
+                    <EuiSelect
+                      options={[{ value: '', text: '—' }, { value: 'en', text: 'English' }, { value: 'zh', text: '中文' }]}
+                      value={dramaSourceLanguage}
+                      onChange={(event) => setDramaSourceLanguage(event.target.value as 'en' | 'zh' | '')}
+                      disabled={formBusy}
+                      aria-label={t.dramaSpokenLanguage}
+                    />
+                  </EuiFormRow>
+                )}
               </>
             )}
           </>

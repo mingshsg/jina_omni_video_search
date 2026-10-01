@@ -35,6 +35,7 @@ export interface AssetJobDramaDoc {
   run_id?: string;
   /** Per-run subtitle policy (P4): auto | existing_only | force_asr. */
   subtitle_source?: string;
+  source_language?: string;
   /** Per-run director coverage (P4): sampled. */
   director_coverage?: string;
   error_code?: string;

@@ -13,6 +13,7 @@ import {
   EuiForm,
   EuiFormRow,
   EuiRadioGroup,
+  EuiSelect,
   EuiSpacer,
   EuiText,
   EuiTitle,
@@ -37,6 +38,7 @@ export function DramaStartFlyout({
   const [modules, setModules] = useState<EuiComboBoxOptionOption[]>([]);
   const [languages, setLanguages] = useState<EuiComboBoxOptionOption[]>([]);
   const [subtitleSource, setSubtitleSource] = useState<SubtitleSource>('auto');
+  const [sourceLanguage, setSourceLanguage] = useState<'en' | 'zh' | ''>('');
   const [clientError, setClientError] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -58,6 +60,7 @@ export function DramaStartFlyout({
 
   const selectedModules = modules.map((o) => String(o.value ?? o.label));
   const hasSubtitles = selectedModules.includes('subtitles');
+  const bilingual = hasSubtitles && languages.some((o) => o.value === 'en') && languages.some((o) => o.value === 'zh');
 
   const subtitleSourceOptions = [
     { id: 'auto', label: t.dramaSubtitleSourceAuto },
@@ -83,6 +86,10 @@ export function DramaStartFlyout({
       setClientError(t.dramaNeedLanguageForSubtitles);
       return;
     }
+    if (bilingual && subtitleSource !== 'existing_only' && !sourceLanguage) {
+      setClientError(t.dramaSpokenLanguageRequired);
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -98,6 +105,7 @@ export function DramaStartFlyout({
             languages: languages.map((o) => String(o.value ?? o.label)),
             modules: selectedModules,
             subtitle_source: subtitleSource,
+            ...(bilingual && sourceLanguage ? { source_language: sourceLanguage } : {}),
             // P4: only `sampled` is offered; `full` is never selectable.
             director_coverage: 'sampled',
           }),
@@ -162,6 +170,16 @@ export function DramaStartFlyout({
                   name="drama-subtitle-source"
                 />
               </EuiFormRow>
+              {bilingual && (
+                <EuiFormRow label={t.dramaSpokenLanguage} helpText={t.dramaSpokenLanguageHelp}>
+                  <EuiSelect
+                    options={[{ value: '', text: '—' }, { value: 'en', text: 'English' }, { value: 'zh', text: '中文' }]}
+                    value={sourceLanguage}
+                    onChange={(event) => setSourceLanguage(event.target.value as 'en' | 'zh' | '')}
+                    aria-label={t.dramaSpokenLanguage}
+                  />
+                </EuiFormRow>
+              )}
             </>
           )}
           <EuiFormRow label={t.dramaDirectorCoverage}>

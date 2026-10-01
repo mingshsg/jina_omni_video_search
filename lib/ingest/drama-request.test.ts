@@ -35,6 +35,21 @@ describe('resolveDramaOptions', () => {
     });
   });
 
+  it('accepts a spoken source language only when it is requested', () => {
+    expect(resolveDramaOptions({
+      enabled: true,
+      languages: ['en', 'zh'],
+      modules: ['subtitles'],
+      source_language: 'en',
+    })?.sourceLanguage).toBe('en');
+    expect(() => resolveDramaOptions({
+      enabled: true,
+      languages: ['zh'],
+      modules: ['subtitles'],
+      source_language: 'en',
+    })).toThrow(IngestError);
+  });
+
   it('accepts Korean and Thai as source subtitle languages', () => {
     expect(resolveDramaOptions({
       enabled: true,

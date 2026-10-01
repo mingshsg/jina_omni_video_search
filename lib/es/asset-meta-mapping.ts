@@ -87,6 +87,7 @@ export function videoAssetsMetaMappingProperties(
             modules: { type: 'keyword' },
             languages: { type: 'keyword' },
             subtitle_source: { type: 'keyword', index: false },
+            source_language: { type: 'keyword', index: false },
             director_coverage: { type: 'keyword', index: false },
             structure: {
               type: 'nested',
