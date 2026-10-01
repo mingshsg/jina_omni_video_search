@@ -6,6 +6,13 @@ loses an action item.
 
 ## Current — project level
 
+- [`drama-run-history-code-review-2026-10-01.md`](./drama-run-history-code-review-2026-10-01.md)
+  — **Design sound; one P1 and three P2s found and fixed.** The live
+  `video-assets` mapping was missing the new `meta.drama.runs` field (first
+  write would have 500'd) — migrated and live-verified. A misleading
+  subtitle count, unbounded run-history growth, and a build-breaking type
+  error are also fixed. → [`todo/50`](../todo/50-drama-run-history-2026-10-01.md)
+
 - [`existing-only-retry-recovery-review-2026-10-01.md`](./existing-only-retry-recovery-review-2026-10-01.md)
   — **The reported retry was recovered with explicit Auto + English.**
   EN/ZH each have 121 aligned, indexed cues; human subtitle quality review

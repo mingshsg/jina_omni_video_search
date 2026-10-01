@@ -104,6 +104,57 @@ describe('dramaSummaryFromAsset', () => {
 });
 
 describe('dramaResultsFromAsset sanitizes paths', () => {
+  it('keeps earlier subtitles and scripts visible while a later structure run is active', () => {
+    const oldRoot = '/internal/media/v1/drama/oldrun';
+    const dto = dramaResultsFromAsset(docWithMetaDrama({
+      run_id: 'newrun',
+      enrichment_status: 'running',
+      modules: ['structure'],
+      modules_done: [],
+      languages: [],
+      runs: [{
+        run_id: 'oldrun',
+        enrichment_status: 'succeeded',
+        modules: ['subtitles', 'directors_script'],
+        modules_done: ['subtitles', 'directors_script'],
+        languages: ['en', 'zh'],
+        subtitle_paths: [`${oldRoot}/subtitles/en.srt`, `${oldRoot}/subtitles/zh.srt`],
+        directors_script_zh_path: `${oldRoot}/scripts/zh.md`,
+        synopsis_zh: '旧摘要',
+        synopsis_status: 'audited',
+      }],
+    }))!;
+    expect(dto.status).toBe('running');
+    expect(dto.subtitle_urls).toEqual({
+      en: '/api/drama-media/v1/oldrun/subtitles/en.srt',
+      zh: '/api/drama-media/v1/oldrun/subtitles/zh.srt',
+    });
+    expect(dto.script_urls?.zh).toBe('/api/drama-media/v1/oldrun/scripts/zh.md');
+    expect(dto.synopsis_zh).toBe('旧摘要');
+    expect(dto.previous_runs).toEqual([expect.objectContaining({ run_id: 'oldrun', status: 'succeeded' })]);
+    expect(JSON.stringify(dto)).not.toContain(oldRoot);
+  });
+
+  it('uses the latest successful language while retaining other languages', () => {
+    const dto = dramaResultsFromAsset(docWithMetaDrama({
+      run_id: 'newrun',
+      enrichment_status: 'partial',
+      modules: ['subtitles'],
+      modules_done: ['subtitles'],
+      languages: ['en', 'zh'],
+      subtitle_paths: ['subtitles/en.srt'],
+      runs: [{
+        run_id: 'oldrun', enrichment_status: 'succeeded',
+        modules: ['subtitles'], modules_done: ['subtitles'], languages: ['en', 'zh'],
+        subtitle_paths: ['subtitles/en.srt', 'subtitles/zh.srt'],
+      }],
+    }))!;
+    expect(dto.subtitle_urls).toEqual({
+      en: '/api/drama-media/v1/newrun/subtitles/en.srt',
+      zh: '/api/drama-media/v1/oldrun/subtitles/zh.srt',
+    });
+  });
+
   it('returns route links for published scripts and stills only', () => {
     const base = '/internal/media/v1/drama/r1';
     const doc = docWithMetaDrama({
@@ -134,7 +185,7 @@ describe('dramaResultsFromAsset sanitizes paths', () => {
       enrichment_status: 'succeeded',
       modules: ['directors_script', 'key_scenes'],
       languages: ['zh'],
-      subtitle_paths: ['/internal/media/v1/drama/r1/zh.srt'],
+      subtitle_paths: ['/internal/media/v1/drama/r1/subtitles/zh.srt'],
       directors_script_zh_path: '/internal/script/zh.md',
       directors_script_raw_path: '/internal/script/raw.json',
       synopsis_zh: 'synopsis',

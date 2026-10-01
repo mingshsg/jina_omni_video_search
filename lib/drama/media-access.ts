@@ -19,24 +19,26 @@ export function approvedDramaMediaPath(params: {
   drama: DramaMetaPayload | undefined;
 }): string | null {
   const { mediaRoot, videoId, runId, rest, drama } = params;
-  if (!drama || drama.run_id !== runId || rest.length === 0) return null;
+  if (!drama || rest.length === 0) return null;
+  const publishedRun = [drama, ...(drama.runs ?? [])].find((run) => run.run_id === runId);
+  if (!publishedRun) return null;
 
   const root = path.resolve(mediaRoot, 'media', videoId, 'drama', runId);
   const requested = path.resolve(root, ...rest);
   if (!inside(root, requested)) return null;
 
   const published = [
-    drama.directors_script_zh_path,
-    drama.directors_script_en_path,
-    ...(drama.subtitle_paths ?? []).filter((raw) => {
+    publishedRun.directors_script_zh_path,
+    publishedRun.directors_script_en_path,
+    ...(publishedRun.subtitle_paths ?? []).filter((raw) => {
       if (typeof raw !== 'string') return false;
       const relative = path.relative(root, path.resolve(root, raw))
         .split(path.sep).join('/');
       const match = /^subtitles\/(en|zh|ko|th)\.srt$/.exec(relative);
-      return Boolean(match && drama.languages.includes(match[1] as 'en' | 'zh' | 'ko' | 'th'));
+      return Boolean(match && publishedRun.languages.includes(match[1] as 'en' | 'zh' | 'ko' | 'th'));
     }),
-    ...(drama.key_scenes ?? []).map((scene) => scene.thumb_path),
-    ...(drama.key_actors ?? [])
+    ...(publishedRun.key_scenes ?? []).map((scene) => scene.thumb_path),
+    ...(publishedRun.key_actors ?? [])
       .filter((actor) => actor.verified)
       .map((actor) => actor.thumb_path),
   ];

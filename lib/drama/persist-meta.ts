@@ -49,13 +49,32 @@ export interface DramaMetaPayload {
   }>;
   modules_done?: DramaModule[];
   error?: { code: string; message: string };
+  /** Earlier runs, oldest first. Each snapshot keeps its own artifact run ID. */
+  runs?: Array<Omit<DramaMetaPayload, 'runs'>>;
 }
+
+/** Cap on retained prior-run snapshots — bounds document growth across repeated re-enrichment. */
+const DRAMA_RUN_HISTORY_MAX = 5;
 
 const PAINLESS = `
   if (ctx._source.meta == null) {
     ctx._source.meta = new HashMap();
   }
-  ctx._source.meta.drama = params.drama;
+  def next = new HashMap(params.drama);
+  def previous = ctx._source.meta.drama;
+  if (previous != null) {
+    def history = previous.runs == null ? new ArrayList() : new ArrayList(previous.runs);
+    if (previous.run_id != next.run_id) {
+      def snapshot = new HashMap(previous);
+      snapshot.remove('runs');
+      history.add(snapshot);
+      while (history.size() > params.historyMax) {
+        history.remove(0);
+      }
+    }
+    if (!history.isEmpty()) next.runs = history;
+  }
+  ctx._source.meta.drama = next;
   ctx._source.updated_at = params.now;
 `;
 
@@ -76,6 +95,7 @@ export async function persistDramaMeta(
       params: {
         drama,
         now: new Date().toISOString(),
+        historyMax: DRAMA_RUN_HISTORY_MAX,
       },
     },
   });

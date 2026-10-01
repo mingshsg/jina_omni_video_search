@@ -24,6 +24,10 @@ import { EditMetadataFlyout } from '@/components/EditMetadataFlyout';
 import { GroupBackfillModal } from '@/components/GroupBackfillModal';
 import type { DramaSummaryDto } from '@/lib/drama/safe-dto';
 import { formatChunkPresetLabel } from '@/lib/ingest/chunk-presets';
+import {
+  DRAMA_ACTIVE_STATUSES,
+  DRAMA_TERMINAL_STATUSES,
+} from '@/lib/ingest/drama-options';
 import { useLocale } from '@/lib/i18n/locale-context';
 import { workTitleTooltipLines } from '@/lib/metadata/work-title-display';
 
@@ -156,7 +160,12 @@ export default function LibraryPage() {
   }, [load]);
 
   useEffect(() => {
-    if (!assets.some((asset) => ['pending', 'running'].includes(asset.drama?.status ?? ''))) return;
+    if (
+      !assets.some((asset) =>
+        (DRAMA_ACTIVE_STATUSES as readonly string[]).includes(asset.drama?.status ?? ''),
+      )
+    )
+      return;
     const timer = window.setInterval(() => {
       void (async () => {
         try {
@@ -395,10 +404,13 @@ export default function LibraryPage() {
             type: 'icon' as const,
             icon: 'videoPlayer',
             available: (item: LibraryAsset) =>
-              item.status === 'ready' && !item.drama,
+              item.status === 'ready' &&
+              (!item.drama ||
+                (DRAMA_TERMINAL_STATUSES as readonly string[]).includes(item.drama.status)),
             enabled: (item: LibraryAsset) =>
               item.status === 'ready' &&
-              !item.drama &&
+              (!item.drama ||
+                (DRAMA_TERMINAL_STATUSES as readonly string[]).includes(item.drama.status)) &&
               !batchBusy &&
               busyId !== item.video_id,
             onClick: (item: LibraryAsset) => setDramaStartTarget(item),

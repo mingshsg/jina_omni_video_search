@@ -81,6 +81,8 @@ export function videoAssetsMetaMappingProperties(
           type: 'object',
           properties: {
             run_id: { type: 'keyword' },
+            /** Prior run snapshots are retained in _source for result history. */
+            runs: { type: 'object', enabled: false },
             show_id: { type: 'keyword' },
             episode_id: { type: 'keyword' },
             enrichment_status: { type: 'keyword' },

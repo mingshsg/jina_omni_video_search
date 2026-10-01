@@ -6,6 +6,7 @@ import {
   assertDramaDurationAllowed,
   type DramaRequestOptions,
 } from '../ingest/drama-request';
+import { DRAMA_TERMINAL_STATUSES } from '../ingest/drama-options';
 import { resolveIngestJob } from '../ingest/job-store';
 import {
   isDramaRunActive,
@@ -42,12 +43,16 @@ export async function startExistingDrama(
     if (asset.status !== 'ready') {
       throw new ExistingDramaStartError('DRAMA_NOT_READY', 409, 'Video must be ready before enrichment');
     }
-    const drama = (asset.meta as { drama?: unknown } | undefined)?.drama;
-    if (drama || asset.job?.drama) {
+    const drama = (asset.meta as { drama?: { enrichment_status?: string } } | undefined)?.drama;
+    const currentStatus = drama?.enrichment_status ?? asset.job?.drama?.status;
+    if (
+      currentStatus &&
+      !(DRAMA_TERMINAL_STATUSES as readonly string[]).includes(currentStatus)
+    ) {
       throw new ExistingDramaStartError(
-        'DRAMA_ALREADY_REQUESTED',
+        'DRAMA_RUN_ACTIVE',
         409,
-        'Enrichment was already requested for this video; use its retry action if needed',
+        'Enrichment is already running for this video',
       );
     }
     if (isDramaRunActive(videoId)) {

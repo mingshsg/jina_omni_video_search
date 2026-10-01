@@ -58,6 +58,7 @@ export interface SafeKeyActor {
  * summaries) for the results flyout. Still path-free.
  */
 export interface DramaResultsDto extends DramaSummaryDto {
+  previous_runs?: DramaSummaryDto[];
   synopsis_zh?: string;
   synopsis_en?: string;
   structure?: SafeStructureInterval[];
@@ -138,51 +139,78 @@ export function dramaResultsFromAsset(
   const base = dramaSummaryFromAsset(asset);
   if (!base) return undefined;
   if (!metaDrama) return base;
+  type RunSnapshot = Omit<DramaMetaPayload, 'runs'>;
+  const runs: RunSnapshot[] = [metaDrama, ...(metaDrama.runs ?? []).slice().reverse()];
+  const firstWith = <K extends keyof RunSnapshot>(key: K): RunSnapshot[K] | undefined =>
+    runs.find((run) => run[key] != null)?.[key];
   const subtitleUrls: NonNullable<DramaResultsDto['subtitle_urls']> = {};
-  for (const raw of metaDrama.subtitle_paths ?? []) {
-    const parts = raw.split(/[\\/]/).filter(Boolean);
-    if (parts.at(-2) !== 'subtitles') continue;
-    const match = /^(en|zh|ko|th)\.srt$/.exec(parts.at(-1) ?? '');
-    if (!match) continue;
-    const lang = match[1] as 'en' | 'zh' | 'ko' | 'th';
-    if (!metaDrama.languages.includes(lang)) continue;
-    const url = artifactUrl(asset.video_id, metaDrama.run_id, raw);
-    if (url) subtitleUrls[lang] = url;
+  for (const run of runs) {
+    for (const raw of run.subtitle_paths ?? []) {
+      const parts = raw.split(/[\\/]/).filter(Boolean);
+      if (parts.at(-2) !== 'subtitles') continue;
+      const match = /^(en|zh|ko|th)\.srt$/.exec(parts.at(-1) ?? '');
+      if (!match) continue;
+      const lang = match[1] as 'en' | 'zh' | 'ko' | 'th';
+      if (subtitleUrls[lang] || !run.languages.includes(lang)) continue;
+      const url = artifactUrl(asset.video_id, run.run_id, raw);
+      if (url) subtitleUrls[lang] = url;
+    }
   }
+  const scriptZhRun = runs.find((run) => run.directors_script_zh_path);
+  const scriptEnRun = runs.find((run) => run.directors_script_en_path);
+  const sceneRun = runs.find((run) => run.key_scenes != null);
+  const actorRun = runs.find((run) => run.key_actors != null);
+  const synopsisRun = runs.find((run) => run.synopsis_zh || run.synopsis_en);
   return {
     ...base,
+    previous_runs: (metaDrama.runs ?? []).slice().reverse().map((run) => ({
+      status: run.enrichment_status,
+      run_id: run.run_id,
+      modules: run.modules,
+      modules_done: run.modules_done,
+      languages: run.languages,
+      error: run.error?.message,
+    })),
     script_urls: {
-      zh: artifactUrl(asset.video_id, metaDrama.run_id, metaDrama.directors_script_zh_path),
-      en: artifactUrl(asset.video_id, metaDrama.run_id, metaDrama.directors_script_en_path),
+      zh: scriptZhRun && artifactUrl(asset.video_id, scriptZhRun.run_id, scriptZhRun.directors_script_zh_path),
+      en: scriptEnRun && artifactUrl(asset.video_id, scriptEnRun.run_id, scriptEnRun.directors_script_en_path),
     },
-    synopsis_zh: metaDrama.synopsis_zh,
-    synopsis_en: metaDrama.synopsis_en,
-    structure: metaDrama.structure?.map((s) => ({
+    synopsis_zh: synopsisRun?.synopsis_zh,
+    synopsis_en: synopsisRun?.synopsis_en,
+    synopsis_status: synopsisRun?.synopsis_status,
+    structure: firstWith('structure')?.map((s) => ({
       kind: s.kind,
       start_ms: s.start_ms,
       end_ms: s.end_ms,
       confidence: s.confidence,
       source: s.source,
     })),
-    key_scenes: metaDrama.key_scenes?.map((s) => ({
+    key_scenes: sceneRun?.key_scenes?.map((s) => ({
       start_ms: s.start_ms,
       end_ms: s.end_ms,
       summary_zh: s.summary_zh,
       summary_en: s.summary_en,
-      ...(artifactUrl(asset.video_id, metaDrama.run_id, s.thumb_path)
-        ? { thumb_url: artifactUrl(asset.video_id, metaDrama.run_id, s.thumb_path) }
+      ...(artifactUrl(asset.video_id, sceneRun.run_id, s.thumb_path)
+        ? { thumb_url: artifactUrl(asset.video_id, sceneRun.run_id, s.thumb_path) }
         : {}),
     })),
-    key_actors: metaDrama.key_actors?.map((a) => ({
+    key_actors: actorRun?.key_actors?.map((a) => ({
       role_zh: a.role_zh,
       role_en: a.role_en,
       verified: a.verified,
       t_ms: a.t_ms,
-      ...(a.verified && artifactUrl(asset.video_id, metaDrama.run_id, a.thumb_path)
-        ? { thumb_url: artifactUrl(asset.video_id, metaDrama.run_id, a.thumb_path) }
+      ...(a.verified && artifactUrl(asset.video_id, actorRun.run_id, a.thumb_path)
+        ? { thumb_url: artifactUrl(asset.video_id, actorRun.run_id, a.thumb_path) }
         : {}),
     })),
-    subtitle_count: metaDrama.subtitle_paths?.length,
+    // Count published, language-recognized subtitles only — never fall back
+    // to a raw subtitle_paths length, which can include unexposed files
+    // (e.g. a host transcript with no recognized `subtitles/<lang>.srt`
+    // name) and would show a misleading "N subtitles" with zero links.
+    // Still `undefined` (hide the row) when no run ever attempted subtitles.
+    subtitle_count: runs.some((run) => run.subtitle_paths !== undefined)
+      ? Object.keys(subtitleUrls).length
+      : undefined,
     subtitle_urls: subtitleUrls,
   };
 }

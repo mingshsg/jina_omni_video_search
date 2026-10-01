@@ -23,6 +23,24 @@ export type DramaEnrichmentStatus =
   | 'skipped';
 
 /**
+ * Single source of truth for "is this drama status still in flight" —
+ * previously duplicated as inline string-literal lists in
+ * `lib/drama/start-existing.ts`, `app/library/page.tsx` (x3), and
+ * `components/DramaResultsFlyout.tsx`, which can silently drift out of
+ * sync with each other and with `DramaEnrichmentStatus` itself.
+ */
+export const DRAMA_ACTIVE_STATUSES: readonly DramaEnrichmentStatus[] = [
+  'pending',
+  'running',
+];
+export const DRAMA_TERMINAL_STATUSES: readonly DramaEnrichmentStatus[] = [
+  'succeeded',
+  'partial',
+  'failed',
+  'skipped',
+];
+
+/**
  * Per-run subtitle resolution policy (plan/12 P4).
  * - `auto`: matching sidecar → matching embedded stream → host SRT → configured ASR.
  * - `existing_only`: sidecar/embedded only; never call ASR. Missing

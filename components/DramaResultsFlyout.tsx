@@ -19,6 +19,7 @@ import {
 import { useCallback, useEffect, useState } from 'react';
 import { useLocale } from '@/lib/i18n/locale-context';
 import type { DramaResultsDto, DramaSummaryDto } from '@/lib/drama/safe-dto';
+import { DRAMA_ACTIVE_STATUSES } from '@/lib/ingest/drama-options';
 
 type SubtitleSource = 'auto' | 'existing_only' | 'force_asr';
 
@@ -130,7 +131,12 @@ export function DramaResultsFlyout({
   }, [load]);
 
   useEffect(() => {
-    if (!['pending', 'running'].includes((detail ?? drama).status)) return;
+    if (
+      !(DRAMA_ACTIVE_STATUSES as readonly string[]).includes(
+        (detail ?? drama).status,
+      )
+    )
+      return;
     const timer = window.setInterval(() => void load(), 5000);
     return () => window.clearInterval(timer);
   }, [detail, drama, load]);
@@ -257,6 +263,25 @@ export function DramaResultsFlyout({
             <p style={{ color: '#BD271E' }}>{dto.error}</p>
           )}
         </EuiText>
+
+        {detail?.previous_runs && detail.previous_runs.length > 0 && (
+          <>
+            <EuiSpacer size="m" />
+            <EuiTitle size="xxs">
+              <h3>{t.dramaResultPreviousRuns}</h3>
+            </EuiTitle>
+            <EuiSpacer size="s" />
+            <ul>
+              {detail.previous_runs.map((run) => (
+                <li key={run.run_id}>
+                  <EuiText size="s">
+                    <code>{run.run_id}</code> · {run.status} · {(run.modules ?? []).join(', ')}
+                  </EuiText>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
 
         {detail && hasDetail && (
           <>

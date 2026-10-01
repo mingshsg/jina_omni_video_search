@@ -5,6 +5,7 @@ import type { DramaMetaPayload } from '../drama/persist-meta';
 
 type MappingNode = {
   type?: string;
+  enabled?: boolean;
   properties?: Record<string, MappingNode>;
 };
 
@@ -60,6 +61,7 @@ function fullPayload(): DramaMetaPayload {
       },
     ],
     error: { code: 'DRAMA_ENRICHMENT_ERROR', message: 'boom' },
+    runs: [{ run_id: 'older', enrichment_status: 'succeeded', modules: ['subtitles'], languages: ['en'] }],
   };
 }
 
@@ -81,6 +83,7 @@ function checkValue(path: string, value: unknown, node: MappingNode | undefined)
     return missing;
   }
   if (isPlainObject(value)) {
+    if (node.enabled === false) return missing;
     const props = node.properties;
     if (props === undefined) {
       missing.push(`${path} (object without mapped properties)`);

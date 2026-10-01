@@ -62,4 +62,16 @@ describe('approvedDramaMediaPath', () => {
     })).toBeNull();
     expect(allowed(['..', '..', 'video.mp4'])).toBeNull();
   });
+
+  it('serves an older published run but never an unlisted file from that run', () => {
+    const newer: DramaMetaPayload = {
+      run_id: 'run2', enrichment_status: 'running',
+      modules: ['structure'], languages: [],
+      runs: [{ ...drama, runs: undefined }],
+    };
+    expect(allowed(['subtitles', 'en.srt'], newer, 'run1')).toBe(drama.subtitle_paths?.[0]);
+    expect(allowed(['subtitles', 'host_en.srt'], newer, 'run1')).toBeNull();
+    expect(allowed(['faces', 'no.jpg'], newer, 'run1')).toBeNull();
+    expect(allowed(['subtitles', 'en.srt'], newer, 'run3')).toBeNull();
+  });
 });
