@@ -66,9 +66,11 @@ export async function GET(request: Request, { params }: Params) {
     if (!rel || rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
       return new Response('Not found', { status: 404 });
     }
-    return serveFileWithRange(filePath, request, {
+    const response = serveFileWithRange(filePath, request, {
       cacheControl: 'private, max-age=86400',
     });
+    response.headers.set('X-Content-Type-Options', 'nosniff');
+    return response;
   } catch {
     return new Response('Not found', { status: 404 });
   }

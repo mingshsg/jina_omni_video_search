@@ -7,9 +7,9 @@ function inside(root: string, candidate: string): boolean {
 }
 
 /**
- * Only published scripts and approved stills are downloadable. Run-internal
- * meta.json, audio, SRT, audit/usage files and disposable frames are never
- * authorized by a caller-controlled path alone.
+ * Only published scripts, final subtitles, and approved stills are viewable.
+ * Run-internal meta.json, audio, host transcripts, audit/usage files and
+ * disposable frames are never authorized by a caller-controlled path alone.
  */
 export function approvedDramaMediaPath(params: {
   mediaRoot: string;
@@ -28,6 +28,13 @@ export function approvedDramaMediaPath(params: {
   const published = [
     drama.directors_script_zh_path,
     drama.directors_script_en_path,
+    ...(drama.subtitle_paths ?? []).filter((raw) => {
+      if (typeof raw !== 'string') return false;
+      const relative = path.relative(root, path.resolve(root, raw))
+        .split(path.sep).join('/');
+      const match = /^subtitles\/(en|zh|ko|th)\.srt$/.exec(relative);
+      return Boolean(match && drama.languages.includes(match[1] as 'en' | 'zh' | 'ko' | 'th'));
+    }),
     ...(drama.key_scenes ?? []).map((scene) => scene.thumb_path),
     ...(drama.key_actors ?? [])
       .filter((actor) => actor.verified)

@@ -6,6 +6,12 @@ loses an action item.
 
 ## Current — project level
 
+- [`subtitle-view-and-failed-run-diagnostic-2026-10-01.md`](./subtitle-view-and-failed-run-diagnostic-2026-10-01.md)
+  — **The reported EN+ZH failure was recovered with a host English transcript;
+  subtitle viewing is added.** The same run now has 143 aligned cues in each
+  language. Legacy retry guidance and human translation quality remain open.
+  → [`todo/47`](../todo/47-subtitle-view-and-failed-run-2026-10-01.md)
+
 - [`enrichment-and-hybrid-post-push-code-review-2026-10-01.md`](./enrichment-and-hybrid-post-push-code-review-2026-10-01.md)
   — **Small boundary and naming fixes are commit-ready; enrichment acceptance
   remains open.** Concurrent embedding rejection and injected eligibility

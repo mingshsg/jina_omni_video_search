@@ -9,7 +9,11 @@ const drama: DramaMetaPayload = {
   run_id: 'run1',
   enrichment_status: 'succeeded',
   modules: ['directors_script', 'key_scenes', 'key_actors'],
-  languages: ['zh'],
+  languages: ['en', 'zh'],
+  subtitle_paths: [
+    path.join(runRoot, 'subtitles', 'en.srt'),
+    path.join(runRoot, 'subtitles', 'host_en.srt'),
+  ],
   directors_script_zh_path: path.join(runRoot, 'scripts', 'directors_script_zh.md'),
   directors_script_raw_path: path.join(runRoot, 'scripts', 'directors_script_bilingual_raw.md'),
   key_scenes: [{ start_ms: 0, end_ms: 1000, thumb_path: path.join(runRoot, 'scenes', 'one.jpg') }],
@@ -24,8 +28,9 @@ function allowed(rest: string[], selectedDrama: DramaMetaPayload | undefined = d
 }
 
 describe('approvedDramaMediaPath', () => {
-  it('serves only published script and still paths', () => {
+  it('serves only published script, final subtitle and still paths', () => {
     expect(allowed(['scripts', 'directors_script_zh.md'])).toBe(drama.directors_script_zh_path);
+    expect(allowed(['subtitles', 'en.srt'])).toBe(drama.subtitle_paths?.[0]);
     expect(allowed(['scenes', 'one.jpg'])).toBe(drama.key_scenes?.[0].thumb_path);
     expect(allowed(['faces', 'yes.jpg'])).toBe(drama.key_actors?.[0].thumb_path);
   });
@@ -35,6 +40,7 @@ describe('approvedDramaMediaPath', () => {
       ['meta.json'],
       ['audio', 'asr_zh.mp3'],
       ['subtitles', 'zh.srt'],
+      ['subtitles', 'host_en.srt'],
       ['scripts', 'directors_script_bilingual_raw.md'],
       ['scripts', 'directors_audit.json'],
       ['frames', 't_0001s.jpg'],

@@ -64,6 +64,7 @@ export interface DramaResultsDto extends DramaSummaryDto {
   key_scenes?: SafeKeyScene[];
   key_actors?: SafeKeyActor[];
   subtitle_count?: number;
+  subtitle_urls?: Partial<Record<'en' | 'zh' | 'ko' | 'th', string>>;
   script_urls?: { zh?: string; en?: string };
 }
 
@@ -137,6 +138,17 @@ export function dramaResultsFromAsset(
   const base = dramaSummaryFromAsset(asset);
   if (!base) return undefined;
   if (!metaDrama) return base;
+  const subtitleUrls: NonNullable<DramaResultsDto['subtitle_urls']> = {};
+  for (const raw of metaDrama.subtitle_paths ?? []) {
+    const parts = raw.split(/[\\/]/).filter(Boolean);
+    if (parts.at(-2) !== 'subtitles') continue;
+    const match = /^(en|zh|ko|th)\.srt$/.exec(parts.at(-1) ?? '');
+    if (!match) continue;
+    const lang = match[1] as 'en' | 'zh' | 'ko' | 'th';
+    if (!metaDrama.languages.includes(lang)) continue;
+    const url = artifactUrl(asset.video_id, metaDrama.run_id, raw);
+    if (url) subtitleUrls[lang] = url;
+  }
   return {
     ...base,
     script_urls: {
@@ -171,5 +183,6 @@ export function dramaResultsFromAsset(
         : {}),
     })),
     subtitle_count: metaDrama.subtitle_paths?.length,
+    subtitle_urls: subtitleUrls,
   };
 }

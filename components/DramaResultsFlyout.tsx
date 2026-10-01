@@ -296,6 +296,13 @@ export function DramaResultsFlyout({
                 <EuiSpacer size="m" />
                 <EuiText size="s">
                   {t.dramaResultSubtitles}: {detail.subtitle_count}
+                  {Object.entries(detail.subtitle_urls ?? {}).map(([lang, url]) => (
+                    <p key={lang}>
+                      <a href={url} target="_blank" rel="noopener noreferrer">
+                        {t.dramaResultViewSubtitle.replace('{lang}', lang.toUpperCase())}
+                      </a>
+                    </p>
+                  ))}
                 </EuiText>
               </>
             )}

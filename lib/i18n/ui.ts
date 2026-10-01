@@ -189,6 +189,7 @@ export type UiMessages = {
   dramaResultKeyScenes: string;
   dramaResultKeyActors: string;
   dramaResultSubtitles: string;
+  dramaResultViewSubtitle: string;
   dramaResultNoDetail: string;
   dramaResultLoading: string;
   dramaSynopsisStatus: string;
@@ -647,6 +648,7 @@ export const uiEn: UiMessages = {
   dramaResultKeyScenes: 'Key scenes',
   dramaResultKeyActors: 'Key actors',
   dramaResultSubtitles: 'Subtitle files',
+  dramaResultViewSubtitle: 'View {lang} subtitles',
   dramaResultNoDetail: 'No enrichment detail available yet for this run.',
   dramaResultLoading: 'Loading enrichment detail…',
   dramaSynopsisStatus: 'Synopsis status',
@@ -1126,6 +1128,7 @@ export const uiZh: UiMessages = {
   dramaResultKeyScenes: '关键场景',
   dramaResultKeyActors: '关键演员',
   dramaResultSubtitles: '字幕文件',
+  dramaResultViewSubtitle: '查看 {lang} 字幕',
   dramaResultNoDetail: '该本轮暂无可用的增强详情。',
   dramaResultLoading: '正在加载增强详情…',
   dramaSynopsisStatus: '简介状态',

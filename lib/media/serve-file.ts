@@ -35,6 +35,8 @@ export function contentTypeForPath(filePath: string): string {
       return 'image/png';
     case '.webp':
       return 'image/webp';
+    case '.srt':
+      return 'text/plain; charset=utf-8';
     default:
       return 'application/octet-stream';
   }

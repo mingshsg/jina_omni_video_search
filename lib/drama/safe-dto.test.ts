@@ -187,4 +187,26 @@ describe('dramaResultsFromAsset sanitizes paths', () => {
       t_ms: 10,
     });
   });
+
+  it('exposes published final subtitle links without exposing run paths', () => {
+    const base = '/internal/media/v1/drama/r1';
+    const doc = docWithMetaDrama({
+      run_id: 'r1',
+      enrichment_status: 'succeeded',
+      modules: ['subtitles'],
+      languages: ['en', 'zh'],
+      subtitle_paths: [
+        `${base}/subtitles/en.srt`,
+        `${base}/subtitles/zh.srt`,
+        `${base}/subtitles/host_en.srt`,
+      ],
+    });
+    const dto = dramaResultsFromAsset(doc)!;
+    expect(dto.subtitle_urls).toEqual({
+      en: '/api/drama-media/v1/r1/subtitles/en.srt',
+      zh: '/api/drama-media/v1/r1/subtitles/zh.srt',
+    });
+    expect(JSON.stringify(dto)).not.toContain('/internal/media');
+    expect(JSON.stringify(dto)).not.toContain('host_en.srt');
+  });
 });
