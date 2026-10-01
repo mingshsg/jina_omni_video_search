@@ -31,7 +31,7 @@ export async function startExistingDrama(
   options: DramaRequestOptions,
 ): Promise<{ job_id: string; video_id: string; run_id: string | null }> {
   if (starting.has(videoId)) {
-    throw new ExistingDramaStartError('DRAMA_RUN_ACTIVE', 409, 'Drama enrichment is already starting');
+    throw new ExistingDramaStartError('DRAMA_RUN_ACTIVE', 409, 'Enrichment is already starting');
   }
   starting.add(videoId);
   try {
@@ -40,18 +40,18 @@ export async function startExistingDrama(
       throw new ExistingDramaStartError('LIBRARY_NOT_FOUND', 404, 'Video not found');
     }
     if (asset.status !== 'ready') {
-      throw new ExistingDramaStartError('DRAMA_NOT_READY', 409, 'Video must be ready before drama enrichment');
+      throw new ExistingDramaStartError('DRAMA_NOT_READY', 409, 'Video must be ready before enrichment');
     }
     const drama = (asset.meta as { drama?: unknown } | undefined)?.drama;
     if (drama || asset.job?.drama) {
       throw new ExistingDramaStartError(
         'DRAMA_ALREADY_REQUESTED',
         409,
-        'Drama enrichment was already requested for this video; use its retry action if needed',
+        'Enrichment was already requested for this video; use its retry action if needed',
       );
     }
     if (isDramaRunActive(videoId)) {
-      throw new ExistingDramaStartError('DRAMA_RUN_ACTIVE', 409, 'Drama enrichment is already running');
+      throw new ExistingDramaStartError('DRAMA_RUN_ACTIVE', 409, 'Enrichment is already running');
     }
     if (!asset.media_path || !fs.existsSync(asset.media_path) || !fs.statSync(asset.media_path).isFile()) {
       throw new ExistingDramaStartError(

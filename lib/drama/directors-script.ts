@@ -426,7 +426,7 @@ export async function generateDirectorsScript(opts: {
   for (let i = 0; i < windows.length; i++) {
     const { t0, t1 } = windows[i];
     await opts.onProgress?.(
-      `Drama: directors window ${i + 1}/${windows.length} (${tc(t0)}–${tc(t1)})…`,
+      `Enrichment: directors window ${i + 1}/${windows.length} (${tc(t0)}–${tc(t1)})…`,
     );
     const stamps = sampleTimestamps(
       t0,
@@ -553,7 +553,7 @@ export async function generateDirectorsScript(opts: {
     },
   });
 
-  await opts.onProgress?.('Drama: writing synopsis from directors script…');
+  await opts.onProgress?.('Enrichment: writing synopsis from directors script…');
   const synopsis = await summarizeScript({
     title: opts.title,
     bilingualBody: body,

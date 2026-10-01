@@ -330,7 +330,7 @@ export async function generateKeyActors(opts: {
   for (let i = 0; i < stamps.length; i++) {
     const sec = stamps[i];
     await opts.onProgress?.(
-      `Drama: key actors still ${i + 1}/${stamps.length} (${sec}s)…`,
+      `Enrichment: key actors still ${i + 1}/${stamps.length} (${sec}s)…`,
     );
     const outPath = path.join(
       facesDir,
@@ -413,7 +413,7 @@ export async function generateKeyActors(opts: {
         t_ms: Math.round(sec * 1000),
       });
       await opts.onProgress?.(
-        `Drama: key actor candidate "${proposal.roleZh}" @ ${sec}s (needs review)`,
+        `Enrichment: key actor candidate "${proposal.roleZh}" @ ${sec}s (needs review)`,
       );
       if (claimed.size >= env.DRAMA_KEY_ACTORS_MAX) break;
     } catch (err) {

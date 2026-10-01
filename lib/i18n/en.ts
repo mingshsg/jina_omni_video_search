@@ -28,13 +28,13 @@ export const ingestErrorsEn: Record<IngestErrorCode, string> = {
   INGEST_INVALID_GROUP:
     'Invalid index group name (empty or longer than 64 characters).',
   INGEST_DRAMA_EMPTY:
-    'Process as drama requires at least one enrichment module.',
+    'Enrichment requires at least one module.',
   INGEST_DRAMA_INVALID:
-    'Invalid drama options (languages or modules). Check the multi-select values.',
+    'Invalid enrichment options (languages or modules). Check the selections.',
   INGEST_DRAMA_TOO_LONG:
-    'This video exceeds the drama enrichment duration limit (default 210 minutes; see DRAMA_MAX_DURATION_MS).',
+    'This video exceeds the enrichment duration limit (default 210 minutes; see DRAMA_MAX_DURATION_MS).',
   INGEST_DRAMA_URL_NOT_SUPPORTED:
-    'Drama enrichment is not available for URL import yet. Use upload or local path, or enable it later from the library.',
+    'Enrichment is not available for URL import yet. Use upload or local path, or enable it later from the library.',
   INGEST_DRAMA_NEEDS_DIRECTORS:
     'Key actors requires the directors script module in the same request (it reads cast roles from this run\u2019s script). Add directors_script to modules.',
   INGEST_BATCH_EMPTY: 'No video files found for this batch.',

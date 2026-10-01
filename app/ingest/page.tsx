@@ -448,7 +448,7 @@ export default function IngestPage() {
               setBatchRetainResults(true);
               const detail =
                 data.drama?.error?.message ??
-                `drama ${dramaOutcome}: ${(data.drama?.modules_done ?? []).join(', ')}`;
+                `enrichment ${dramaOutcome}: ${(data.drama?.modules_done ?? []).join(', ')}`;
               setBatchErrors((prev) => [
                 ...prev.filter((e) => e.job_id !== row.job_id),
                 {

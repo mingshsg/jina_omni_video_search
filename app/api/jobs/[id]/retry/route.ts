@@ -66,8 +66,8 @@ export async function POST(
             code: 'DRAMA_RUN_ACTIVE',
             message:
               locale === 'zh'
-                ? '该视频的按剧增强正在运行，请等待完成后再重试'
-                : 'Drama enrichment is already running for this video; wait for it to finish before retrying',
+                ? '该视频的增强正在运行，请等待完成后再重试'
+                : 'Enrichment is already running for this video; wait for it to finish before retrying',
           },
         },
         { status: 409 },

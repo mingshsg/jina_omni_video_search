@@ -191,7 +191,7 @@ export async function extractKeyScenes(opts: {
   for (let i = 0; i < candidates.length; i++) {
     const c = candidates[i];
     await opts.onProgress?.(
-      `Drama: key scene ${i + 1}/${candidates.length} (${c.startSec}s–${c.endSec}s)…`,
+      `Enrichment: key scene ${i + 1}/${candidates.length} (${c.startSec}s–${c.endSec}s)…`,
     );
     const midSec = Math.floor((c.startSec + c.endSec) / 2);
     const outPath = path.join(

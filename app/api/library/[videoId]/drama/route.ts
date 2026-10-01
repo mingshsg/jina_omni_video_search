@@ -33,12 +33,12 @@ export async function POST(request: Request, { params }: { params: { videoId: st
     const parsed = requestSchema.safeParse(raw);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: { code: 'INGEST_DRAMA_INVALID', message: 'Invalid drama options' } },
+        { error: { code: 'INGEST_DRAMA_INVALID', message: 'Invalid enrichment options' } },
         { status: 400 },
       );
     }
     const options = resolveDramaOptions({ enabled: true, ...parsed.data });
-    if (!options) throw new Error('Drama options unexpectedly disabled');
+    if (!options) throw new Error('Enrichment options unexpectedly disabled');
     const started = await startExistingDrama(videoId, options);
     // P4: echo the resolved per-run policy in the 202 body alongside the
     // job/video/run identity (run_id is assigned by the handoff marker).
@@ -59,7 +59,7 @@ export async function POST(request: Request, { params }: { params: { videoId: st
         { status: err instanceof ExistingDramaStartError ? err.status : 400 },
       );
     }
-    const message = err instanceof Error ? err.message : 'Could not start drama enrichment';
+    const message = err instanceof Error ? err.message : 'Could not start enrichment';
     return NextResponse.json(
       { error: { code: 'DRAMA_START_FAILED', message: message.replace(/ApiKey\s+\S+/gi, 'ApiKey [redacted]') } },
       { status: 500 },

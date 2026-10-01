@@ -171,7 +171,7 @@ export async function runDramaEnrichment(job: IngestJob): Promise<void> {
     });
     await emitDramaProgress(
       job,
-      `Drama enrichment started (${modules.join(', ')})`,
+      `Enrichment started (${modules.join(', ')})`,
       job.drama!,
     );
 
@@ -226,7 +226,7 @@ export async function runDramaEnrichment(job: IngestJob): Promise<void> {
       try {
         await emitDramaProgress(
           job,
-          'Drama: detecting structure (片头/片尾/body)…',
+          'Enrichment: detecting structure (片头/片尾/body)…',
           job.drama!,
         );
         structure = await proposeStructure({
@@ -238,7 +238,7 @@ export async function runDramaEnrichment(job: IngestJob): Promise<void> {
         patchDrama(job, { modules_done: [...modulesDone] });
         await emitDramaProgress(
           job,
-          `Drama: structure ready (${structure.length} intervals)`,
+          `Enrichment: structure ready (${structure.length} intervals)`,
           job.drama!,
         );
       } catch (err) {
@@ -264,7 +264,7 @@ export async function runDramaEnrichment(job: IngestJob): Promise<void> {
         try {
           await emitDramaProgress(
             job,
-            `Drama: subtitles (${lang})…`,
+            `Enrichment: subtitles (${lang})…`,
             job.drama!,
           );
           const pairError = lang === 'en' || lang === 'zh' ? bilingual?.errors[lang] : undefined;
@@ -312,7 +312,7 @@ export async function runDramaEnrichment(job: IngestJob): Promise<void> {
           patchDrama(job, { modules_done: [...modulesDone] });
           await emitDramaProgress(
             job,
-            `Drama: indexed ${subResult.indexed} ${lang} cues (${resolved.origin}, ${subResult.embedded} embedded)`,
+            `Enrichment: indexed ${subResult.indexed} ${lang} cues (${resolved.origin}, ${subResult.embedded} embedded)`,
             job.drama!,
           );
         } catch (err) {
@@ -327,7 +327,7 @@ export async function runDramaEnrichment(job: IngestJob): Promise<void> {
       try {
         await emitDramaProgress(
           job,
-          'Drama: directors script (EIS multimodal)…',
+          'Enrichment: directors script (EIS multimodal)…',
           job.drama!,
         );
         const result = await generateDirectorsScript({
@@ -361,7 +361,7 @@ export async function runDramaEnrichment(job: IngestJob): Promise<void> {
             : '';
         await emitDramaProgress(
           job,
-          `Drama: directors done (${result.windowsDone}/${result.windowsPlanned} windows ok, sampled ${result.coverageSec}s, ~${result.sceneCount} scenes, audit ${result.audit?.status ?? 'skipped'}${result.audit?.verdict ? `/${result.audit.verdict}` : ''}${gapNote})`,
+          `Enrichment: directors done (${result.windowsDone}/${result.windowsPlanned} windows ok, sampled ${result.coverageSec}s, ~${result.sceneCount} scenes, audit ${result.audit?.status ?? 'skipped'}${result.audit?.verdict ? `/${result.audit.verdict}` : ''}${gapNote})`,
           job.drama!,
         );
       } catch (err) {
@@ -376,7 +376,7 @@ export async function runDramaEnrichment(job: IngestJob): Promise<void> {
       try {
         await emitDramaProgress(
           job,
-          'Drama: key actors (EIS propose+verify)…',
+          'Enrichment: key actors (EIS propose+verify)…',
           job.drama!,
         );
         keyActors = await generateKeyActors({
@@ -394,7 +394,7 @@ export async function runDramaEnrichment(job: IngestJob): Promise<void> {
         patchDrama(job, { modules_done: [...modulesDone] });
         await emitDramaProgress(
           job,
-          `Drama: key actors done (${keyActors.actors.length} candidates, needs review — upstream face gates unimplemented)`,
+          `Enrichment: key actors done (${keyActors.actors.length} candidates, needs review — upstream face gates unimplemented)`,
           job.drama!,
         );
       } catch (err) {
@@ -408,7 +408,7 @@ export async function runDramaEnrichment(job: IngestJob): Promise<void> {
       try {
         await emitDramaProgress(
           job,
-          'Drama: key scenes (stills + summaries)…',
+          'Enrichment: key scenes (stills + summaries)…',
           job.drama!,
         );
         keyScenes = await extractKeyScenes({
@@ -425,7 +425,7 @@ export async function runDramaEnrichment(job: IngestJob): Promise<void> {
         patchDrama(job, { modules_done: [...modulesDone] });
         await emitDramaProgress(
           job,
-          `Drama: key scenes done (${keyScenes.scenes.length}, ${keyScenes.selection === 'script' ? 'script-selected' : 'uniform still-only fallback — no summaries'})`,
+          `Enrichment: key scenes done (${keyScenes.scenes.length}, ${keyScenes.selection === 'script' ? 'script-selected' : 'uniform still-only fallback — no summaries'})`,
           job.drama!,
         );
       } catch (err) {
@@ -451,7 +451,7 @@ export async function runDramaEnrichment(job: IngestJob): Promise<void> {
         if (deleted > 0) {
           await emitDramaProgress(
             job,
-            `Drama: frame cleanup removed ${deleted} dir(s) (~${((gc.freedBytes + sweep.freedBytes) / 1024 / 1024).toFixed(1)} MB)`,
+            `Enrichment: frame cleanup removed ${deleted} dir(s) (~${((gc.freedBytes + sweep.freedBytes) / 1024 / 1024).toFixed(1)} MB)`,
             job.drama!,
           );
         }
@@ -545,10 +545,10 @@ export async function runDramaEnrichment(job: IngestJob): Promise<void> {
         drama: job.drama,
         message:
           dramaMeta.enrichment_status === 'succeeded'
-            ? 'Drama enrichment complete'
+            ? 'Enrichment complete'
             : dramaMeta.enrichment_status === 'partial'
-              ? `Drama enrichment partial: ${dramaMeta.error?.message ?? ''}`
-              : `Drama enrichment failed: ${dramaMeta.error?.message ?? ''}`,
+              ? `Enrichment partial: ${dramaMeta.error?.message ?? ''}`
+              : `Enrichment failed: ${dramaMeta.error?.message ?? ''}`,
       },
       { event: 'progress', persist: false },
     );
@@ -571,7 +571,7 @@ export function startDramaEnrichmentAsync(job: IngestJob): void {
         job,
         {
           drama: job.drama,
-          message: `Drama enrichment failed: ${message.slice(0, 200)}`,
+          message: `Enrichment failed: ${message.slice(0, 200)}`,
         },
         // I4: durably record unexpected top-level failures — jobToAssetDoc
         // carries the failed drama state, so restart can still retry it.

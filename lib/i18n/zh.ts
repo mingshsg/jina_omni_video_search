@@ -27,12 +27,12 @@ export const ingestErrorsZh: Record<IngestErrorCode, string> = {
     '无效的分块预设或窗口/重叠参数。请使用 standard、60s、30s、20s、20s_3s、fine、5s、2s，或提供合法的 window_ms + overlap_ms。',
   INGEST_INVALID_GROUP:
     '无效的索引分组名（为空或超过 64 个字符）。',
-  INGEST_DRAMA_EMPTY: '按剧处理至少需要选择一个增强模块。',
-  INGEST_DRAMA_INVALID: '剧集选项无效（语言或模块）。请检查多选项。',
+  INGEST_DRAMA_EMPTY: '增强至少需要选择一个模块。',
+  INGEST_DRAMA_INVALID: '增强选项无效（语言或模块）。请检查所选内容。',
   INGEST_DRAMA_TOO_LONG:
-    '该视频超过按剧处理时长上限（默认 210 分钟；见 DRAMA_MAX_DURATION_MS）。',
+    '该视频超过增强时长上限（默认 210 分钟；见 DRAMA_MAX_DURATION_MS）。',
   INGEST_DRAMA_URL_NOT_SUPPORTED:
-    'URL 导入暂不支持按剧处理。请使用上传或本地路径，或之后在片库中开启。',
+    'URL 导入暂不支持增强。请使用上传或本地路径，或之后在片库中开启。',
   INGEST_DRAMA_NEEDS_DIRECTORS:
     '关键演员需要同时选择导演分场稿模块（演员从本轮生成的分场稿中提取）。请在模块中加入 directors_script。',
   INGEST_BATCH_EMPTY: '本批次未找到视频文件。',
