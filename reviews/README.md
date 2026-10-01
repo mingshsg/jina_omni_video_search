@@ -6,6 +6,11 @@ loses an action item.
 
 ## Current — project level
 
+- [`run-history-followup-and-scene-link-code-review-2026-10-01.md`](./run-history-followup-and-scene-link-code-review-2026-10-01.md)
+  — **No blocking issues.** Independent recheck of the earlier-run labeling,
+  trimmed-run GC, and scene-linking commits that landed after `todo/50`'s
+  fixes. → [`todo/51`](../todo/51-run-history-followup-and-scene-link-2026-10-01.md)
+
 - [`drama-run-history-code-review-2026-10-01.md`](./drama-run-history-code-review-2026-10-01.md)
   — **Design sound; one P1 and three P2s found and fixed.** The live
   `video-assets` mapping was missing the new `meta.drama.runs` field (first
