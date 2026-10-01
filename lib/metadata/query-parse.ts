@@ -8,7 +8,7 @@ import {
   type CountryCode,
   type VideoType,
 } from './catalogs';
-import { findContainedAliases } from './people';
+import { findContainedAliases, lowerCaseSameLength } from './people';
 
 export type QueryParserKind = 'dictionary' | 'eis' | 'raw' | 'disabled' | 'unavailable';
 
@@ -296,7 +296,7 @@ function stripSpans(query: string, spans: Array<{ start: number; end: number }>)
 export function parseQueryDictionary(query: string): DictionaryParseResult {
   const t0 = performance.now();
   const raw = query.normalize('NFKC');
-  const hayLower = raw.toLowerCase();
+  const hayLower = lowerCaseSameLength(raw);
   const occupied = new Array<boolean>(hayLower.length).fill(false);
   const rejected: ParseRejection[] = [];
   const confidence: Record<string, number> = {};

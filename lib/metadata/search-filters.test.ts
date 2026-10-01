@@ -5,6 +5,7 @@ import {
   buildChunkFilters,
   hasActiveFilters,
   interpretEligibleTotal,
+  isValidYearRange,
   parseSearchFilters,
   searchFiltersSchema,
   SearchFilterError,
@@ -61,6 +62,18 @@ describe('parseSearchFilters', () => {
       group_id: ['my set'],
     });
     expect(hasActiveFilters(f)).toBe(true);
+  });
+
+  it('isValidYearRange only rejects an inverted pair with both bounds set (todo/22 F7)', () => {
+    expect(isValidYearRange(1960, 1965)).toBe(true);
+    expect(isValidYearRange(1965, 1965)).toBe(true);
+    expect(isValidYearRange(undefined, 1965)).toBe(true);
+    expect(isValidYearRange(1965, undefined)).toBe(true);
+    expect(isValidYearRange(undefined, undefined)).toBe(true);
+    // This is the shape app/api/search/route.ts's filter-mode merge can
+    // produce: an already-valid request range narrowed by a non-overlapping
+    // extracted year leaves year_from > year_to.
+    expect(isValidYearRange(2000, 1990)).toBe(false);
   });
 
   it('rejects reversed year range and unknown actor / country', () => {

@@ -154,6 +154,10 @@ const envSchema = z
     QUERY_PARSER_MAX_TOKENS: positiveInt(256),
     QUERY_PARSER_FACET_MODE: z.enum(['boost', 'filter']).optional().default('boost'),
     QUERY_PARSER_CACHE_TTL_MS: positiveInt(300_000),
+    /** Shorter TTL for parses that fell back after an EIS failure (todo/22
+     * F8) — a transient timeout/transport error shouldn't force every
+     * repeat of the same query to miss EIS for the full cache window. */
+    QUERY_PARSER_DEGRADED_CACHE_TTL_MS: positiveInt(10_000),
     QUERY_PARSER_CACHE_MAX: positiveInt(128),
     /** Separate from EMBED_CONCURRENCY — interactive parse must not queue behind ingest. */
     QUERY_PARSER_CONCURRENCY: positiveInt(2),

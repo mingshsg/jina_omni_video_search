@@ -339,12 +339,13 @@ async function searchLexicalAssets(params: {
   query: string;
   eligibleIds: string[];
   size: number;
+  cfg: AppConfig;
 }): Promise<{
   assets: LexicalAssetHit[];
   took_ms: number;
 }> {
   const client = getEsClient();
-  const cfg = getConfig();
+  const cfg = params.cfg;
   const t0 = performance.now();
   if (params.eligibleIds.length === 0 || params.size === 0) {
     return { assets: [], took_ms: 0 };
@@ -390,9 +391,10 @@ async function knnChunks(params: {
   k: number;
   filters: Record<string, unknown>[];
   mode: QueryVectorMode;
+  cfg: AppConfig;
 }): Promise<KnnHit[]> {
   const client = getEsClient();
-  const cfg = getConfig();
+  const cfg = params.cfg;
   const res = await client.search({
     index: cfg.ES_INDEX_CHUNKS,
     size: params.k,
@@ -417,12 +419,13 @@ async function msearchFloorKnn(params: {
   assets: LexicalAssetHit[];
   variantId: string;
   mode: QueryVectorMode;
+  cfg: AppConfig;
 }): Promise<{ hitsByAsset: KnnHit[][]; http_requests: number; subsearches: number }> {
   if (params.assets.length === 0) {
     return { hitsByAsset: [], http_requests: 0, subsearches: 0 };
   }
   const client = getEsClient();
-  const cfg = getConfig();
+  const cfg = params.cfg;
   // Bug fix (todo/22 F1): `_msearch` bodies do not accept `retriever` — the
   // installed client's MsearchMultisearchBody type has `knn` but no
   // `retriever`, and the previous version of this function suppressed that
@@ -540,6 +543,7 @@ async function expandLexicalChunks(params: {
   variantId: string;
   lexical: LexicalAssetHit[];
   mode: QueryVectorMode;
+  cfg: AppConfig;
 }): Promise<{
   candidates: FusionCandidate[];
   http_requests: number;
@@ -574,6 +578,7 @@ async function expandLexicalChunks(params: {
         assets: floorAssets,
         variantId: params.variantId,
         mode: params.mode,
+        cfg: params.cfg,
       });
       httpRequests += floor.http_requests;
       subsearches += floor.subsearches;
@@ -594,6 +599,7 @@ async function expandLexicalChunks(params: {
           eligibleVideoIds: ids,
         }),
         mode: params.mode,
+        cfg: params.cfg,
       });
       httpRequests += 1;
       subsearches += 1;
@@ -642,9 +648,10 @@ async function searchSemanticAssets(params: {
   queryVector: number[];
   eligibleIds: string[];
   size: number;
+  cfg: AppConfig;
 }): Promise<{ ranks: Map<string, number>; took_ms: number }> {
   const client = getEsClient();
-  const cfg = getConfig();
+  const cfg = params.cfg;
   const t0 = performance.now();
   if (!cfg.ASSET_SEMANTIC_ENABLED || params.eligibleIds.length === 0) {
     return { ranks: new Map(), took_ms: 0 };
@@ -693,11 +700,11 @@ async function searchSemanticAssets(params: {
 
 async function loadAssetFacetSnapshots(
   videoIds: string[],
+  cfg: AppConfig,
 ): Promise<Map<string, AssetFacetSnapshot>> {
   const out = new Map<string, AssetFacetSnapshot>();
   if (videoIds.length === 0) return out;
   const client = getEsClient();
-  const cfg = getConfig();
   const res = await client.mget({
     index: cfg.ES_INDEX_ASSETS,
     ids: videoIds,
@@ -738,6 +745,46 @@ export async function searchChunksHybrid(
   const W = hybridBranchWindow(size);
   const tAll = performance.now();
 
+  const residualText = params.vectorQuery?.trim() || params.query;
+  const fullQuery = params.query.trim();
+  const residualMatchesFull =
+    residualText.normalize('NFKC').toLowerCase() ===
+    fullQuery.normalize('NFKC').toLowerCase();
+
+  let embedCalls = Math.max(0, Math.trunc(params.priorEmbedCalls ?? 0));
+
+  // Resolve the query vector concurrently with eligibility enumeration
+  // instead of serially after it (todo/22 F4). The speculative embed (if
+  // any) was launched for the *full* raw query before parsing finished, so
+  // it can only be reused when the parser left the residual unchanged; when
+  // parsing narrowed the residual, start embedding the correct text right
+  // away so that round trip overlaps the independent enumeration request
+  // instead of following it.
+  let vectorPromise: Promise<{ vector: number[]; took_ms: number }> | null =
+    null;
+  if (!params.queryVector?.length) {
+    if (params.speculativeEmbed && residualMatchesFull) {
+      const speculativeEmbed = params.speculativeEmbed;
+      vectorPromise = speculativeEmbed.then((speculative) => {
+        if (speculative?.vector?.length) {
+          // priorEmbedCalls already counted the launch; do not double-count.
+          return { vector: speculative.vector, took_ms: speculative.took_ms };
+        }
+        embedCalls += 1;
+        return embedQueryVector(config, residualText);
+      });
+    } else {
+      // Residual differs, or no speculative promise — embed residual now,
+      // concurrently with enumeration. Speculative (if any) still counts
+      // via priorEmbedCalls when launched; let it settle without blocking.
+      if (params.speculativeEmbed) {
+        void params.speculativeEmbed.catch(() => null);
+      }
+      embedCalls += 1;
+      vectorPromise = embedQueryVector(config, residualText);
+    }
+  }
+
   const enumerated = await enumerateEligibleAssetIds({
     variantId: params.variantId,
     filters: params.filters ?? null,
@@ -745,6 +792,9 @@ export async function searchChunksHybrid(
   });
 
   if (enumerated.videoIds.length === 0) {
+    // Eligibility came back empty — the vector (if any) was launched
+    // speculatively and is now unneeded; let it settle without throwing.
+    void vectorPromise?.catch(() => null);
     return {
       hits: [],
       rank_window_size: W,
@@ -777,40 +827,14 @@ export async function searchChunksHybrid(
     };
   }
 
-  const residualText = params.vectorQuery?.trim() || params.query;
-  const fullQuery = params.query.trim();
-  const residualMatchesFull =
-    residualText.normalize('NFKC').toLowerCase() ===
-    fullQuery.normalize('NFKC').toLowerCase();
-
-  let embedCalls = Math.max(0, Math.trunc(params.priorEmbedCalls ?? 0));
   let embedMs = 0;
   let queryVector: number[];
-
   if (params.queryVector?.length) {
     queryVector = params.queryVector;
-  } else if (params.speculativeEmbed && residualMatchesFull) {
-    const speculative = await params.speculativeEmbed;
-    if (speculative?.vector?.length) {
-      queryVector = speculative.vector;
-      embedMs += speculative.took_ms;
-      // priorEmbedCalls already counted the launch; do not double-count.
-    } else {
-      const embedded = await embedQueryVector(config, residualText);
-      queryVector = embedded.vector;
-      embedMs += embedded.took_ms;
-      embedCalls += 1;
-    }
   } else {
-    // Residual differs, or no speculative promise — embed residual now.
-    // Speculative (if any) still counts via priorEmbedCalls when launched.
-    if (params.speculativeEmbed) {
-      void params.speculativeEmbed.catch(() => null);
-    }
-    const embedded = await embedQueryVector(config, residualText);
+    const embedded = await vectorPromise!;
     queryVector = embedded.vector;
     embedMs += embedded.took_ms;
-    embedCalls += 1;
   }
 
   const mode: QueryVectorMode = { kind: 'vector', vector: queryVector };
@@ -837,6 +861,7 @@ export async function searchChunksHybrid(
         k: W,
         filters: baseFilters,
         mode,
+        cfg: config,
       }).then((hits) => ({ field: 'visual' as const, hits })),
     );
   }
@@ -848,6 +873,7 @@ export async function searchChunksHybrid(
         k: W,
         filters: baseFilters,
         mode,
+        cfg: config,
       }).then((hits) => ({ field: 'audio' as const, hits })),
     );
   }
@@ -879,6 +905,7 @@ export async function searchChunksHybrid(
       query: bm25Text,
       eligibleIds: enumerated.videoIds,
       size: Math.min(20, enumerated.videoIds.length),
+      cfg: config,
     });
     httpRequests += 1;
     subsearches += 1;
@@ -893,6 +920,7 @@ export async function searchChunksHybrid(
           variantId: params.variantId,
           lexical,
           mode,
+          cfg: config,
         });
         lexicalKnnMs = expanded.took_ms;
         httpRequests += expanded.http_requests;
@@ -945,6 +973,7 @@ export async function searchChunksHybrid(
         queryVector,
         eligibleIds: enumerated.videoIds,
         size: Math.min(20, enumerated.videoIds.length),
+        cfg: config,
       });
       httpRequests += 1;
       subsearches += 1;
@@ -969,6 +998,7 @@ export async function searchChunksHybrid(
             variantId: params.variantId,
             lexical: semanticOnly,
             mode,
+            cfg: config,
           });
           knnSemanticMs += expanded.took_ms;
           httpRequests += expanded.http_requests;
@@ -1012,7 +1042,10 @@ export async function searchChunksHybrid(
   if (params.extractedBoosts) {
     try {
       attempts += 1;
-      assetFacetsByVideo = await loadAssetFacetSnapshots(candidateVideoIds);
+      assetFacetsByVideo = await loadAssetFacetSnapshots(
+        candidateVideoIds,
+        config,
+      );
       httpRequests += 1;
       subsearches += 1;
     } catch (err) {

@@ -9,6 +9,7 @@ import {
   expandActorIds,
   findContainedAliases,
   loadPeopleCatalog,
+  lowerCaseSameLength,
   normalizeActorKeyToken,
   PersonCatalogError,
   resetPeopleCatalogCache,
@@ -66,6 +67,25 @@ describe('people catalog', () => {
 
   it('does not treat Latin substrings inside longer words as aliases', () => {
     expect(findContainedAliases('Shepburnesque style')).toEqual([]);
+  });
+
+  it('lowerCaseSameLength never changes string length, even for length-changing casing (todo/22 F9)', () => {
+    // U+0130 lowercases to a 2-code-unit "i̇" with plain toLowerCase().
+    const s = 'İstanbul İ';
+    expect(lowerCaseSameLength(s).length).toBe(s.length);
+    expect(lowerCaseSameLength('Audrey Hepburn')).toBe('audrey hepburn');
+  });
+
+  it('keeps span offsets aligned when a length-changing lowercase char precedes an alias (todo/22 F9)', () => {
+    // Naive `hay.toLowerCase()` would make the haystack 1 code unit longer
+    // than `hay` here, shifting every match offset found after it.
+    const query = 'İ Audrey Hepburn running';
+    const matches = findContainedAliases(query);
+    expect(matches).toHaveLength(1);
+    expect(matches[0]!.alias).toBe('Audrey Hepburn');
+    expect(query.slice(matches[0]!.start, matches[0]!.end)).toBe(
+      'Audrey Hepburn',
+    );
   });
 
   it('derives actor keys from contained aliases for mixed queries', () => {

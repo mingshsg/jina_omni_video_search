@@ -162,6 +162,25 @@ export interface ContainedAliasMatch {
 }
 
 /**
+ * Case-insensitive projection of `s` guaranteed to keep the exact same
+ * length (UTF-16 code units) as `s`, so indices found by searching the
+ * result can be applied directly back to the original string. Plain
+ * `String.prototype.toLowerCase()` does not guarantee this — e.g. U+0130
+ * ('İ') lowercases to two code units ("i̇") — which silently misaligned
+ * span offsets taken from a lowercased haystack and applied to the
+ * original (todo/22 F9). Characters whose single-character lowercase form
+ * would change length are left as-is rather than folded.
+ */
+export function lowerCaseSameLength(s: string): string {
+  let out = '';
+  for (const ch of s) {
+    const lower = ch.toLowerCase();
+    out += lower.length === ch.length ? lower : ch;
+  }
+  return out;
+}
+
+/**
  * Longest-first, non-overlapping catalog alias matches inside a free-text query.
  * Latin spans require word boundaries so "art" does not hit inside "Hepburn".
  * Used by Phase 3 BM25 (name+scene) and Phase 3.5 dictionary parsing.
@@ -169,7 +188,7 @@ export interface ContainedAliasMatch {
 export function findContainedAliases(query: string): ContainedAliasMatch[] {
   const hay = query.normalize('NFKC');
   if (!hay.trim()) return [];
-  const hayLower = hay.toLowerCase();
+  const hayLower = lowerCaseSameLength(hay);
   const aliases = [...getAliasIndex().entries()]
     .map(([aliasLower, personId]) => ({
       aliasLower,

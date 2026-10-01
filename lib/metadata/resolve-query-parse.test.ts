@@ -1,4 +1,4 @@
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { callEisCompletion, EisCompletionError } = vi.hoisted(() => {
   class EisCompletionError extends Error {
@@ -38,6 +38,7 @@ const eisCfg = {
   QUERY_PARSER_MAX_TOKENS: 256,
   QUERY_PARSER_FACET_MODE: 'boost',
   QUERY_PARSER_CACHE_TTL_MS: 60_000,
+  QUERY_PARSER_DEGRADED_CACHE_TTL_MS: 1_000,
   QUERY_PARSER_CACHE_MAX: 32,
   QUERY_PARSER_CONCURRENCY: 2,
 } as never;
@@ -235,5 +236,79 @@ describe('resolveQueryParse with mocked EIS', () => {
     expect(result.parser).toBe('dictionary');
     expect(result.eis_skipped).toBe(true);
     expect(callEisCompletion).not.toHaveBeenCalled();
+  });
+
+  describe('cache TTL (todo/22 F8)', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(0);
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('retries EIS after a transient failure once the short degraded TTL elapses', async () => {
+      callEisCompletion.mockRejectedValue(
+        new EisCompletionError('timeout', 'timed out'),
+      );
+      const first = await resolveQueryParse({
+        query: 'Audrey Hepburn interview',
+        cfg: eisCfg,
+      });
+      expect(first.eis_skip_reason).toBe('timeout');
+      expect(callEisCompletion).toHaveBeenCalledTimes(1);
+
+      // Past the 1s degraded TTL but well inside the 60s normal TTL — a
+      // degraded entry must not survive this long, or EIS recovering has no
+      // effect until the full window expires.
+      vi.setSystemTime(2_000);
+      callEisCompletion.mockResolvedValue(
+        JSON.stringify({
+          vector_query: 'interview',
+          free_text: 'Audrey Hepburn',
+          actor_ids: ['person:audrey-hepburn'],
+          video_type: null,
+          country: null,
+          year_from: null,
+          year_to: null,
+        }),
+      );
+      const second = await resolveQueryParse({
+        query: 'Audrey Hepburn interview',
+        cfg: eisCfg,
+      });
+      expect(callEisCompletion).toHaveBeenCalledTimes(2);
+      expect(second.parser).toBe('eis');
+      expect(second.cache).toBe('miss');
+    });
+
+    it('keeps serving a successful EIS parse from cache across the same window', async () => {
+      callEisCompletion.mockResolvedValue(
+        JSON.stringify({
+          vector_query: 'interview',
+          free_text: 'Audrey Hepburn',
+          actor_ids: ['person:audrey-hepburn'],
+          video_type: null,
+          country: null,
+          year_from: null,
+          year_to: null,
+        }),
+      );
+      const first = await resolveQueryParse({
+        query: 'Audrey Hepburn interview',
+        cfg: eisCfg,
+      });
+      expect(first.parser).toBe('eis');
+      expect(callEisCompletion).toHaveBeenCalledTimes(1);
+
+      vi.setSystemTime(2_000);
+      const second = await resolveQueryParse({
+        query: 'Audrey Hepburn interview',
+        cfg: eisCfg,
+      });
+      expect(callEisCompletion).toHaveBeenCalledTimes(1);
+      expect(second.cache).toBe('hit');
+    });
   });
 });

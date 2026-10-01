@@ -81,13 +81,15 @@ export function putCachedParseResult(
   result: QueryParseResult,
   cfg?: AppConfig,
   nowMs: number = Date.now(),
+  ttlMsOverride?: number,
 ): void {
   const config = cfg ?? getConfig();
+  const ttlMs = ttlMsOverride ?? config.QUERY_PARSER_CACHE_TTL_MS;
   const stored: CacheEntry = {
     key,
     result: { ...result, cache: 'miss' },
     createdAtMs: nowMs,
-    expiresAtMs: nowMs + config.QUERY_PARSER_CACHE_TTL_MS,
+    expiresAtMs: nowMs + ttlMs,
     lastAccessMs: nowMs,
   };
   cacheState().entries.set(key, stored);

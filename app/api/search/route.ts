@@ -4,6 +4,7 @@ import { getConfig } from '@/lib/config';
 import { embedTextQueryVector, searchChunks } from '@/lib/es/search';
 import { searchDescriptionAssets } from '@/lib/es/description-search';
 import {
+  isValidYearRange,
   parseSearchFilters,
   searchFiltersSchema,
   SearchFilterError,
@@ -238,6 +239,13 @@ export async function POST(request: Request) {
             merged.year_to == null
               ? boosts.year_to
               : Math.min(merged.year_to, boosts.year_to);
+        }
+        if (!isValidYearRange(merged.year_from, merged.year_to)) {
+          return errorResponse(
+            'SEARCH_INVALID_REQUEST',
+            'year_from must be <= year_to',
+            400,
+          );
         }
         filters = Object.keys(merged).length ? merged : null;
         extractedBoosts = null;

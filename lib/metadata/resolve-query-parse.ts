@@ -32,6 +32,31 @@ import {
 
 export type { QueryParseResult } from './query-parse';
 
+/**
+ * `eis_skip_reason` values set when `runEisParse` genuinely failed (timeout,
+ * transport error, or a malformed/empty completion even after one repair
+ * attempt) — as opposed to a deliberate `shouldSkipEis` decision
+ * ('exact_alias' / 'no_catalog_hit'), which is deterministic for the query
+ * and safe to cache at the normal TTL regardless of EIS availability.
+ */
+const EIS_FAILURE_SKIP_REASONS = new Set([
+  'timeout',
+  'transport',
+  'empty',
+  'malformed',
+]);
+
+/** todo/22 F8: don't let a transient EIS failure degrade every repeat of a query for the full cache TTL. */
+function parseCacheTtlMs(
+  cfg: AppConfig,
+  result: QueryParseResult,
+): number | undefined {
+  if (result.eis_skipped && EIS_FAILURE_SKIP_REASONS.has(result.eis_skip_reason ?? '')) {
+    return cfg.QUERY_PARSER_DEGRADED_CACHE_TTL_MS;
+  }
+  return undefined;
+}
+
 /** CJK / Hangul / Kana — plan §C2 generalization (e.g. 南朝鲜的片子). */
 const GENERALIZATION_SCRIPT_RE =
   /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/;
@@ -311,6 +336,6 @@ export async function resolveQueryParse(params: {
   }
 
   const result = await runEisParse(query, dict, cfg);
-  putCachedParseResult(cacheKey, result, cfg);
+  putCachedParseResult(cacheKey, result, cfg, Date.now(), parseCacheTtlMs(cfg, result));
   return result;
 }

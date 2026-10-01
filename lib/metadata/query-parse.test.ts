@@ -44,6 +44,18 @@ describe('parseQueryDictionary', () => {
     expect(parsed.extracted.year_to).toBe(1969);
   });
 
+  // Regression (todo/22 F9): phrase-match spans used to be found on a plain
+  // `.toLowerCase()` haystack and then sliced out of the original string —
+  // a length-changing lowercase char (U+0130) ahead of the match shifted
+  // every later offset and corrupted the residual.
+  it('keeps country/type/year spans aligned when a length-changing lowercase char precedes them', () => {
+    const parsed = parseQueryDictionary('İ Korean trailer 1960s');
+    expect(parsed.extracted.country).toEqual(['KR']);
+    expect(parsed.extracted.video_type).toEqual(['trailer']);
+    expect(parsed.extracted.year_from).toBe(1960);
+    expect(parsed.vector_query.trim()).toBe('İ');
+  });
+
   it('extracts a single year', () => {
     const years = extractYears('film from 1961');
     expect(years.year_from).toBe(1961);

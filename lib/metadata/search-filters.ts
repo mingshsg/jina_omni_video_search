@@ -98,6 +98,21 @@ export function hasActiveFilters(
   );
 }
 
+/**
+ * True unless both bounds are set and inverted. Shared by the initial
+ * request-body validation and by `app/api/search/route.ts`'s filter-mode
+ * facet merge (todo/22 F7), which narrows `year_from`/`year_to` from parsed
+ * query boosts *after* the request already passed this check once — an
+ * already-valid range plus a non-overlapping extracted year can still
+ * produce an inverted one and needs the same guard re-applied.
+ */
+export function isValidYearRange(
+  year_from: number | null | undefined,
+  year_to: number | null | undefined,
+): boolean {
+  return !(year_from != null && year_to != null && year_from > year_to);
+}
+
 export function parseSearchFilters(raw: unknown): NormalizedSearchFilters | null {
   if (raw == null || raw === undefined) return null;
   const parsed = searchFiltersSchema.safeParse(raw);
@@ -112,11 +127,7 @@ export function parseSearchFilters(raw: unknown): NormalizedSearchFilters | null
   if (!parsed.data) return null;
 
   const f = parsed.data;
-  if (
-    f.year_from != null &&
-    f.year_to != null &&
-    f.year_from > f.year_to
-  ) {
+  if (!isValidYearRange(f.year_from, f.year_to)) {
     throw new SearchFilterError(
       'SEARCH_INVALID_REQUEST',
       'year_from must be <= year_to',

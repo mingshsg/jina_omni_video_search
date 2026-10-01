@@ -37,6 +37,31 @@ const SCALAR_KEYS = [
   'ignore_above',
 ] as const;
 
+/**
+ * Elasticsearch's `getMapping` omits a scalar mapping parameter when it is
+ * at the field type's default, so an existing field that never set it can
+ * still be compatible with a desired mapping that spells the default out
+ * explicitly (AGENTS.md trap #8 — treating the omission as a conflict can
+ * break `yarn setup-indices` against an already-correct cluster).
+ */
+const SCALAR_KEY_DEFAULTS: Partial<
+  Record<string, Partial<Record<(typeof SCALAR_KEYS)[number], unknown>>>
+> = {
+  text: { analyzer: 'standard' },
+  dense_vector: { index: true, similarity: 'cosine' },
+};
+
+function isOmittedDefault(
+  fieldType: unknown,
+  key: (typeof SCALAR_KEYS)[number],
+  desiredValue: unknown,
+): boolean {
+  if (typeof fieldType !== 'string') return false;
+  const defaults = SCALAR_KEY_DEFAULTS[fieldType];
+  if (!defaults || !(key in defaults)) return false;
+  return JSON.stringify(defaults[key]) === JSON.stringify(desiredValue);
+}
+
 function copyToNormalized(value: unknown): string[] {
   if (value == null) return [];
   if (typeof value === 'string') return [value];
@@ -61,6 +86,11 @@ function scalarMismatch(
         desired.type === 'object' &&
         isPlainObject(existing.properties)
       ) {
+        continue;
+      }
+      const fieldType =
+        typeof existing.type === 'string' ? existing.type : desired.type;
+      if (isOmittedDefault(fieldType, key, desired[key])) {
         continue;
       }
       // Adding a scalar setting to an existing field usually needs reindex.

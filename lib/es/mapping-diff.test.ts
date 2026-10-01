@@ -87,6 +87,46 @@ describe('diffMappingProperties', () => {
     ).toBe(true);
   });
 
+  it('treats a desired dense_vector index/similarity that match the type default as compatible when getMapping omitted them (F6)', () => {
+    const partial = {
+      meta: {
+        type: 'object',
+        properties: {
+          // Elasticsearch omits `index`/`similarity` from getMapping when
+          // they equal the dense_vector type's default (true / 'cosine').
+          description_embedding: { type: 'dense_vector', dims: 1024 },
+        },
+      },
+    };
+    const diff = diffMappingProperties(desired, partial);
+    expect(
+      diff.conflicts.some((c) => c.path.includes('description_embedding')),
+    ).toBe(false);
+  });
+
+  it('still conflicts when an omitted scalar does not match the type default', () => {
+    const partial = {
+      meta: {
+        type: 'object',
+        properties: {
+          // dims has no default — an existing dense_vector field missing it
+          // entirely is a genuine conflict, not an omitted default.
+          description_embedding: {
+            type: 'dense_vector',
+            index: true,
+            similarity: 'cosine',
+          },
+        },
+      },
+    };
+    const diff = diffMappingProperties(desired, partial);
+    expect(
+      diff.conflicts.some(
+        (c) => c.path === 'meta.properties.description_embedding.dims',
+      ),
+    ).toBe(true);
+  });
+
   it('conflicts when an existing field type differs', () => {
     const bad = {
       meta: {
