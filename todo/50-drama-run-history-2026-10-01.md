@@ -50,11 +50,19 @@ after a fresh re-enrichment" work on `codex/enrichment-add-runs`.
       run), and `DramaResultsFlyout` shows "From earlier run {run}" under that
       section. Tests cover mixed, per-language, and current-only results.
 - [x] Fixed the pre-existing `safe-dto.test.ts` assignment-cast diagnostics.
-- [ ] **F8 Trimmed-run artifacts:** when history exceeds 5, the dropped
-      run's `MEDIA_ROOT/media/<videoId>/drama/<runId>/` stays on disk with no
-      reference and `drama-gc-sweep` only removes `frames`/`work`/`tmp`.
-      Deleting published subtitles/scripts needs a product decision; not
-      implemented.
+- [x] **F8 Trimmed-run artifacts:** when history exceeds 5, the dropped
+      run's `MEDIA_ROOT/media/<videoId>/drama/<runId>/` stayed on disk with no
+      reference. Decision: operator-triggered removal with a report-only
+      default. `yarn drama-gc-sweep --trimmed-runs=report` lists run
+      directories the asset no longer references; `--trimmed-runs=delete`
+      removes them (`--max-trimmed-runs`, default 50). Without the flag the
+      script behaves as before. `lib/drama/trimmed-run-gc.ts` skips missing
+      assets, any active persisted drama status, every referenced run ID
+      (current, history, `job.drama.run_id`), and directories newer than
+      `DRAMA_GC_MIN_AGE_MS`. Tests cover report, delete, each skip, and the
+      cap. A report-only run against the configured cluster and `./data`
+      scanned 3 videos with 0 candidates (each has a single referenced run).
+      Deletion against real data is NOT RUN.
 
 ## Gates
 
