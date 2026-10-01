@@ -34,6 +34,7 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from 'react';
 import { AppShell } from '@/components/AppShell';
+import { SceneLinkGapSelect } from '@/components/SceneLinkGapSelect';
 import {
   EMPTY_FACETS,
   facetsToApiFilters,
@@ -222,6 +223,7 @@ export default function SearchPage() {
   );
   const [variantId, setVariantId] = useState('');
   const [size, setSize] = useState(5);
+  const [linkGapMs, setLinkGapMs] = useState(0);
   const [facets, setFacets] = useState<SearchFacetState>(EMPTY_FACETS);
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [assets, setAssets] = useState<LibraryAsset[]>([]);
@@ -338,8 +340,8 @@ export default function SearchPage() {
   }, [assets, variantId]);
 
   const hitGroups = useMemo(
-    () => groupSearchHitsTopK(hits, chunkWindowMs, size),
-    [hits, chunkWindowMs, size],
+    () => groupSearchHitsTopK(hits, chunkWindowMs, size, { linkGapMs }),
+    [hits, chunkWindowMs, size, linkGapMs],
   );
 
     const timelineHits = useMemo(() => {
@@ -908,6 +910,9 @@ export default function SearchPage() {
               onChange={(e) => setSize(Number(e.target.value) || 5)}
             />
           </EuiFormRow>
+        </EuiFlexItem>
+        <EuiFlexItem grow={false} style={{ minWidth: 200 }}>
+          <SceneLinkGapSelect value={linkGapMs} onChange={setLinkGapMs} />
         </EuiFlexItem>
         <EuiFlexItem grow={false} style={{ minWidth: 180 }}>
           <EuiFormRow label={t.sortByLabel}>

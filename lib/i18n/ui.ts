@@ -28,6 +28,10 @@ export type UiMessages = {
   variantAllHint: string;
   topKLabel: string;
   topKHelp: string;
+  sceneLinkLabel: string;
+  sceneLinkHelp: string;
+  sceneLinkTouching: string;
+  sceneLinkGap: string;
   videoFilterLabel: string;
   videoFilterAll: string;
   groupFilterLabel: string;
@@ -472,6 +476,11 @@ export const uiEn: UiMessages = {
   variantAllHint: 'Select an indexed variant',
   topKLabel: 'Top-k',
   topKHelp: 'Result groups',
+  sceneLinkLabel: 'Scene linking',
+  sceneLinkHelp:
+    'Matching moments in the same video join one scene while each starts within this gap of the previous one, with no length limit.',
+  sceneLinkTouching: 'Overlapping or touching',
+  sceneLinkGap: 'Gap up to {s}s',
   videoFilterLabel: 'Video',
   videoFilterAll: 'All videos',
   groupFilterLabel: 'Group',
@@ -959,6 +968,11 @@ export const uiZh: UiMessages = {
   variantAllHint: '选择已索引的变体',
   topKLabel: 'Top-k',
   topKHelp: '结果组数',
+  sceneLinkLabel: '场景连接',
+  sceneLinkHelp:
+    '同一视频中的匹配片段，只要与上一片段的间隔不超过该值，就连成一个场景，不限总时长。',
+  sceneLinkTouching: '重叠或相接',
+  sceneLinkGap: '间隔不超过 {s} 秒',
   videoFilterLabel: '视频',
   videoFilterAll: '全部视频',
   groupFilterLabel: '分组',

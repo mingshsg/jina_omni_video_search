@@ -1,10 +1,23 @@
 /**
  * Presentation grouping for ranked search hits.
  *
- * Same video (+ variant) hits whose start times span at most
- * `2 * chunkWindowMs` (earliest → latest) collapse into one group.
+ * Default (span) rule: same video (+ variant) hits whose start times span at
+ * most `2 * chunkWindowMs` (earliest → latest) collapse into one group.
+ * Chain rule (`linkGapMs` set): a hit joins the group when it starts no more
+ * than `linkGapMs` after the group's latest end, with no total length cap.
  * Top-k then counts **groups**, not raw windows.
  */
+
+export type GroupSearchHitsOptions = {
+  /**
+   * Chain linked hits instead of capping the group span. `0` links only
+   * overlapping or touching windows; larger values bridge short gaps.
+   */
+  linkGapMs?: number;
+};
+
+/** Gap choices (seconds) offered for chained scene linking. */
+export const SCENE_LINK_GAP_CHOICES_S = [0, 5, 10, 30, 60] as const;
 
 export type GroupableHit = {
   chunk_id: string;
@@ -95,13 +108,15 @@ function finalizeGroup<T extends GroupableHit>(
 }
 
 /**
- * Cluster hits from the same video/variant when
- * `latest_start - earliest_start <= 2 * chunkWindowMs`.
+ * Cluster hits from the same video/variant: by the span rule when
+ * `latest_start - earliest_start <= 2 * chunkWindowMs`, or by the chain rule
+ * when `options.linkGapMs` is set.
  * Groups are ordered by the representative's original rank.
  */
 export function groupSearchHits<T extends GroupableHit>(
   hits: T[],
   chunkWindowMs: number,
+  options?: GroupSearchHitsOptions,
 ): SearchHitGroup<T>[] {
   if (hits.length === 0) return [];
 
@@ -110,6 +125,10 @@ export function groupSearchHits<T extends GroupableHit>(
       ? Math.floor(chunkWindowMs)
       : 64_000;
   const thresholdMs = windowMs * 2;
+  const linkGapMs =
+    options?.linkGapMs != null && Number.isFinite(options.linkGapMs)
+      ? Math.max(0, options.linkGapMs)
+      : undefined;
 
   const originalIndex = new Map<string, number>();
   hits.forEach((h, i) => originalIndex.set(h.chunk_id, i));
@@ -134,19 +153,27 @@ export function groupSearchHits<T extends GroupableHit>(
 
     let current: T[] = [];
     let earliestStart = 0;
+    let latestEnd = 0;
 
     for (const hit of sorted) {
       if (current.length === 0) {
         current = [hit];
         earliestStart = hit.start_ms;
+        latestEnd = hit.end_ms;
         continue;
       }
-      if (hit.start_ms - earliestStart <= thresholdMs) {
+      const joins =
+        linkGapMs !== undefined
+          ? hit.start_ms <= latestEnd + linkGapMs
+          : hit.start_ms - earliestStart <= thresholdMs;
+      if (joins) {
         current.push(hit);
+        latestEnd = Math.max(latestEnd, hit.end_ms);
       } else {
         groups.push(finalizeGroup(current, originalIndex));
         current = [hit];
         earliestStart = hit.start_ms;
+        latestEnd = hit.end_ms;
       }
     }
     if (current.length > 0) {
@@ -175,14 +202,16 @@ export function groupSearchHitsTopK<T extends GroupableHit>(
   hits: T[],
   chunkWindowMs: number,
   groupTopK: number,
-  options?: { maxPerVideo?: number },
+  options?: { maxPerVideo?: number } & GroupSearchHitsOptions,
 ): SearchHitGroup<T>[] {
   const k = Math.max(1, Math.floor(groupTopK));
   const maxPerVideo = Math.max(
     1,
     Math.floor(options?.maxPerVideo ?? MAX_GROUPS_PER_VIDEO),
   );
-  const groups = groupSearchHits(hits, chunkWindowMs);
+  const groups = groupSearchHits(hits, chunkWindowMs, {
+    linkGapMs: options?.linkGapMs,
+  });
   if (groups.length <= k) return groups;
 
   const distinctVideos = new Set(groups.map((g) => g.video_id)).size;

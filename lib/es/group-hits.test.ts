@@ -51,6 +51,38 @@ describe('groupSearchHits', () => {
     expect(groups[0]!.end_ms).toBe(29_000);
   });
 
+  it('chains overlapping windows past the 2×window span when linkGapMs is set', () => {
+    // 10s windows every 8s: each overlaps the next by 2s.
+    const chain = [0, 8_000, 16_000, 24_000, 32_000, 40_000].map((start_ms, i) =>
+      hit({ chunk_id: `c${i}`, start_ms }),
+    );
+    const groups = groupSearchHits(chain, 10_000, { linkGapMs: 0 });
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.members).toHaveLength(6);
+    expect(groups[0]!.start_ms).toBe(0);
+    expect(groups[0]!.end_ms).toBe(50_000);
+    expect(groupSearchHits(chain, 10_000)).toHaveLength(2);
+  });
+
+  it('breaks a chain at a missing window unless the gap tolerance bridges it', () => {
+    const hits = [
+      hit({ chunk_id: 'a', start_ms: 0 }),
+      hit({ chunk_id: 'c', start_ms: 16_000 }),
+    ];
+    expect(groupSearchHits(hits, 10_000, { linkGapMs: 0 })).toHaveLength(2);
+    expect(groupSearchHits(hits, 10_000, { linkGapMs: 5_000 })).toHaveLength(2);
+    expect(groupSearchHits(hits, 10_000, { linkGapMs: 10_000 })).toHaveLength(1);
+  });
+
+  it('links a touching window at gap 0', () => {
+    const groups = groupSearchHits(
+      [hit({ chunk_id: 'a', start_ms: 0 }), hit({ chunk_id: 'b', start_ms: 10_000 })],
+      10_000,
+      { linkGapMs: 0 },
+    );
+    expect(groups).toHaveLength(1);
+  });
+
   it('never merges hits from different videos', () => {
     const groups = groupSearchHits(
       [
