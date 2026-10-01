@@ -784,17 +784,21 @@ export async function searchChunksHybrid(
       vectorPromise = embedQueryVector(config, residualText);
     }
   }
+  // Enumeration may still be in flight when embedding rejects, or it may
+  // fail first. Attach a rejection handler now; awaiting the original
+  // promise below still propagates embedding failures to the caller.
+  void vectorPromise?.catch(() => null);
 
   const enumerated = await enumerateEligibleAssetIds({
     variantId: params.variantId,
     filters: params.filters ?? null,
     videoId: params.videoId,
+    cfg: config,
   });
 
   if (enumerated.videoIds.length === 0) {
     // Eligibility came back empty — the vector (if any) was launched
-    // speculatively and is now unneeded; let it settle without throwing.
-    void vectorPromise?.catch(() => null);
+    // speculatively and is now unneeded.
     return {
       hits: [],
       rank_window_size: W,

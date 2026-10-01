@@ -2,7 +2,7 @@
  * Search facet validation + eligible asset-ID enumeration (Phase 2).
  */
 import { z } from 'zod';
-import { getConfig } from '../config';
+import { getConfig, type AppConfig } from '../config';
 import { getEsClient } from '../es/client';
 import {
   COUNTRY_CODE_SET,
@@ -364,9 +364,10 @@ export async function enumerateEligibleAssetIds(params: {
   variantId: string;
   filters?: NormalizedSearchFilters | null;
   videoId?: string | null;
+  cfg?: AppConfig;
 }): Promise<EnumerateEligibleAssetsResult> {
   const client = getEsClient();
-  const cfg = getConfig();
+  const cfg = params.cfg ?? getConfig();
   const t0 = performance.now();
   const filter = buildAssetEligibilityFilters(
     params.variantId,
