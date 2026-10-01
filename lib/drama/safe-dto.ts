@@ -59,6 +59,11 @@ export interface SafeKeyActor {
  */
 export interface DramaResultsDto extends DramaSummaryDto {
   previous_runs?: DramaSummaryDto[];
+  /**
+   * Run ID behind each result section, present only when that section falls
+   * back to an earlier run than the current `run_id`.
+   */
+  earlier_run_sources?: DramaEarlierRunSources;
   synopsis_zh?: string;
   synopsis_en?: string;
   structure?: SafeStructureInterval[];
@@ -67,6 +72,16 @@ export interface DramaResultsDto extends DramaSummaryDto {
   subtitle_count?: number;
   subtitle_urls?: Partial<Record<'en' | 'zh' | 'ko' | 'th', string>>;
   script_urls?: { zh?: string; en?: string };
+}
+
+export interface DramaEarlierRunSources {
+  synopsis?: string;
+  script_zh?: string;
+  script_en?: string;
+  structure?: string;
+  key_scenes?: string;
+  key_actors?: string;
+  subtitles?: Partial<Record<'en' | 'zh' | 'ko' | 'th', string>>;
 }
 
 /** Convert a published run path to a route URL without exposing MEDIA_ROOT. */
@@ -141,9 +156,10 @@ export function dramaResultsFromAsset(
   if (!metaDrama) return base;
   type RunSnapshot = Omit<DramaMetaPayload, 'runs'>;
   const runs: RunSnapshot[] = [metaDrama, ...(metaDrama.runs ?? []).slice().reverse()];
-  const firstWith = <K extends keyof RunSnapshot>(key: K): RunSnapshot[K] | undefined =>
-    runs.find((run) => run[key] != null)?.[key];
+  const earlier = (run: RunSnapshot | undefined): string | undefined =>
+    run && run.run_id !== metaDrama.run_id ? run.run_id : undefined;
   const subtitleUrls: NonNullable<DramaResultsDto['subtitle_urls']> = {};
+  const subtitleSources: NonNullable<DramaEarlierRunSources['subtitles']> = {};
   for (const run of runs) {
     for (const raw of run.subtitle_paths ?? []) {
       const parts = raw.split(/[\\/]/).filter(Boolean);
@@ -153,16 +169,34 @@ export function dramaResultsFromAsset(
       const lang = match[1] as 'en' | 'zh' | 'ko' | 'th';
       if (subtitleUrls[lang] || !run.languages.includes(lang)) continue;
       const url = artifactUrl(asset.video_id, run.run_id, raw);
-      if (url) subtitleUrls[lang] = url;
+      if (!url) continue;
+      subtitleUrls[lang] = url;
+      const source = earlier(run);
+      if (source) subtitleSources[lang] = source;
     }
   }
   const scriptZhRun = runs.find((run) => run.directors_script_zh_path);
   const scriptEnRun = runs.find((run) => run.directors_script_en_path);
+  const structureRun = runs.find((run) => run.structure != null);
   const sceneRun = runs.find((run) => run.key_scenes != null);
   const actorRun = runs.find((run) => run.key_actors != null);
   const synopsisRun = runs.find((run) => run.synopsis_zh || run.synopsis_en);
+  const earlierRunSources: DramaEarlierRunSources = Object.fromEntries(
+    Object.entries({
+      synopsis: earlier(synopsisRun),
+      script_zh: earlier(scriptZhRun),
+      script_en: earlier(scriptEnRun),
+      structure: earlier(structureRun),
+      key_scenes: earlier(sceneRun),
+      key_actors: earlier(actorRun),
+      ...(Object.keys(subtitleSources).length > 0 ? { subtitles: subtitleSources } : {}),
+    }).filter(([, value]) => value !== undefined),
+  );
   return {
     ...base,
+    ...(Object.keys(earlierRunSources).length > 0
+      ? { earlier_run_sources: earlierRunSources }
+      : {}),
     previous_runs: (metaDrama.runs ?? []).slice().reverse().map((run) => ({
       status: run.enrichment_status,
       run_id: run.run_id,
@@ -178,7 +212,7 @@ export function dramaResultsFromAsset(
     synopsis_zh: synopsisRun?.synopsis_zh,
     synopsis_en: synopsisRun?.synopsis_en,
     synopsis_status: synopsisRun?.synopsis_status,
-    structure: firstWith('structure')?.map((s) => ({
+    structure: structureRun?.structure?.map((s) => ({
       kind: s.kind,
       start_ms: s.start_ms,
       end_ms: s.end_ms,

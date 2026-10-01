@@ -141,6 +141,16 @@ export function DramaResultsFlyout({
     return () => window.clearInterval(timer);
   }, [detail, drama, load]);
 
+  const sources = detail?.earlier_run_sources;
+  const earlierRunNote = (runId: string | undefined) =>
+    runId ? (
+      <EuiText size="xs" color="subdued">
+        <p>{t.dramaResultFromEarlierRun.replace('{run}', runId)}</p>
+      </EuiText>
+    ) : null;
+  const subtitleSource = (lang: string) =>
+    sources?.subtitles?.[lang as keyof NonNullable<typeof sources.subtitles>];
+
   const dto = detail ?? drama;
   const hasDetail = Boolean(
     detail &&
@@ -291,6 +301,7 @@ export function DramaResultsFlyout({
                 <EuiTitle size="xxs">
                   <h3>{t.dramaResultSynopsis}</h3>
                 </EuiTitle>
+                {earlierRunNote(sources?.synopsis)}
                 <EuiSpacer size="s" />
                 {detail.synopsis_zh && (
                   <EuiText size="s">
@@ -311,8 +322,12 @@ export function DramaResultsFlyout({
                 <EuiTitle size="xxs"><h3>{t.dramaModuleDirectors}</h3></EuiTitle>
                 <EuiText size="s">
                   {detail.script_urls.zh && <p><a href={detail.script_urls.zh} target="_blank" rel="noopener noreferrer">zh script</a></p>}
+                </EuiText>
+                {detail.script_urls.zh && earlierRunNote(sources?.script_zh)}
+                <EuiText size="s">
                   {detail.script_urls.en && <p><a href={detail.script_urls.en} target="_blank" rel="noopener noreferrer">en script</a></p>}
                 </EuiText>
+                {detail.script_urls.en && earlierRunNote(sources?.script_en)}
               </>
             )}
 
@@ -322,6 +337,7 @@ export function DramaResultsFlyout({
                 <EuiTitle size="xxs">
                   <h3>{t.dramaResultStructure}</h3>
                 </EuiTitle>
+                {earlierRunNote(sources?.structure)}
                 <EuiSpacer size="s" />
                 <ul>
                   {detail.structure.map((s, i) => (
@@ -342,6 +358,7 @@ export function DramaResultsFlyout({
                 <EuiTitle size="xxs">
                   <h3>{t.dramaResultKeyScenes}</h3>
                 </EuiTitle>
+                {earlierRunNote(sources?.key_scenes)}
                 <EuiSpacer size="s" />
                 <ul>
                   {detail.key_scenes.map((s, i) => (
@@ -364,6 +381,7 @@ export function DramaResultsFlyout({
                 <EuiTitle size="xxs">
                   <h3>{t.dramaResultKeyActors}</h3>
                 </EuiTitle>
+                {earlierRunNote(sources?.key_actors)}
                 <EuiSpacer size="s" />
                 <ul>
                   {detail.key_actors.map((a, i) => (
@@ -390,6 +408,12 @@ export function DramaResultsFlyout({
                       <a href={url} target="_blank" rel="noopener noreferrer">
                         {t.dramaResultViewSubtitle.replace('{lang}', lang.toUpperCase())}
                       </a>
+                      {subtitleSource(lang) && (
+                        <EuiText size="xs" color="subdued" component="span">
+                          {' · '}
+                          {t.dramaResultFromEarlierRun.replace('{run}', subtitleSource(lang)!)}
+                        </EuiText>
+                      )}
                     </p>
                   ))}
                 </EuiText>

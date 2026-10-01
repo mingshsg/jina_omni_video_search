@@ -76,7 +76,7 @@ describe('dramaSummaryFromAsset', () => {
 
   it('falls back to job.drama when meta.drama is absent', () => {
     const doc = docWithMetaDrama({} as DramaMetaPayload);
-    (doc.meta as Record<string, unknown>) = { revision: 1, updated_at: '' };
+    doc.meta = { revision: 1, updated_at: '' } as unknown as VideoAssetDocument['meta'];
     doc.job.drama = {
       status: 'running',
       languages: ['ko'],
@@ -98,7 +98,7 @@ describe('dramaSummaryFromAsset', () => {
 
   it('returns undefined when no drama anywhere', () => {
     const doc = docWithMetaDrama({} as DramaMetaPayload);
-    (doc.meta as Record<string, unknown>) = { revision: 1, updated_at: '' };
+    doc.meta = { revision: 1, updated_at: '' } as unknown as VideoAssetDocument['meta'];
     expect(dramaSummaryFromAsset(doc)).toBeUndefined();
   });
 });
@@ -132,7 +132,25 @@ describe('dramaResultsFromAsset sanitizes paths', () => {
     expect(dto.script_urls?.zh).toBe('/api/drama-media/v1/oldrun/scripts/zh.md');
     expect(dto.synopsis_zh).toBe('旧摘要');
     expect(dto.previous_runs).toEqual([expect.objectContaining({ run_id: 'oldrun', status: 'succeeded' })]);
+    expect(dto.earlier_run_sources).toEqual({
+      synopsis: 'oldrun',
+      script_zh: 'oldrun',
+      subtitles: { en: 'oldrun', zh: 'oldrun' },
+    });
     expect(JSON.stringify(dto)).not.toContain(oldRoot);
+  });
+
+  it('labels no section when every result comes from the current run', () => {
+    const dto = dramaResultsFromAsset(docWithMetaDrama({
+      run_id: 'r1',
+      enrichment_status: 'succeeded',
+      modules: ['subtitles', 'directors_script'],
+      modules_done: ['subtitles', 'directors_script'],
+      languages: ['en'],
+      subtitle_paths: ['subtitles/en.srt'],
+      synopsis_en: 'current',
+    }))!;
+    expect(dto.earlier_run_sources).toBeUndefined();
   });
 
   it('uses the latest successful language while retaining other languages', () => {
@@ -153,6 +171,7 @@ describe('dramaResultsFromAsset sanitizes paths', () => {
       en: '/api/drama-media/v1/newrun/subtitles/en.srt',
       zh: '/api/drama-media/v1/oldrun/subtitles/zh.srt',
     });
+    expect(dto.earlier_run_sources).toEqual({ subtitles: { zh: 'oldrun' } });
   });
 
   it('returns route links for published scripts and stills only', () => {

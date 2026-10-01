@@ -40,6 +40,22 @@ after a fresh re-enrichment" work on `codex/enrichment-add-runs`.
       dictionary. **Fixed 2026-10-01** — added `dramaResultPreviousRuns` to
       `lib/i18n/ui.ts`.
 
+## Follow-up — 2026-10-01
+
+- [x] **F7 Unlabelled earlier-run results:** each results section falls back
+      to the newest earlier run that has it, but the flyout showed that output
+      beside the current run's status with no attribution.
+      `dramaResultsFromAsset` now returns `earlier_run_sources` (run ID per
+      section and per subtitle language, only when it differs from the current
+      run), and `DramaResultsFlyout` shows "From earlier run {run}" under that
+      section. Tests cover mixed, per-language, and current-only results.
+- [x] Fixed the pre-existing `safe-dto.test.ts` assignment-cast diagnostics.
+- [ ] **F8 Trimmed-run artifacts:** when history exceeds 5, the dropped
+      run's `MEDIA_ROOT/media/<videoId>/drama/<runId>/` stays on disk with no
+      reference and `drama-gc-sweep` only removes `frames`/`work`/`tmp`.
+      Deleting published subtitles/scripts needs a product decision; not
+      implemented.
+
 ## Gates
 
 - [x] `yarn test` — 107 files / 793 tests pass (Homebrew Node 25; Node 22
@@ -55,11 +71,3 @@ after a fresh re-enrichment" work on `codex/enrichment-add-runs`.
       `DramaResultsFlyout`.
 - [ ] Product sign-off that 5 is the right history-retention count (ops
       judgment, not a correctness question).
-
-## Known pre-existing, out of scope here
-
-- `lib/drama/safe-dto.test.ts`'s `(doc.meta as Record<string, unknown>) =
-  ...` assignment-cast does not "sufficiently overlap" per the TS language
-  service. Already present on `HEAD` before this work; does not fail
-  `yarn build` (tests are outside its typecheck scope) or `yarn test`
-  (Vitest doesn't typecheck). Worth a follow-up cleanup, not blocking.

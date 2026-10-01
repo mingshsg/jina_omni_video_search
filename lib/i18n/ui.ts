@@ -186,6 +186,7 @@ export type UiMessages = {
   dramaResultOverview: string;
   dramaResultRunId: string;
   dramaResultPreviousRuns: string;
+  dramaResultFromEarlierRun: string;
   dramaResultSynopsis: string;
   dramaResultStructure: string;
   dramaResultKeyScenes: string;
@@ -647,6 +648,7 @@ export const uiEn: UiMessages = {
   dramaResultOverview: 'Run overview',
   dramaResultRunId: 'Run ID',
   dramaResultPreviousRuns: 'Previous enrichment runs',
+  dramaResultFromEarlierRun: 'From earlier run {run}',
   dramaResultSynopsis: 'Synopsis',
   dramaResultStructure: 'Structure',
   dramaResultKeyScenes: 'Key scenes',
@@ -1129,6 +1131,7 @@ export const uiZh: UiMessages = {
   dramaResultOverview: '运行概览',
   dramaResultRunId: '运行 ID',
   dramaResultPreviousRuns: '之前的增强任务',
+  dramaResultFromEarlierRun: '来自之前的任务 {run}',
   dramaResultSynopsis: '剧情简介',
   dramaResultStructure: '结构区间',
   dramaResultKeyScenes: '关键场景',
