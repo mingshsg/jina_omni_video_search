@@ -221,7 +221,6 @@ export default function SearchPage() {
     null,
   );
   const [variantId, setVariantId] = useState('');
-  const [videoId, setVideoId] = useState<string>('');
   const [size, setSize] = useState(5);
   const [facets, setFacets] = useState<SearchFacetState>(EMPTY_FACETS);
   const [hits, setHits] = useState<SearchHit[]>([]);
@@ -296,14 +295,6 @@ export default function SearchPage() {
       cancelled = true;
     };
   }, [t.libraryError]);
-
-  const videoOptions = useMemo(
-    () => [
-      { value: '', text: t.videoFilterAll },
-      ...assets.map((a) => ({ value: a.video_id, text: a.title || a.video_id })),
-    ],
-    [assets, t.videoFilterAll],
-  );
 
   const facetsActiveCount = useMemo(() => {
     let n = 0;
@@ -452,7 +443,7 @@ export default function SearchPage() {
         query: q,
         modality,
         variant_id: variantId,
-        video_id: videoId || null,
+        video_id: null,
         size: oversampleForGroupedTopK(size),
         sort_by: nextSort,
         ...(filters ? { filters } : {}),
@@ -510,7 +501,6 @@ export default function SearchPage() {
     query,
     modality,
     variantId,
-    videoId,
     size,
     sortBy,
     facets,
@@ -853,17 +843,7 @@ export default function SearchPage() {
             )}
           </EuiFormRow>
         </EuiFlexItem>
-        <EuiFlexItem grow={2}>
-          <EuiFormRow label={t.videoFilterLabel}>
-            <EuiSelect
-              options={videoOptions}
-              value={videoId}
-              onChange={(e) => setVideoId(e.target.value)}
-              aria-label={t.videoFilterLabel}
-            />
-          </EuiFormRow>
-        </EuiFlexItem>
-        <EuiFlexItem grow={2} style={{ minWidth: 200 }}>
+        <EuiFlexItem grow={3} style={{ minWidth: 200 }}>
           <SearchGroupFilter
             selectedIds={facets.group_id}
             variantId={variantId}
