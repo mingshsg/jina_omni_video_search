@@ -34,8 +34,9 @@ and asks how to view the subtitle text.
 
 ## Follow-up
 
-- [ ] For legacy EN+ZH requests lacking `source_language`, make retry
-  guidance actionable before another click. The current retry route cannot
-  change the original request, and container ASR is not configured here.
+- [x] For legacy EN+ZH requests lacking `source_language`, make retry
+  guidance actionable before another click. The results flyout can now
+  explicitly revise subtitle method and spoken language through the retry
+  route; see [`todo/48`](48-existing-only-retry-recovery-2026-10-01.md).
 - [ ] Human-check the translated Chinese text and timing before calling
   the subtitle output quality accepted.

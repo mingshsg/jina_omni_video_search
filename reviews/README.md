@@ -6,6 +6,11 @@ loses an action item.
 
 ## Current — project level
 
+- [`existing-only-retry-recovery-review-2026-10-01.md`](./existing-only-retry-recovery-review-2026-10-01.md)
+  — **The reported retry was recovered with explicit Auto + English.**
+  EN/ZH each have 121 aligned, indexed cues; human subtitle quality review
+  remains open. → [`todo/48`](../todo/48-existing-only-retry-recovery-2026-10-01.md)
+
 - [`subtitle-view-and-failed-run-diagnostic-2026-10-01.md`](./subtitle-view-and-failed-run-diagnostic-2026-10-01.md)
   — **The reported EN+ZH failure was recovered with a host English transcript;
   subtitle viewing is added.** The same run now has 143 aligned cues in each

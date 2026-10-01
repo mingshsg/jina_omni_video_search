@@ -177,6 +177,7 @@ export type UiMessages = {
   dramaClientNeedLanguages: string;
   dramaStatusLabel: string;
   dramaRetryLabel: string;
+  dramaRetryNoExistingSubtitle: string;
   dramaPartialNote: string;
   dramaFailedNote: string;
   dramaStartAction: string;
@@ -634,6 +635,7 @@ export const uiEn: UiMessages = {
     'Select at least one subtitle language when Subtitles is enabled.',
   dramaStatusLabel: 'Enrichment',
   dramaRetryLabel: 'Retry enrichment',
+  dramaRetryNoExistingSubtitle: 'No existing timed subtitles were found. Select Auto and the spoken language to use a host transcript or configured ASR, or add a matching subtitle file before retrying.',
   dramaPartialNote:
     'Enrichment finished partially — the video is searchable, but some modules failed. You can retry them.',
   dramaFailedNote:
@@ -1114,6 +1116,7 @@ export const uiZh: UiMessages = {
   dramaClientNeedLanguages: '勾选字幕模块时请至少选择一种字幕语言。',
   dramaStatusLabel: '增强',
   dramaRetryLabel: '重试增强',
+  dramaRetryNoExistingSubtitle: '未找到现有时间轴字幕。请选择“自动”和原声语言，以使用主机字幕或已配置的 ASR；也可以先添加匹配的字幕文件再重试。',
   dramaPartialNote:
     '增强部分完成——视频已可检索，但部分模块失败，可以重试。',
   dramaFailedNote:

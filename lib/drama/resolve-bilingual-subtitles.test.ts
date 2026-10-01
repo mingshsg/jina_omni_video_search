@@ -71,6 +71,14 @@ describe('EN/ZH subtitle source then translation', () => {
     expect(translateMock).not.toHaveBeenCalled();
   });
 
+  it('explains why an existing-only retry cannot use host ASR', async () => {
+    resolveMock.mockRejectedValue(new NoSubtitlesError('missing'));
+    const result = await resolveEnglishChineseSubtitles({ ...opts(), subtitleSource: 'existing_only' });
+    expect(result.errors.en?.message).toMatch(/Existing-only skips host transcripts and ASR/);
+    expect(result.errors.zh?.message).toMatch(/retry with Auto/);
+    expect(resolveMock.mock.calls).toHaveLength(2);
+  });
+
   it('runs configured ASR once in the selected spoken language, then translates', async () => {
     resolveMock.mockImplementation(async ({ lang, allowConfiguredAsr }: { lang: string; allowConfiguredAsr?: boolean }) => {
       if (lang === 'zh' && allowConfiguredAsr !== false) return { ...en, lang: 'zh', origin: 'asr' };

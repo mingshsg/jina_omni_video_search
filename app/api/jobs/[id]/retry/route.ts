@@ -11,6 +11,7 @@ import {
   startPipelineAsync,
 } from '@/lib/ingest/pipeline';
 import { isDramaRunActive, startDramaEnrichmentAsync } from '@/lib/drama/runner';
+import { DramaRetryPolicyError, resolveDramaRetryPolicy } from '@/lib/drama/retry-policy';
 import { resolveLocale } from '@/lib/i18n';
 
 export const runtime = 'nodejs';
@@ -43,6 +44,37 @@ export async function POST(
       },
       { status: 404 },
     );
+  }
+
+  // An omitted body retains the original retry contract. A supplied body
+  // explicitly changes only the subtitle policy of a failed enrichment run.
+  let retryPolicy: ReturnType<typeof resolveDramaRetryPolicy> | undefined;
+  const body = await request.text();
+  if (body.trim()) {
+    if (body.length > 4096) {
+      return NextResponse.json(
+        { error: { code: 'DRAMA_RETRY_POLICY_INVALID', message: 'Invalid subtitle retry options' } },
+        { status: 400 },
+      );
+    }
+    if (prev.status !== 'ready' || !prev.drama ||
+        ['succeeded', 'skipped'].includes(prev.drama.status)) {
+      return NextResponse.json(
+        { error: { code: 'DRAMA_RETRY_POLICY_UNAVAILABLE', message: 'Subtitle options can only be changed when retrying unfinished enrichment' } },
+        { status: 409 },
+      );
+    }
+    try {
+      retryPolicy = resolveDramaRetryPolicy(prev.drama, JSON.parse(body) as unknown);
+    } catch (err) {
+      const policyError = err instanceof DramaRetryPolicyError
+        ? err
+        : new DramaRetryPolicyError('DRAMA_RETRY_POLICY_INVALID', 400, 'Invalid subtitle retry options');
+      return NextResponse.json(
+        { error: { code: policyError.code, message: policyError.message } },
+        { status: policyError.status },
+      );
+    }
   }
 
   // Drama-only resume (R7): base ingest already reached `ready`, so rerun
@@ -79,9 +111,9 @@ export async function POST(
       modules: prev.drama.modules,
       modules_done: [],
       run_id: prev.drama.run_id,
-      // P4: keep the original per-run policy on drama-only retry.
-      subtitleSource: prev.drama.subtitleSource,
-      sourceLanguage: prev.drama.sourceLanguage,
+      // Default to the original policy; an explicit retry request may revise it.
+      subtitleSource: retryPolicy?.subtitleSource ?? prev.drama.subtitleSource,
+      sourceLanguage: retryPolicy?.sourceLanguage ?? prev.drama.sourceLanguage,
       directorCoverage: prev.drama.directorCoverage,
     };
     prev.pipelineRunning = false;

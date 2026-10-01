@@ -10,6 +10,8 @@ import {
   EuiFlyout,
   EuiFlyoutBody,
   EuiFlyoutHeader,
+  EuiFormRow,
+  EuiSelect,
   EuiSpacer,
   EuiText,
   EuiTitle,
@@ -17,6 +19,8 @@ import {
 import { useCallback, useEffect, useState } from 'react';
 import { useLocale } from '@/lib/i18n/locale-context';
 import type { DramaResultsDto, DramaSummaryDto } from '@/lib/drama/safe-dto';
+
+type SubtitleSource = 'auto' | 'existing_only' | 'force_asr';
 
 function dramaColor(
   status: string,
@@ -53,6 +57,14 @@ export function DramaResultsFlyout({
   const [detail, setDetail] = useState<DramaResultsDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
+  const [retrySource, setRetrySource] = useState<SubtitleSource>(
+    drama.subtitle_source === 'existing_only' || drama.subtitle_source === 'force_asr'
+      ? drama.subtitle_source : 'auto',
+  );
+  const [retryLanguage, setRetryLanguage] = useState<'en' | 'zh' | ''>(
+    drama.source_language === 'en' || drama.source_language === 'zh'
+      ? drama.source_language : '',
+  );
 
   const load = useCallback(async () => {
     try {
@@ -73,25 +85,45 @@ export function DramaResultsFlyout({
 
   const retry = useCallback(async () => {
     if (!jobId || retrying) return;
+    const current = detail ?? drama;
+    const hasSubtitles = current.modules?.includes('subtitles') ?? false;
+    const hasBilingualSubtitles = hasSubtitles &&
+      current.languages?.includes('en') && current.languages?.includes('zh');
+    if (hasBilingualSubtitles && retrySource !== 'existing_only' && !retryLanguage) {
+      setError(t.dramaSpokenLanguageRequired);
+      return;
+    }
     setRetrying(true);
     setError(null);
     try {
       const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}/retry`, {
         method: 'POST',
-        headers: { 'Accept-Language': locale },
+        headers: {
+          'Accept-Language': locale,
+          ...(hasSubtitles ? { 'Content-Type': 'application/json' } : {}),
+        },
+        ...(hasSubtitles ? { body: JSON.stringify({
+          subtitle_source: retrySource,
+          ...(retryLanguage ? { source_language: retryLanguage } : {}),
+        }) } : {}),
       });
       const data = (await res.json()) as { error?: { message: string } };
       if (!res.ok) throw new Error(data.error?.message ?? t.libraryError);
       // The runner is asynchronous; show the accepted state immediately and
       // keep polling rather than leaving the stale failure on screen.
-      setDetail((current) => ({ ...(current ?? drama), status: 'pending', error: undefined }));
+      setDetail((current) => ({
+        ...(current ?? drama), status: 'pending', error: undefined,
+        subtitle_source: retrySource,
+        ...(retryLanguage ? { source_language: retryLanguage } : {}),
+      }));
       onRetryStarted?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : t.libraryError);
     } finally {
       setRetrying(false);
     }
-  }, [jobId, retrying, locale, t.libraryError, drama, onRetryStarted]);
+  }, [jobId, retrying, locale, t.libraryError, t.dramaSpokenLanguageRequired,
+    drama, detail, retrySource, retryLanguage, onRetryStarted]);
 
   useEffect(() => {
     void load();
@@ -159,9 +191,41 @@ export function DramaResultsFlyout({
           {t.refresh}
         </EuiButtonEmpty>
         {jobId && ['failed', 'partial'].includes(dto.status) && (
-          <EuiButton size="s" isLoading={retrying} onClick={() => void retry()}>
-            {t.dramaRetryLabel}
-          </EuiButton>
+          <>
+            {dto.modules?.includes('subtitles') && (
+              <>
+                <EuiSpacer size="s" />
+                <EuiFormRow label={t.dramaSubtitleSource}>
+                  <EuiSelect
+                    options={[
+                      { value: 'auto', text: t.dramaSubtitleSourceAuto },
+                      { value: 'existing_only', text: t.dramaSubtitleSourceExisting },
+                      { value: 'force_asr', text: t.dramaSubtitleSourceForceAsr },
+                    ]}
+                    value={retrySource}
+                    onChange={(event) => setRetrySource(event.target.value as SubtitleSource)}
+                  />
+                </EuiFormRow>
+                {dto.languages?.includes('en') && dto.languages?.includes('zh') && (
+                  <EuiFormRow label={t.dramaSpokenLanguage} helpText={t.dramaSpokenLanguageHelp}>
+                    <EuiSelect
+                      options={[{ value: '', text: '—' }, { value: 'en', text: 'English' }, { value: 'zh', text: '中文' }]}
+                      value={retryLanguage}
+                      onChange={(event) => setRetryLanguage(event.target.value as 'en' | 'zh' | '')}
+                    />
+                  </EuiFormRow>
+                )}
+                {dto.error?.includes('No timed English or Chinese') &&
+                  retrySource === 'existing_only' && (
+                    <EuiCallOut color="warning" size="s" title={t.dramaRetryNoExistingSubtitle} />
+                  )}
+                <EuiSpacer size="s" />
+              </>
+            )}
+            <EuiButton size="s" isLoading={retrying} onClick={() => void retry()}>
+              {t.dramaRetryLabel}
+            </EuiButton>
+          </>
         )}
         <EuiSpacer size="s" />
         <EuiText size="s">

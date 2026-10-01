@@ -47,7 +47,11 @@ export async function resolveEnglishChineseSubtitles(opts: {
       }
     }
     if (!found.en && !found.zh) {
-      const missing = new Error('No timed English or Chinese source subtitle was found. Supply a matching sidecar, embedded subtitle, or host transcript; configured ASR needs an explicit spoken language.');
+      const missing = new Error(
+        opts.subtitleSource === 'existing_only'
+          ? 'No timed English or Chinese sidecar or embedded subtitle was found. Existing-only skips host transcripts and ASR; retry with Auto and the spoken language, or supply a matching timed subtitle file.'
+          : 'No timed English or Chinese source subtitle was found. Supply a matching sidecar, embedded subtitle, or host transcript; configured ASR needs an explicit spoken language.',
+      );
       return { resolved: found, errors: { en: errors.en ?? missing, zh: errors.zh ?? missing } };
     }
   }
