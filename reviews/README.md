@@ -6,6 +6,13 @@ loses an action item.
 
 ## Current — project level
 
+- [`enrichment-and-hybrid-post-push-code-review-2026-10-01.md`](./enrichment-and-hybrid-post-push-code-review-2026-10-01.md)
+  — **Small boundary and naming fixes are commit-ready; enrichment acceptance
+  remains open.** Concurrent embedding rejection and injected eligibility
+  configuration are repaired. Failed-state retry polling, long bilingual
+  transcripts, and human subtitle quality still need work.
+  → [`todo/46`](../todo/46-enrichment-and-hybrid-post-push-2026-10-01.md)
+
 - [`pending-commits-readiness-review-2026-09-30.md`](./pending-commits-readiness-review-2026-09-30.md)
   — **Historical 17-commit hold; four P2 findings repaired.** Long CJK
   filenames, metadata-editor load failure, Group availability races, and
