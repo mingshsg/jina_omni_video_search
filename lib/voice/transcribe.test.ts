@@ -24,4 +24,9 @@ describe('original-language voice transcription', () => {
     await expect(transcribeAudio(testWav(), 'auto', getVoiceConfig({ VOICE_ASR_API_URL: 'http://localhost/asr', VOICE_ASR_MODEL: 'whisper' }), new AbortController().signal))
       .rejects.toMatchObject({ message: 'Transcription service could not process this recording.' });
   });
+  it('preserves the ASR compute deadline as a sanitized timeout', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('private timeout diagnostics', { status: 504 })));
+    await expect(transcribeAudio(testWav(), 'auto', getVoiceConfig({ VOICE_ASR_API_URL: 'http://localhost/asr', VOICE_ASR_MODEL: 'whisper' }), new AbortController().signal))
+      .rejects.toMatchObject({ code: 'VOICE_TIMEOUT', status: 504, message: 'Transcription timed out. Please retry.' });
+  });
 });

@@ -6,6 +6,9 @@ loses an action item.
 
 ## Current — project level
 
+- [`voice-asr-cancellation-implementation-review-2026-10-02.md`](./voice-asr-cancellation-implementation-review-2026-10-02.md)
+  — **local ASR worker cancellation.** Compute deadline, disconnect/shutdown termination and capacity recovery pass; actual rebuilt app abort reaps the cached-model worker in 61ms. 536 tests/build pass; wider acceptance remains open. → [`todo/55`](../todo/55-voice-asr-cancellation-2026-10-02.md)
+
 - [`voice-search-commit-review-2026-10-02.md`](./voice-search-commit-review-2026-10-02.md)
   — **voice branch commit review.** Fixed retained uploads and partial moment-result handling; 534 tests and build pass. Optional local ASR compute cancellation and release acceptance remain open. → [`todo/54`](../todo/54-voice-search-commit-review-2026-10-02.md)
 

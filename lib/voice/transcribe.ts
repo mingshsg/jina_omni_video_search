@@ -23,7 +23,11 @@ export async function transcribeAudio(wav: Buffer, language: VoiceLanguage, cfg:
   try {
     const response = await fetch(cfg.asrUrl, { method: 'POST', redirect: 'error', signal,
       headers: cfg.asrKey ? { Authorization: `Bearer ${cfg.asrKey}` } : {}, body: form });
-    if (!response.ok) { await response.body?.cancel(); throw new Error('ASR request failed'); }
+    if (!response.ok) {
+      await response.body?.cancel();
+      if (response.status === 504) throw new VoiceError('VOICE_TIMEOUT', 'Transcription timed out. Please retry.', 504);
+      throw new Error('ASR request failed');
+    }
     const data = JSON.parse((await readBoundedBody(response.body, 16 * 1024, signal)).toString());
     return parseTranscript(data);
   } catch (err) {

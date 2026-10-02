@@ -29,6 +29,10 @@ HF_HUB_OFFLINE=1 /usr/local/bin/python3 scripts/voice-whisper-server.py --port 8
 
 Set `VOICE_ASR_API_URL=http://127.0.0.1:8768/v1/audio/transcriptions` and `VOICE_ASR_MODEL=mlx-community/whisper-large-v3-turbo` in the host app's ignored `.env`. The optional server uses one processing slot, bounded multipart input and in-memory WAV→NumPy decoding, with no recording files. It binds to loopback only and does not log transcripts or request bodies. It does not run in the Next.js container; use a separately configured accessible service for container deployments. This script does not install dependencies or download weights when `HF_HUB_OFFLINE=1`. A remote Whisper deployment can use the same explicit protocol configuration.
 
+Each accepted transcription runs in an owned worker process. The helper kills its process group and reaps the worker on client disconnect, graceful service shutdown or compute timeout, then releases the single slot. The default compute deadline is 25s including model load and PCM transfer; `--compute-timeout` can shorten it (greater than 0, at most 25s). Active excess requests receive 429 without queuing. Timeout returns 504, which the app preserves as `VOICE_TIMEOUT`; other worker failures stay sanitized. If the OS cannot reap a worker, the helper keeps admission closed and returns 503 for that request; subsequent requests remain busy until an operator restarts it.
+
+Model weights are loaded per request to make termination independent of the HTTP server. This increases startup work; measure representative p95 before changing performance claims. Python3 is required by the standard-library process/HTTP regression harness in `yarn test`; those tests use fake model workers and generated audio and do not require MLX or downloads.
+
 ## API
 
 `POST /api/search/voice` is multipart, Node runtime, `Cache-Control: no-store`.
@@ -55,7 +59,7 @@ Errors retain `{error:{code,message}}`: 400 invalid/empty/no speech/duration, 41
 
 Two voice requests per app process, zero waiting voice queue, 30s overall server budget and 35s browser budget. Decoder processes are killed on abort; fetch/ES transports receive AbortSignal. Audio inference also uses the existing embedding concurrency gate, with cancelled waiters removed. Existing ingest callers retain their original gate behavior. An already-submitted provider request may still be billed after cancellation.
 
-The optional local MLX helper runs transcription synchronously. Aborting its HTTP request does not interrupt model computation; its single slot remains occupied until transcription finishes. Worker-level cancellation and a compute deadline remain an open acceptance item in [todo/54](../todo/54-voice-search-commit-review-2026-10-02.md). Do not treat the app's 30s request timeout as an ASR compute deadline.
+The optional local MLX helper has its own bounded worker deadline and watches its HTTP peer for disconnect, independently of the app's 30s request budget. Worker termination/slot recovery evidence is tracked in [todo/55](../todo/55-voice-asr-cancellation-2026-10-02.md). Remote providers still need independent cancellation/retention verification. The app cannot interrupt a provider's already-completed or already-billed work.
 
 Sound Sample rejects timed-out or failed-shard responses from every moment-search branch, including the attribution searches used by All. An incomplete response is an upstream error, not an ordinary empty or successful result. Existing text/image/live callers retain their current response handling.
 
