@@ -31,6 +31,8 @@ Set `VOICE_ASR_API_URL=http://127.0.0.1:8768/v1/audio/transcriptions` and `VOICE
 
 Each accepted transcription runs in an owned worker process. The helper kills its process group and reaps the worker on client disconnect, graceful service shutdown or compute timeout, then releases the single slot. The default compute deadline is 25s including model load and PCM transfer; `--compute-timeout` can shorten it (greater than 0, at most 25s). Active excess requests receive 429 without queuing. Timeout returns 504, which the app preserves as `VOICE_TIMEOUT`; other worker failures stay sanitized. If the OS cannot reap a worker, the helper keeps admission closed and returns 503 for that request; subsequent requests remain busy until an operator restarts it.
 
+Graceful shutdown also interrupts accepted sockets that have not completed their HTTP request, so idle clients, partial headers and unfinished uploads cannot block handler shutdown. Connections receive a 10s inactivity timeout from acceptance. Unexpected errors while terminating a process group keep admission closed even if its leader exited; worker pipes still close and reap is attempted.
+
 Model weights are loaded per request to make termination independent of the HTTP server. This increases startup work; measure representative p95 before changing performance claims. Python3 is required by the standard-library process/HTTP regression harness in `yarn test`; those tests use fake model workers and generated audio and do not require MLX or downloads.
 
 ## API

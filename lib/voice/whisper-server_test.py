@@ -108,6 +108,14 @@ class WorkerTests(unittest.TestCase):
             runtime.run_transcription(SUCCESS, b'\x00' * 32000, self.client)
         self.assertEqual(self.workers, [])
 
+    def test_group_termination_error_fails_closed_and_closes_pipes(self):
+        with mock.patch.object(runtime.os, 'killpg', side_effect=PermissionError('termination denied')):
+            with self.assertRaises(runtime.WorkerCleanupFailed):
+                runtime.run_transcription(SUCCESS, b'\x00' * 32000, self.client, 2)
+        self.assertIsNotNone(self.workers[0].poll())
+        self.assertTrue(self.workers[0].stdin.closed)
+        self.assertTrue(self.workers[0].stdout.closed)
+
     def test_oversize_or_malformed_worker_result_is_rejected_and_reaped(self):
         for code in ["import sys; sys.stdout.write('x'*20000); sys.stdout.flush(); import time; time.sleep(60)",
                      "print('provider-secret-in-diagnostics')", "print('{\"text\":12}')", 'raise SystemExit(1)']:
@@ -214,6 +222,44 @@ class HttpTests(unittest.TestCase):
             start.assert_not_called()
         self.assertFalse(self.server.slot.locked())
 
+    def assert_close_interrupts_request(self, request_bytes):
+        accepted = threading.Event()
+        closed = threading.Event()
+        original_setup = service.Handler.setup
+        def setup(handler):
+            original_setup(handler)
+            accepted.set()
+        def close():
+            self.server.shutdown()
+            self.server.server_close()
+            closed.set()
+        with mock.patch.object(service.Handler, 'setup', setup):
+            peer = socket.create_connection(self.server.server_address, timeout=2)
+            try:
+                if request_bytes:
+                    peer.sendall(request_bytes)
+                self.assertTrue(accepted.wait(1))
+                closing = threading.Thread(target=close)
+                closing.start()
+                try:
+                    self.assertTrue(closed.wait(1), 'unfinished HTTP input blocked shutdown')
+                finally:
+                    peer.close()
+                    closing.join(2)
+            finally:
+                peer.close()
+
+    def test_service_close_interrupts_idle_connection(self):
+        self.assert_close_interrupts_request(b'')
+
+    def test_service_close_interrupts_partial_headers(self):
+        self.assert_close_interrupts_request(b'POST /v1/audio/transcriptions HTTP/1.1\r\n')
+
+    def test_service_close_interrupts_partial_upload(self):
+        self.assert_close_interrupts_request(
+            b'POST /v1/audio/transcriptions HTTP/1.1\r\nHost: localhost\r\n'
+            b'Content-Type: multipart/form-data; boundary=test\r\nContent-Length: 10000\r\n\r\npartial')
+
     def test_failed_reap_keeps_admission_closed(self):
         with mock.patch.object(service, 'run_transcription', side_effect=runtime.WorkerCleanupFailed):
             self.assertEqual(self.post(1), (503, {'error': 'worker_unavailable'}))
@@ -223,6 +269,10 @@ class HttpTests(unittest.TestCase):
         for timeout in [0, -1, 26, float('nan')]:
             with self.assertRaises(ValueError):
                 service.VoiceWhisperServer(('127.0.0.1', 0), compute_timeout=timeout)
+
+    def test_occupied_port_preserves_bind_error(self):
+        with self.assertRaises(OSError):
+            service.VoiceWhisperServer(self.server.server_address)
 
 
 if __name__ == '__main__':

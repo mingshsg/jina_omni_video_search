@@ -9,6 +9,6 @@ it('local Whisper helper terminates real workers and recovers HTTP capacity afte
   const result = await promisify(execFile)(process.env.VOICE_WHISPER_TEST_PYTHON ?? 'python3',
     ['-B', fileURLToPath(new URL('./whisper-server_test.py', import.meta.url))],
     { timeout: 25000, maxBuffer: 64 * 1024 });
-  expect(result.stderr).toContain('Ran 12 tests');
+  expect(result.stderr).toContain('Ran 17 tests');
   expect(result.stderr).toContain('OK');
 }, 30000);

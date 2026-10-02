@@ -11,6 +11,7 @@ import io
 import json
 import os
 import signal
+import socket
 import sys
 import threading
 import wave
@@ -30,11 +31,14 @@ class VoiceWhisperServer(ThreadingHTTPServer):
     def __init__(self, address, *, model=MODEL, compute_timeout=DEFAULT_COMPUTE_TIMEOUT, worker_command=None):
         if not 0 < compute_timeout <= DEFAULT_COMPUTE_TIMEOUT:
             raise ValueError('Compute timeout must be greater than 0 and at most 25 seconds')
+        # Initialize before binding: TCPServer also calls server_close if bind fails.
+        self.stopping = threading.Event()
+        self.connections = set()
+        self.connections_lock = threading.Lock()
         super().__init__(address, Handler)
         self.model = model
         self.compute_timeout = compute_timeout
         self.slot = threading.Lock()
-        self.stopping = threading.Event()
         # Injection is for process/HTTP tests; the CLI never accepts a command.
         self.worker_command = worker_command
 
@@ -46,7 +50,33 @@ class VoiceWhisperServer(ThreadingHTTPServer):
 
     def server_close(self):
         self.stopping.set()
+        with self.connections_lock:
+            connections = list(self.connections)
+        # Interrupt request-line/header/body reads as well as model compute.
+        # Joining non-daemon handlers alone hangs on clients still sending input.
+        for connection in connections:
+            try:
+                connection.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass  # already disconnected or closed by its handler
         super().server_close()
+
+    def get_request(self):
+        connection, address = super().get_request()
+        connection.settimeout(10)
+        with self.connections_lock:
+            if self.stopping.is_set():
+                connection.close()
+                raise OSError('Server is stopping')
+            self.connections.add(connection)
+        return connection, address
+
+    def shutdown_request(self, request):
+        try:
+            super().shutdown_request(request)
+        finally:
+            with self.connections_lock:
+                self.connections.discard(request)
 
 
 class Handler(BaseHTTPRequestHandler):

@@ -112,13 +112,21 @@ def run_transcription(command, pcm, connection, timeout=DEFAULT_COMPUTE_TIMEOUT,
         # Kill the owned group even if its leader exited while a descendant holds
         # stdout open. Admission is released only after the direct worker is reaped.
         try:
-            os.killpg(worker.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        try:
-            worker.wait(timeout=1)
-        except subprocess.TimeoutExpired:
-            raise WorkerCleanupFailed() from None
+            kill_failed = False
+            try:
+                os.killpg(worker.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            except OSError:
+                kill_failed = True
+            try:
+                worker.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                raise WorkerCleanupFailed() from None
+            if kill_failed:
+                # Even if the leader exited, descendants may still be running.
+                # Keep admission closed when group termination was not confirmed.
+                raise WorkerCleanupFailed() from None
         finally:
             worker.stdin.close()
             worker.stdout.close()
