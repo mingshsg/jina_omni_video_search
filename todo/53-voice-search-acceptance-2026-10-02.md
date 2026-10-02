@@ -3,6 +3,7 @@
 Review: [voice-search-implementation-review](../reviews/voice-search-implementation-review-2026-10-02.md). Plan/implementation tracker: [todo/52](52-voice-search-2026-10-02.md).
 
 - [x] Fix unfiltered voice submit, implicit text reruns and baseline custom-variant support; verify scoped API/browser behavior and full Node22 suite/build.
+- [x] Remove the unsupported `microphone` EUI icon from the reopen control after screenshot inspection; retain its accessible Voice search label. No such icon exists in the installed EUI registry.
 - [ ] **P2 A1** — Chrome/Safari microphone recording, permission ignored/denied, no device, 1–15s caps, supported codecs, stop/close/unmount, late/stale response and EN/ZH manual accessibility checks.
 - [ ] **P2 A2** — 30 labeled sound samples plus human review; report recall/usefulness by category/target and negative-score distributions. Enable visual/both only after their independent quality gates.
 - [ ] **P2 A3** — human multilingual transcript review and typed-versus-spoken cases with names, language switching, no-speech and current metadata/parser settings. Advertise ko/th only after fixture and quality validation.

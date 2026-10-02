@@ -3,6 +3,7 @@
 Date: 2026-10-02. Plan: [13-voice-search.md](../plan/13-voice-search.md).
 Scope: planning PR against `live-video-search`, followed by isolated implementation on `codex/voice-search` (authorized by the user on 2026-10-02).
 Planning PR: [#1 — Voice search](https://github.com/mingsorg/jina_omni_drama/pull/1).
+Implementation PR: [#2 — Voice tab, sound matching and editable transcripts](https://github.com/mingsorg/jina_omni_drama/pull/2), draft against `live-video-search`. Implementation committed at `6f66a9f`; follow-up presentation/delivery correction recorded in the same branch.
 
 ## Planning work
 

@@ -735,7 +735,7 @@ export default function SearchExperience({ voicePage = false }: { voicePage?: bo
           </EuiButton>
         </EuiFlexItem>
         {voicePage && (<EuiFlexItem grow={false}>
-          <EuiButtonEmpty iconType="microphone" onClick={() => {
+          <EuiButtonEmpty onClick={() => {
             requestSeqRef.current++;
             setSearching(false);
             setVoiceOpen((open) => !open);
