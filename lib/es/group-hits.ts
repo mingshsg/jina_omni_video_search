@@ -48,6 +48,28 @@ export type SearchHitGroup<T extends GroupableHit> = {
   end_label: string;
 };
 
+/**
+ * The up-to-`max` moment buttons shown on one scene card, chronologically
+ * ordered and always including `group.representative` (the single highest-
+ * scoring moment) — `members` is sorted by `start_ms`, so on a chained scene
+ * with more members than the button cap, the representative can otherwise
+ * fall past the visible window and never get a button (G2).
+ */
+export function pickVisibleSceneMoments<T extends GroupableHit>(
+  group: Pick<SearchHitGroup<T>, 'members' | 'representative'>,
+  max: number,
+): T[] {
+  if (max <= 0) return [];
+  if (group.members.length <= max) return group.members;
+  const head = group.members.slice(0, max);
+  if (head.some((m) => m.chunk_id === group.representative.chunk_id)) {
+    return head;
+  }
+  return [...head.slice(0, max - 1), group.representative].sort(
+    (a, b) => a.start_ms - b.start_ms,
+  );
+}
+
 /** Max ES/API window size used when oversampling for grouped top-k. */
 export const GROUPED_SEARCH_FETCH_CAP = 100;
 

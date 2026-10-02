@@ -6,6 +6,15 @@ loses an action item.
 
 ## Current — project level
 
+- [`trimmed-run-age-guard-and-scene-buttons-code-review-2026-10-02.md`](./trimmed-run-age-guard-and-scene-buttons-code-review-2026-10-02.md)
+  — **One P2 and two P3s found, all fixed.** The age guard now fails closed
+  on any unreadable entry instead of treating it as "nothing newer" (both
+  the unreadable-subdirectory and vanished-mid-scan cases are reproduced as
+  regression tests); the best-scoring moment can no longer be excluded from
+  a long scene's button row; the stale duplicate docs are archived. Tests
+  (809) and build pass.
+  → [`todo/52`](../todo/52-trimmed-run-age-guard-and-scene-buttons-2026-10-02.md)
+
 - [`run-history-followup-and-scene-link-code-review-2026-10-01.md`](./run-history-followup-and-scene-link-code-review-2026-10-01.md)
   — **No blocking issues.** Independent recheck of the earlier-run labeling,
   trimmed-run GC, and scene-linking commits that landed after `todo/50`'s

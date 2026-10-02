@@ -38,6 +38,7 @@ import {
 import {
   groupSearchHitsTopK,
   oversampleForGroupedTopK,
+  pickVisibleSceneMoments,
   SCENE_MOMENT_BUTTONS_MAX,
 } from '@/lib/es/group-hits';
 import { formatChunkPresetLabel } from '@/lib/ingest/chunk-presets';
@@ -541,7 +542,7 @@ export default function ImageSearchPage() {
                           <>
                             <EuiSpacer size="xs" />
                             <EuiFlexGroup gutterSize="xs" wrap>
-                              {group.members.slice(0, SCENE_MOMENT_BUTTONS_MAX).map((m) => (
+                              {pickVisibleSceneMoments(group, SCENE_MOMENT_BUTTONS_MAX).map((m) => (
                                 <EuiFlexItem key={m.chunk_id} grow={false}>
                                   <EuiButton
                                     size="s"

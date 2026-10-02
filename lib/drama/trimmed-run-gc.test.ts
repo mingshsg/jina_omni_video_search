@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -154,6 +154,66 @@ describe('sweepTrimmedDramaRuns', () => {
     });
     expect(result.candidates).toEqual([]);
     expect(fs.existsSync(active)).toBe(true);
+  });
+
+  it('G1 regression: treats a file that vanishes mid-scan as unknown, not as nothing newer', async () => {
+    makeRun('v1', 'cur');
+    const active = makeRun('v1', 'active'); // 2h old — would otherwise qualify
+    const vanished = path.join(active, 'subtitles', 'en.srt');
+    const realStatSync = fs.statSync;
+    const statSyncSpy = vi
+      .spyOn(fs, 'statSync')
+      .mockImplementation(((
+        p: Parameters<typeof fs.statSync>[0],
+        opts?: Parameters<typeof fs.statSync>[1],
+      ) => {
+        if (String(p) === vanished) {
+          const err = new Error('ENOENT: no such file or directory');
+          (err as NodeJS.ErrnoException).code = 'ENOENT';
+          throw err;
+        }
+        return realStatSync(p, opts as never);
+      }) as typeof fs.statSync);
+    try {
+      const result = await sweepTrimmedDramaRuns({
+        mediaRoot,
+        getAsset: async () => asset(run('cur')),
+        minAgeMs: HOUR,
+        apply: true,
+      });
+      expect(result.candidates).toEqual([]);
+      expect(result.skipped).toEqual([
+        { videoId: 'v1', runId: 'active', reason: 'scan_error' },
+      ]);
+      expect(fs.existsSync(active)).toBe(true);
+    } finally {
+      statSyncSpy.mockRestore();
+    }
+  });
+
+  it('G1 regression: treats an unreadable subdirectory as unknown, not as nothing newer', async () => {
+    if (process.getuid?.() === 0) return; // root bypasses permission bits
+    makeRun('v1', 'cur');
+    const active = makeRun('v1', 'active', 2 * HOUR);
+    const workDir = path.join(active, 'work');
+    fs.mkdirSync(workDir);
+    fs.writeFileSync(path.join(workDir, 'transcript.part'), 'x');
+    fs.chmodSync(workDir, 0o000);
+    try {
+      const result = await sweepTrimmedDramaRuns({
+        mediaRoot,
+        getAsset: async () => asset(run('cur')),
+        minAgeMs: HOUR,
+        apply: true,
+      });
+      expect(result.candidates).toEqual([]);
+      expect(result.skipped).toEqual([
+        { videoId: 'v1', runId: 'active', reason: 'scan_error' },
+      ]);
+      expect(fs.existsSync(active)).toBe(true);
+    } finally {
+      fs.chmodSync(workDir, 0o755);
+    }
   });
 
   it('stops at the candidate cap', async () => {

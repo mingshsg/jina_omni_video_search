@@ -3,7 +3,9 @@ import {
   groupSearchHits,
   groupSearchHitsTopK,
   oversampleForGroupedTopK,
+  pickVisibleSceneMoments,
   type GroupableHit,
+  type SearchHitGroup,
 } from './group-hits';
 
 function hit(
@@ -186,6 +188,44 @@ describe('groupSearchHits', () => {
       3,
     );
     expect(groups).toHaveLength(3);
+  });
+});
+
+describe('pickVisibleSceneMoments', () => {
+  function group(
+    members: GroupableHit[],
+    representative: GroupableHit,
+  ): Pick<SearchHitGroup<GroupableHit>, 'members' | 'representative'> {
+    return { members, representative };
+  }
+
+  it('returns every member when under the cap', () => {
+    const members = [hit({ chunk_id: 'a', start_ms: 0 }), hit({ chunk_id: 'b', start_ms: 10_000 })];
+    expect(pickVisibleSceneMoments(group(members, members[0]!), 12)).toEqual(members);
+  });
+
+  it('keeps the first N when the representative is already among them', () => {
+    const members = Array.from({ length: 14 }, (_, i) =>
+      hit({ chunk_id: `c${i}`, start_ms: i * 10_000, score: i === 2 ? 5 : 1 }),
+    );
+    const visible = pickVisibleSceneMoments(group(members, members[2]!), 12);
+    expect(visible).toHaveLength(12);
+    expect(visible.map((m) => m.chunk_id)).toEqual(members.slice(0, 12).map((m) => m.chunk_id));
+  });
+
+  // G2 regression: on a long chained scene, the best-scoring moment can sit
+  // past the button cap by start time alone; it must still get a button.
+  it('swaps in the representative, chronologically, when it falls past the cap', () => {
+    const members = Array.from({ length: 14 }, (_, i) =>
+      hit({ chunk_id: `c${i}`, start_ms: i * 10_000, score: i === 13 ? 5 : 1 }),
+    );
+    const representative = members[13]!;
+    const visible = pickVisibleSceneMoments(group(members, representative), 12);
+    expect(visible).toHaveLength(12);
+    expect(visible.some((m) => m.chunk_id === representative.chunk_id)).toBe(true);
+    expect(visible.map((m) => m.start_ms)).toEqual(
+      [...visible.map((m) => m.start_ms)].sort((a, b) => a - b),
+    );
   });
 });
 

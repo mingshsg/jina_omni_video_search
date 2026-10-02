@@ -25,7 +25,8 @@ export interface TrimmedRunCandidate {
 
 export interface TrimmedRunSkip {
   videoId: string;
-  reason: 'asset_missing' | 'run_active';
+  reason: 'asset_missing' | 'run_active' | 'scan_error';
+  runId?: string;
 }
 
 export interface TrimmedRunSweepResult {
@@ -71,28 +72,50 @@ function hasActiveDramaStatus(asset: VideoAssetDocument): boolean {
  * Total size and newest mtime anywhere in the tree. A long run writing only
  * into subdirectories leaves the run directory's own mtime old, so the age
  * guard must use the newest entry.
+ *
+ * Fails closed: any entry this can't fully stat (an unreadable subdirectory,
+ * or a file that vanished between `readdir` and `stat` — evidence of
+ * concurrent activity either way) sets `complete: false`, so the caller
+ * skips the run instead of treating the unreadable part as "nothing newer"
+ * (G1 — a GC guard must not silently under-report recency).
  */
-function treeStats(dir: string): { bytes: number; newestMtimeMs: number } {
+function treeStats(dir: string): {
+  bytes: number;
+  newestMtimeMs: number;
+  complete: boolean;
+} {
   let bytes = 0;
-  let newestMtimeMs = 0;
+  let newestMtimeMs: number;
   try {
     newestMtimeMs = fs.statSync(dir).mtimeMs;
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-      const p = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        const sub = treeStats(p);
-        bytes += sub.bytes;
-        newestMtimeMs = Math.max(newestMtimeMs, sub.newestMtimeMs);
-      } else if (entry.isFile()) {
+  } catch {
+    return { bytes: 0, newestMtimeMs: 0, complete: false };
+  }
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return { bytes, newestMtimeMs, complete: false };
+  }
+  let complete = true;
+  for (const entry of entries) {
+    const p = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      const sub = treeStats(p);
+      bytes += sub.bytes;
+      newestMtimeMs = Math.max(newestMtimeMs, sub.newestMtimeMs);
+      if (!sub.complete) complete = false;
+    } else if (entry.isFile()) {
+      try {
         const stat = fs.statSync(p);
         bytes += stat.size;
         newestMtimeMs = Math.max(newestMtimeMs, stat.mtimeMs);
+      } catch {
+        complete = false;
       }
     }
-  } catch {
-    /* ignore */
   }
-  return { bytes, newestMtimeMs };
+  return { bytes, newestMtimeMs, complete };
 }
 
 function listDirs(dir: string): string[] {
@@ -155,7 +178,11 @@ export async function sweepTrimmedDramaRuns(opts: {
     for (const runId of runIds) {
       if (referenced.has(runId)) continue;
       const runDir = path.join(dramaRoot, runId);
-      const { bytes, newestMtimeMs } = treeStats(runDir);
+      const { bytes, newestMtimeMs, complete } = treeStats(runDir);
+      if (!complete) {
+        out.skipped.push({ videoId, runId, reason: 'scan_error' });
+        continue;
+      }
       if (newestMtimeMs === 0 || now - newestMtimeMs < opts.minAgeMs) continue;
       if (out.candidates.length >= maxRuns) {
         out.stoppedEarly = true;
