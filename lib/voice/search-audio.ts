@@ -64,6 +64,6 @@ export async function searchAudioMoments(request: Extract<VoiceRequest, { mode: 
   if (!coverage.count && request.target === 'audio') return { kind: 'moments', hits: [], meta: { ...meta, took_ms: Math.round(performance.now() - start) } };
   const embedded = await embedQueryAudio(wav, cfg, signal);
   const result = await executeChunkSearch({ index: cfg.ES_INDEX_CHUNKS, modality: request.target, sortBy: sort, size: request.size,
-    filters, sourceFields: FILE_SOURCE_FIELDS, queryVectorMode: { kind: 'vector', vector: embedded.vector }, signal }, cfg);
+    filters, sourceFields: FILE_SOURCE_FIELDS, queryVectorMode: { kind: 'vector', vector: embedded.vector }, signal, requireCompleteResults: true }, cfg);
   return { kind: 'moments', hits: result.hits, meta: { ...meta, took_ms: Math.round(performance.now() - start), rank_window_size: result.rank_window_size } };
 }

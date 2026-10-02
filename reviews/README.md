@@ -6,6 +6,9 @@ loses an action item.
 
 ## Current — project level
 
+- [`voice-search-commit-review-2026-10-02.md`](./voice-search-commit-review-2026-10-02.md)
+  — **voice branch commit review.** Fixed retained uploads and partial moment-result handling; 534 tests and build pass. Optional local ASR compute cancellation and release acceptance remain open. → [`todo/54`](../todo/54-voice-search-commit-review-2026-10-02.md)
+
 - [`voice-search-implementation-review-2026-10-02.md`](./voice-search-implementation-review-2026-10-02.md)
   — **separate Voice tab and file-video voice service.** Node22 suite/build and scoped EIS/ASR/API/browser checks pass; microphone, labeled relevance, performance and deployment acceptance remain open. → [`todo/53`](../todo/53-voice-search-acceptance-2026-10-02.md)
 

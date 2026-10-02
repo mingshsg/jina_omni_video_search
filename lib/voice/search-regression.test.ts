@@ -9,6 +9,22 @@ beforeEach(() => {
     _source: { video_id: 'video', variant_id: 'variant', chunk_index: 1, start_ms: 1000, end_ms: 2000, video_title: 'Title' } }] } });
 });
 describe('shared search preserves legacy file/image/live calls', () => {
+  it.each([
+    ['audio', 0], ['visual', 0], ['both', 0], ['both', 1], ['both', 2],
+  ] as const)('rejects incomplete voice results for %s branch %i', async (modality, failedBranch) => {
+    const params = { index: 'chunks', modality, filters: [], sourceFields: [],
+      queryVectorMode: { kind: 'vector' as const, vector: [1, 0] } };
+    for (const failure of [{ timed_out: true }, { _shards: { failed: 1 } }]) {
+      mocks.search.mockReset().mockResolvedValue({ hits: { hits: [] } });
+      for (let i = 0; i < failedBranch; i++) mocks.search.mockResolvedValueOnce({ hits: { hits: [] } });
+      mocks.search.mockResolvedValueOnce({ ...failure, hits: { hits: [] } });
+      await expect(executeChunkSearch({ ...params, requireCompleteResults: true }, voiceTestConfig()))
+        .rejects.toThrow('incomplete results');
+      // Preserve existing callers, including their treatment of partial responses.
+      mocks.search.mockReset().mockResolvedValue({ ...failure, hits: { hits: [] } });
+      await expect(executeChunkSearch(params, voiceTestConfig())).resolves.toMatchObject({ hits: [] });
+    }
+  });
   it.each(['visual', 'audio', 'both'] as const)('keeps response and request body identical with optional cancellation: %s', async (modality) => {
     const cfg = voiceTestConfig();
     const params = { index: 'chunks', modality, size: 2, filters: [{ term: { variant_id: 'variant' } }],

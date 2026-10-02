@@ -119,7 +119,9 @@ export function VoiceSearchPanel(props: {
     </EuiFlexGroup>
     <EuiSpacer size="s" />
     <EuiFormRow label={t.upload}><EuiFilePicker initialPromptText={t.upload} accept="audio/*,.webm,.ogg,.mp4,.m4a,.wav,.mp3,.flac" disabled={busy || capturing || !available}
-      onChange={(files) => { const file = files?.[0]; if (!file) return; invalidate(); recorderRef.current?.dispose(); setState('preview');
+      onChange={(files) => { const file = files?.[0]; invalidate(); recorderRef.current?.dispose();
+        if (!file) { setClip(null); setState('idle'); setError(null); return; }
+        setState('preview');
         if (file.size > VOICE_UPLOAD_MAX) { setError(t.tooLarge); setClip(null); } else { setError(null); setClip(file); } }} /></EuiFormRow>
     {preview && <><EuiSpacer size="s" /><audio controls src={preview} aria-label={t.preview} /></>}
     {error && <><EuiSpacer size="s" /><EuiCallOut color="danger" size="s" title={error} /></>}

@@ -55,6 +55,10 @@ Errors retain `{error:{code,message}}`: 400 invalid/empty/no speech/duration, 41
 
 Two voice requests per app process, zero waiting voice queue, 30s overall server budget and 35s browser budget. Decoder processes are killed on abort; fetch/ES transports receive AbortSignal. Audio inference also uses the existing embedding concurrency gate, with cancelled waiters removed. Existing ingest callers retain their original gate behavior. An already-submitted provider request may still be billed after cancellation.
 
+The optional local MLX helper runs transcription synchronously. Aborting its HTTP request does not interrupt model computation; its single slot remains occupied until transcription finishes. Worker-level cancellation and a compute deadline remain an open acceptance item in [todo/54](../todo/54-voice-search-commit-review-2026-10-02.md). Do not treat the app's 30s request timeout as an ASR compute deadline.
+
+Sound Sample rejects timed-out or failed-shard responses from every moment-search branch, including the attribution searches used by All. An incomplete response is an upstream error, not an ordinary empty or successful result. Existing text/image/live callers retain their current response handling.
+
 The limiter is a single-process demo boundary. Replicas require shared admission control. Review proxy/body logging and provider retention separately. Rebuild `app` after code changes before validating a Docker demo: `docker compose up -d --build app`, then verify its revision/image creation time. Tests on a host build do not verify the running container.
 
 See [todo/52](../todo/52-voice-search-2026-10-02.md) for exact current gates. Transport verification, unit/build success and unlabeled example hits do not establish 30-sample relevance, human transcript quality, p95/cost, Safari recording or deployment readiness. Live voice querying is future scoped work.

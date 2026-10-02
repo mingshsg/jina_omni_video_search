@@ -139,6 +139,8 @@ export interface ImageSearchResult {
 export interface ExecuteChunkSearchParams {
   /** Optional cancellation for the new voice query path; legacy callers unchanged. */
   signal?: AbortSignal;
+  /** Voice opts in to rejecting partial results; legacy callers retain their behavior. */
+  requireCompleteResults?: boolean;
   index: string;
   modality: SearchModality;
   sortBy?: SearchSortBy;
@@ -246,8 +248,13 @@ export async function executeChunkSearch(
   const config = cfg ?? getConfig();
   const client = getEsClient();
   const size = clampSearchSize(params.size);
-  const search = (body: Parameters<typeof client.search>[0]) =>
-    params.signal ? client.search(body, { signal: params.signal }) : client.search(body);
+  const search = async (body: Parameters<typeof client.search>[0]) => {
+    const response = await (params.signal ? client.search(body, { signal: params.signal }) : client.search(body));
+    if (params.requireCompleteResults && (response.timed_out || (response._shards?.failed ?? 0) > 0)) {
+      throw new Error('Chunk search returned incomplete results.');
+    }
+    return response;
+  };
   const rankWindow = effectiveRankWindowSize(config, size);
   const filters = params.filters;
   const index = params.index;

@@ -28,7 +28,7 @@ describe('voice sound-search scope and identity', () => {
     const signal = new AbortController().signal;
     const result = await searchAudioMoments(input, testWav(), 1200, cfg, signal);
     expect(mocks.embed).toHaveBeenCalledTimes(1);
-    expect(mocks.execute.mock.calls[0][0]).toMatchObject({ modality: 'audio', sortBy: 'audio', signal,
+    expect(mocks.execute.mock.calls[0][0]).toMatchObject({ modality: 'audio', sortBy: 'audio', signal, requireCompleteResults: true,
       filters: [{ term: { variant_id: variant.variant_id } }, { terms: { video_id: ['ready-video'] } }], queryVectorMode: { kind: 'vector' } });
     expect(result.meta.audio_channel_status).toBe('ok');
   });
