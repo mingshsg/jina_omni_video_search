@@ -2,6 +2,7 @@
 
 Date: 2026-10-02. Plan: [13-voice-search.md](../plan/13-voice-search.md).
 Scope: planning PR only against `live-video-search`; feature implementation is future work.
+Planning PR: [#1 — Voice search](https://github.com/mingsorg/jina_omni_drama/pull/1).
 
 ## Planning work
 
@@ -12,7 +13,7 @@ Scope: planning PR only against `live-video-search`; feature implementation is f
 - [x] Define inputs, processing, DTOs, failure handling, privacy/retention, cancellation, budgets and acceptance gates.
 - [x] Isolate branch `codex/voice-search-plan` from `origin/live-video-search` (`db23b88`), excluding enrichment commits and user-owned untracked duplicate review/tracker files.
 - [x] Run full `yarn test` and `yarn build`; record counts, runtime and limitations below.
-- [ ] Inspect final diff, commit only plan/tracker, push and open planning PR; attach PR to this chat.
+- [x] Inspect final diff, commit only plan/tracker, push and open planning PR; attach PR to this chat. PR #1 targets `live-video-search`; feature implementation remains open below.
 
 ## Implementation sequence — not authorized by this planning request
 
