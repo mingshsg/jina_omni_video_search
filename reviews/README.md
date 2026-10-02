@@ -6,6 +6,9 @@ loses an action item.
 
 ## Current — project level
 
+- [`voice-search-implementation-review-2026-10-02.md`](./voice-search-implementation-review-2026-10-02.md)
+  — **separate Voice tab and file-video voice service.** Node22 suite/build and scoped EIS/ASR/API/browser checks pass; microphone, labeled relevance, performance and deployment acceptance remain open. → [`todo/53`](../todo/53-voice-search-acceptance-2026-10-02.md)
+
 - [`project-level-review-2026-09-23.md`](./project-level-review-2026-09-23.md)
   — **repository as a whole.** `next@14.2.35` carries a critical
   unauthenticated RCE (image optimizer route on by default, no 14.x patch

@@ -26,7 +26,8 @@
     "probe-query-parser": "tsx scripts/probe-query-parser.ts",
     "probe-jina-suggest": "tsx scripts/probe-jina-suggest.ts",
     "download-agent-builder-artefacts": "tsx scripts/download-agent-builder-artefacts.ts",
-    "ensure-suggest-agent": "tsx scripts/ensure-suggest-agent.ts"
+    "ensure-suggest-agent": "tsx scripts/ensure-suggest-agent.ts",
+    "probe-voice": "tsx scripts/probe-voice.ts"
   },
   "dependencies": {
     "@elastic/datemath": "^5.0.3",

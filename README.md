@@ -132,6 +132,7 @@ Borealis **8.0.0** · Emotion 11 · **no Tailwind**. EUI is client-side only
 | [docs/data-flow.md](docs/data-flow.md) | Ingest + search flows |
 | [docs/data-model.md](docs/data-model.md) | ES mappings |
 | [docs/api-contract.md](docs/api-contract.md) | REST + SSE |
+| [docs/voice-search.md](docs/voice-search.md) | Voice tab, audio queries, transcription setup and acceptance gates |
 | [docs/ui-mockup.md](docs/ui-mockup.md) | Built UI layout |
 | [docs/operations.md](docs/operations.md) | Measured spike / probe / E2E numbers |
 | [docs/live-video-architecture.md](docs/live-video-architecture.md) | Planned remote live-feed architecture |

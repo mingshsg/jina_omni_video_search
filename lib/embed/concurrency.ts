@@ -14,25 +14,35 @@ export class ConcurrencyGate {
     }
   }
 
-  async run<T>(fn: () => Promise<T>): Promise<T> {
-    await this.acquire();
+  async run<T>(fn: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+    await this.acquire(signal);
     try {
+      signal?.throwIfAborted();
       return await fn();
     } finally {
       this.release();
     }
   }
 
-  private acquire(): Promise<void> {
+  private acquire(signal?: AbortSignal): Promise<void> {
+    if (signal?.aborted) return Promise.reject(signal.reason);
     if (this.active < this.limit) {
       this.active++;
       return Promise.resolve();
     }
-    return new Promise((resolve) => {
-      this.queue.push(() => {
+    return new Promise((resolve, reject) => {
+      const abort = () => {
+        const index = this.queue.indexOf(ready);
+        if (index >= 0) this.queue.splice(index, 1);
+        reject(signal?.reason);
+      };
+      const ready = () => {
+        signal?.removeEventListener('abort', abort);
         this.active++;
         resolve();
-      });
+      };
+      signal?.addEventListener('abort', abort, { once: true });
+      this.queue.push(ready);
     });
   }
 

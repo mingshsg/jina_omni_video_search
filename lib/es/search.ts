@@ -137,6 +137,8 @@ export interface ImageSearchResult {
  * File routes keep defaults; live forces query_vector + custom filters/mapper.
  */
 export interface ExecuteChunkSearchParams {
+  /** Optional cancellation for the new voice query path; legacy callers unchanged. */
+  signal?: AbortSignal;
   index: string;
   modality: SearchModality;
   sortBy?: SearchSortBy;
@@ -244,6 +246,8 @@ export async function executeChunkSearch(
   const config = cfg ?? getConfig();
   const client = getEsClient();
   const size = clampSearchSize(params.size);
+  const search = (body: Parameters<typeof client.search>[0]) =>
+    params.signal ? client.search(body, { signal: params.signal }) : client.search(body);
   const rankWindow = effectiveRankWindowSize(config, size);
   const filters = params.filters;
   const index = params.index;
@@ -280,7 +284,7 @@ export async function executeChunkSearch(
   if (params.modality !== 'both') {
     const field =
       params.modality === 'visual' ? 'embedding_video' : 'embedding_audio';
-    const resp = await client.search({
+    const resp = await search({
       index,
       size: collapse ? fetchSize : size,
       _source: sourceFields,
@@ -352,11 +356,11 @@ export async function executeChunkSearch(
   });
 
   const [rrfResp, visualResp, audioResp] = await Promise.all([
-    client.search(rrfBody as Parameters<typeof client.search>[0]),
-    client.search(
+    search(rrfBody as Parameters<typeof client.search>[0]),
+    search(
       attrBody('embedding_video') as Parameters<typeof client.search>[0],
     ),
-    client.search(
+    search(
       attrBody('embedding_audio') as Parameters<typeof client.search>[0],
     ),
   ]);

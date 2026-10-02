@@ -1,9 +1,9 @@
 # Plan 13 — Short-recording voice search
 
-Date: 2026-10-02. Status: **planning only; implementation and live acceptance NOT RUN**.
+Date: 2026-10-02. Status: **implementation authorized and implemented on `codex/voice-search`; scoped validation recorded in todo/52, full acceptance pending**.
 Tracker: [todo/52](../todo/52-voice-search-2026-10-02.md).
 PR base: `live-video-search` at `db23b8889761f53cb304d147ec2f8fd81cb138a7`.
-No application code, dependencies, indices, provider configuration, or media are changed by this PR.
+The original planning PR #1 changed only this plan and its tracker. The subsequent implementation PR adds code and operations documents without index migrations or ingestion changes.
 
 ## Goal and confirmed product decisions
 
@@ -42,11 +42,11 @@ No chunk re-embedding or mapping migration is expected for compatible existing v
 
 The tracked base P1s in `todo/22`, `todo/30`, `todo/32` are checked closed. The enrichment checkout has unchecked P1-section entries F1–F4 in `todo/37`; `todo/38` records subsequent fixes and still-owed runtime acceptance. An untracked duplicate `todo/32 … (1).md` also retains a stale open R1, while tracked `todo/32` records its fix. Preserve those records; do not close them based on this planning pass.
 
-The user's explicit request for a new planning PR authorizes this document despite AGENTS.md's general freeze on new plans with open P1 trackers. **It does not authorize implementing voice search or resolving unrelated blockers.** Before feature implementation, reconcile tracked P1 dispositions and resolve any genuinely open P1 on the implementation base, with verification evidence. Track that prerequisite in todo/52. This planning PR makes no project-readiness claim.
+The user's explicit request for a new planning PR authorized this document despite AGENTS.md's general freeze on new plans with open P1 trackers. **Implementation was subsequently authorized on 2026-10-02.** Before feature implementation, reconcile tracked P1 dispositions and resolve any genuinely open P1 on the implementation base, with verification evidence. Track that prerequisite in todo/52. This planning PR makes no project-readiness claim.
 
 ## Browser experience
 
-Add a “Voice search” control beside the current text query, opening a compact recording panel. Use EUI and existing EN/ZH localization. Show two choices, **Sound Sample** selected initially and **Spoken Request** selectable. Initial mode is not restored from storage; a prior spoken-mode session must not change the default on a new panel opening.
+**Updated user decision (2026-10-02, implementation):** add a separate **Voice search** navigation tab at `/search-voice`. Reuse the existing file-search experience for controls, moment cards and playback; mount the recording panel on that page. The ordinary Search page keeps its text flow. Use EUI and existing EN/ZH localization. Show two choices, **Sound Sample** selected initially and **Spoken Request** selectable. Initial mode is not restored from storage; a prior spoken-mode session must not change the default on a new panel opening.
 
 State machine: `idle → requesting_permission → recording → preview → processing → results|transcript_review|error`. Cancel/close returns to idle and releases recorder resources. No upload occurs before explicit Search/Transcribe. Recording may continue into preview at the duration cap, but never automatically submits.
 
@@ -120,7 +120,7 @@ Output genuine mono 16 kHz signed 16-bit PCM WAV bytes, at most about 0.5 MiB fo
 
 1. Validate request, capture a stable request scope and enumerate eligible **ready** assets for the requested variant plus hard filters. Empty scope short-circuits before embedding. Enumeration-limit errors fail closed, never widen to global search.
 2. Load the recorded variant stack from asset records and assert compatibility with the active provider, including model, passage task, dims, normalization and variant/proxy identity. Treat query-task pairing separately: query task need not equal the stored passage task, but the provider's query/passsage pairing must be verified. Reject missing/contradictory stack evidence. Do not trust a client-supplied variant ID alone.
-3. Prepare WAV once and call `createEmbeddingProvider(cfg).embedAudio(wav, 'query')` once. Require exact configured dimension count, finite components and nonzero norm; respect existing normalization ownership. Never route EIS audio through a text `query_vector_builder`.
+3. Prepare WAV once and call `embedQueryAudio(wav, cfg, signal)` once. This query-only adapter retains the existing provider audio body but adds bounded responses, AbortSignal and zero retries; the existing provider interface has no cancellation contract, so ingest transport remains unchanged. Require exact configured dimension count, finite components and nonzero norm; respect existing normalization ownership. Never route EIS audio through a text `query_vector_builder`.
 4. Reuse `executeChunkSearch` with explicit `QueryVectorMode` and the existing chunk filter builder. Target `audio` uses `embedding_audio` and audio sort; `visual` uses `embedding_video` and visual sort; `both` uses the existing RRF and attribution behavior. Reuse its weights, candidate window and rank constant; no raw cross-channel score addition or audio-specific new `SearchSortBy` member.
 5. Return read-only moment hits and operational metadata. Shared helpers may be extracted from `lib/es/search.ts` only with existing text/image/live regression tests proving responses and filters unchanged. Do not add BM25 or automatic transcript fusion to Sound Sample in MVP.
 
@@ -151,17 +151,17 @@ Keep the feature planning PR separate from blocker fixes and implementation. Imp
 
 | Gate | Required evidence / proposed target | Current result |
 | --- | --- | --- |
-| Request/default contract | Omitted mode is sound; explicit modes work; malformed/duplicate fields, oversize streaming body, MIME spoof, video-only, duration boundaries and unknown variants fail predictably | NOT RUN |
-| Unit/service contracts | Tests under `lib/**/*.test.ts`: filters/ready isolation, one audio embedding, empty-scope zero calls, missing audio, finite/dimension checks, stale responses, cancellation/resource release, API union and provider sanitization | NOT RUN |
-| Browser capture | Current Chrome + Safari desktop; supported MIME → valid WAV → search, permission ignored/denied, no device, upload fallback, cap, preview, mode switch, close/unmount and delayed responses. HTTPS and localhost; EN/ZH accessible controls | NOT RUN |
-| Provider/server acceptance | Real selected endpoint accepts exact WAV/query body; compatibility and task pairing verified, no fallback across stacks. Binary support for one provider never proves the others | NOT RUN |
-| Spoken-text parity | Reviewed transcript submitted with same mode/filter/parser settings yields same request and ranked results as typed text; EN/ZH first, ko/th only when tested. Named-actor corrections and no-speech negatives | NOT RUN |
-| Audio relevance | At least 30 manually labeled samples, including speech, environmental sound and music, with repeat examples/noisy/mismatched-language negatives. Proposed Recall@5 ≥ 0.80 on labeled-positive samples, reported per category and target. Human review separately checks top-5 usefulness; exact source identity is not required | NOT RUN |
-| Negative relevance | Silence/near-silence, unrelated sound and corpus with no audio; zero vectors rejected; no fabricated “confident match.” Report hard-negative top-score distribution before deciding any cutoff | NOT RUN |
-| Latency/cost | ≥100 searches/mode on a fixed documented corpus/variant/deployment, concurrency 1 and 2, cold/warm split. Provisional stop-to-results p95 ≤5s sound; stop-to-transcript p95 ≤8s speech. Exclude recording and human review time; report stage latency/requests/usage and pricing-derived cost rather than inventing a dollar threshold | NOT RUN |
-| Read-only/regression | Compare chunk counts/vectors/variant/file paths and metadata revisions before/after voice queries. Existing text/image/library/media/live route regressions unchanged; no provider cross-mixing | NOT RUN |
-| Host build/full suite | `yarn test`: 62 files / 447 tests pass. `yarn build`: compile/typecheck/static generation pass. Yarn 1.22.22, bundled Node 24.19.0, existing dependency install shared read-only through a local symlink. These validate the planning branch baseline, not voice behavior | PASS (Node 24); Node 22 NOT RUN |
-| Runtime deployment | Rebuild `app` after implementation; check image/revision and exercise UI/API in that container. Rebuild worker only if worker changes are later authorized | NOT RUN |
+| Request/default contract | Omitted mode is sound; explicit modes work; malformed/duplicate fields, oversize streaming body, MIME spoof, video-only, duration boundaries and unknown variants fail predictably | Pending; see todo/52 for scoped implementation evidence |
+| Unit/service contracts | Tests under `lib/**/*.test.ts`: filters/ready isolation, one audio embedding, empty-scope zero calls, missing audio, finite/dimension checks, stale responses, cancellation/resource release, API union and provider sanitization | Pending; see todo/52 for scoped implementation evidence |
+| Browser capture | Current Chrome + Safari desktop; supported MIME → valid WAV → search, permission ignored/denied, no device, upload fallback, cap, preview, mode switch, close/unmount and delayed responses. HTTPS and localhost; EN/ZH accessible controls | Pending; see todo/52 for scoped implementation evidence |
+| Provider/server acceptance | Real selected endpoint accepts exact WAV/query body; compatibility and task pairing verified, no fallback across stacks. Binary support for one provider never proves the others | Pending; see todo/52 for scoped implementation evidence |
+| Spoken-text parity | Reviewed transcript submitted with same mode/filter/parser settings yields same request and ranked results as typed text; EN/ZH first, ko/th only when tested. Named-actor corrections and no-speech negatives | Pending; see todo/52 for scoped implementation evidence |
+| Audio relevance | At least 30 manually labeled samples, including speech, environmental sound and music, with repeat examples/noisy/mismatched-language negatives. Proposed Recall@5 ≥ 0.80 on labeled-positive samples, reported per category and target. Human review separately checks top-5 usefulness; exact source identity is not required | Pending; see todo/52 for scoped implementation evidence |
+| Negative relevance | Silence/near-silence, unrelated sound and corpus with no audio; zero vectors rejected; no fabricated “confident match.” Report hard-negative top-score distribution before deciding any cutoff | Pending; see todo/52 for scoped implementation evidence |
+| Latency/cost | ≥100 searches/mode on a fixed documented corpus/variant/deployment, concurrency 1 and 2, cold/warm split. Provisional stop-to-results p95 ≤5s sound; stop-to-transcript p95 ≤8s speech. Exclude recording and human review time; report stage latency/requests/usage and pricing-derived cost rather than inventing a dollar threshold | Pending; see todo/52 for scoped implementation evidence |
+| Read-only/regression | Compare chunk counts/vectors/variant/file paths and metadata revisions before/after voice queries. Existing text/image/library/media/live route regressions unchanged; no provider cross-mixing | Pending; see todo/52 for scoped implementation evidence |
+| Host build/full suite | `yarn test`: 62 files / 447 tests pass. `yarn build`: compile/typecheck/static generation pass. Yarn 1.22.22, bundled Node 24.19.0, existing dependency install shared read-only through a local symlink. These validate the planning branch baseline, not voice behavior | Historical baseline PASS; final Node 22 implementation PASS in todo/52 |
+| Runtime deployment | Rebuild `app` after implementation; check image/revision and exercise UI/API in that container. Rebuild worker only if worker changes are later authorized | Pending; see todo/52 for scoped implementation evidence |
 
 Targets are proposed acceptance thresholds, not measured claims. Human relevance review remains separate from automated test/build success. If the capability spike finds poor cross-modal quality, ship only targets that pass and return unavailable for unverified targets; changing provider for indexed variants requires a separate reindex/variant decision.
 
@@ -173,4 +173,4 @@ Targets are proposed acceptance thresholds, not measured claims. Human relevance
 - [MDN MediaRecorder](https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder): MIME capability detection, recorded blobs and lifecycle events. Container support must still be measured in selected browsers.
 - [ffmpeg protocol documentation](https://ffmpeg.org/ffmpeg-protocols.html): pipe I/O and protocol restrictions; codec/framing/resource behavior requires integration tests.
 
-No billed provider calls, microphone recording, live Elasticsearch queries, container rebuilds or filesystem deletions were performed for this plan.
+The original planning PR performed no provider calls or live Elasticsearch queries. Implementation performed the scoped provider/API/browser checks in todo/52. No microphone capture, container rebuild or filesystem deletion was performed.
