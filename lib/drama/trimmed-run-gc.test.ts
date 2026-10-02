@@ -18,7 +18,9 @@ function makeRun(videoId: string, runId: string, ageMs = 2 * HOUR): string {
   fs.mkdirSync(path.join(dir, 'subtitles'), { recursive: true });
   fs.writeFileSync(path.join(dir, 'subtitles', 'en.srt'), 'abc');
   const at = new Date(Date.now() - ageMs);
-  fs.utimesSync(dir, at, at);
+  for (const p of [path.join(dir, 'subtitles', 'en.srt'), path.join(dir, 'subtitles'), dir]) {
+    fs.utimesSync(p, at, at);
+  }
   return dir;
 }
 
@@ -135,6 +137,23 @@ describe('sweepTrimmedDramaRuns', () => {
     });
     expect(result.candidates).toEqual([]);
     expect(fs.existsSync(fresh)).toBe(true);
+  });
+
+  it('keeps an old run directory that has a recently written nested file', async () => {
+    makeRun('v1', 'cur');
+    const active = makeRun('v1', 'active');
+    fs.mkdirSync(path.join(active, 'frames'));
+    fs.writeFileSync(path.join(active, 'frames', 't_0001s.jpg'), 'x');
+    const old = new Date(Date.now() - 2 * HOUR);
+    fs.utimesSync(active, old, old);
+    const result = await sweepTrimmedDramaRuns({
+      mediaRoot,
+      getAsset: async () => asset(run('cur')),
+      minAgeMs: HOUR,
+      apply: true,
+    });
+    expect(result.candidates).toEqual([]);
+    expect(fs.existsSync(active)).toBe(true);
   });
 
   it('stops at the candidate cap', async () => {

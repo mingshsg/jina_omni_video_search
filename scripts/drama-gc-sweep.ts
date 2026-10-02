@@ -10,7 +10,8 @@
  * `--trimmed-runs=report` additionally lists whole run directories that the
  * asset no longer references (dropped from the retained run history, todo/50
  * F8); `--trimmed-runs=delete` removes them. Requires Elasticsearch.
- * `--max-trimmed-runs` caps candidates per invocation.
+ * `--max-trimmed-runs` caps candidates per invocation; `--max-runs` also
+ * caps how many videos that pass looks up.
  *
  * Usage: yarn drama-gc-sweep [--media-root=...] [--max-dirs=100] [--max-runs=500]
  *        [--trimmed-runs=report|delete] [--max-trimmed-runs=50]

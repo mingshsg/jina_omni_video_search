@@ -108,6 +108,7 @@ export type UiMessages = {
   seekingTo: string;
   groupedMoments: string;
   groupedMomentsOne: string;
+  groupedMomentsMore: string;
   facetsLabel: string;
   facetYearFrom: string;
   facetYearTo: string;
@@ -566,6 +567,7 @@ export const uiEn: UiMessages = {
   seekingTo: 'Seek to',
   groupedMoments: '{count} moments',
   groupedMomentsOne: '1 moment',
+  groupedMomentsMore: '+{count} more on the timeline',
 
   facetsLabel: 'Filters',
   facetsReset: 'Reset filters',
@@ -1056,6 +1058,7 @@ export const uiZh: UiMessages = {
   seekingTo: '跳转到',
   groupedMoments: '{count} 个瞬间',
   groupedMomentsOne: '1 个瞬间',
+  groupedMomentsMore: '另有 {count} 个，见时间线',
 
   facetsLabel: '筛选',
   facetsReset: '重置筛选',

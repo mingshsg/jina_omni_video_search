@@ -38,6 +38,7 @@ import {
 import {
   groupSearchHitsTopK,
   oversampleForGroupedTopK,
+  SCENE_MOMENT_BUTTONS_MAX,
 } from '@/lib/es/group-hits';
 import { formatChunkPresetLabel } from '@/lib/ingest/chunk-presets';
 import { useLocale } from '@/lib/i18n/locale-context';
@@ -540,7 +541,7 @@ export default function ImageSearchPage() {
                           <>
                             <EuiSpacer size="xs" />
                             <EuiFlexGroup gutterSize="xs" wrap>
-                              {group.members.map((m) => (
+                              {group.members.slice(0, SCENE_MOMENT_BUTTONS_MAX).map((m) => (
                                 <EuiFlexItem key={m.chunk_id} grow={false}>
                                   <EuiButton
                                     size="s"
@@ -558,6 +559,16 @@ export default function ImageSearchPage() {
                                   </EuiButton>
                                 </EuiFlexItem>
                               ))}
+                              {group.members.length > SCENE_MOMENT_BUTTONS_MAX && (
+                                <EuiFlexItem grow={false}>
+                                  <EuiText size="xs" color="subdued">
+                                    {t.groupedMomentsMore.replace(
+                                      '{count}',
+                                      String(group.members.length - SCENE_MOMENT_BUTTONS_MAX),
+                                    )}
+                                  </EuiText>
+                                </EuiFlexItem>
+                              )}
                             </EuiFlexGroup>
                           </>
                         )}

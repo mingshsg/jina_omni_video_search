@@ -7,8 +7,8 @@
  *
  * Report-only unless `apply` is set. A run directory is deleted only when
  * the asset exists, no persisted drama status for it is active, no field on
- * the asset references the run, and the directory is older than the age
- * guard. The in-process run lease is not visible from a script, so the
+ * the asset references the run, and nothing in the directory tree is newer
+ * than the age guard. The in-process run lease is not visible from a script, so the
  * active-status and age checks stand in for it.
  */
 import fs from 'node:fs';
@@ -67,18 +67,32 @@ function hasActiveDramaStatus(asset: VideoAssetDocument): boolean {
   );
 }
 
-function dirSize(dir: string): number {
-  let total = 0;
+/**
+ * Total size and newest mtime anywhere in the tree. A long run writing only
+ * into subdirectories leaves the run directory's own mtime old, so the age
+ * guard must use the newest entry.
+ */
+function treeStats(dir: string): { bytes: number; newestMtimeMs: number } {
+  let bytes = 0;
+  let newestMtimeMs = 0;
   try {
+    newestMtimeMs = fs.statSync(dir).mtimeMs;
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       const p = path.join(dir, entry.name);
-      if (entry.isDirectory()) total += dirSize(p);
-      else if (entry.isFile()) total += fs.statSync(p).size;
+      if (entry.isDirectory()) {
+        const sub = treeStats(p);
+        bytes += sub.bytes;
+        newestMtimeMs = Math.max(newestMtimeMs, sub.newestMtimeMs);
+      } else if (entry.isFile()) {
+        const stat = fs.statSync(p);
+        bytes += stat.size;
+        newestMtimeMs = Math.max(newestMtimeMs, stat.mtimeMs);
+      }
     }
   } catch {
     /* ignore */
   }
-  return total;
+  return { bytes, newestMtimeMs };
 }
 
 function listDirs(dir: string): string[] {
@@ -141,18 +155,12 @@ export async function sweepTrimmedDramaRuns(opts: {
     for (const runId of runIds) {
       if (referenced.has(runId)) continue;
       const runDir = path.join(dramaRoot, runId);
-      let stat: fs.Stats;
-      try {
-        stat = fs.statSync(runDir);
-      } catch {
-        continue;
-      }
-      if (now - stat.mtimeMs < opts.minAgeMs) continue;
+      const { bytes, newestMtimeMs } = treeStats(runDir);
+      if (newestMtimeMs === 0 || now - newestMtimeMs < opts.minAgeMs) continue;
       if (out.candidates.length >= maxRuns) {
         out.stoppedEarly = true;
         return out;
       }
-      const bytes = dirSize(runDir);
       out.candidates.push({ videoId, runId, bytes });
       if (!opts.apply) continue;
       try {

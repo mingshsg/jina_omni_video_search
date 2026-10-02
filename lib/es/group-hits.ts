@@ -16,6 +16,9 @@ export type GroupSearchHitsOptions = {
   linkGapMs?: number;
 };
 
+/** Moment buttons shown on one scene card; the player timeline lists the rest. */
+export const SCENE_MOMENT_BUTTONS_MAX = 12;
+
 /** Gap choices (seconds) offered for chained scene linking. */
 export const SCENE_LINK_GAP_CHOICES_S = [0, 5, 10, 30, 60] as const;
 
