@@ -77,3 +77,9 @@ yarn probe-voice --asr --auto=<generated-en.wav> --en=<generated-en.wav> --zh=<g
 V1 and V7/V8 remain open for these acceptance gates; V2–V6 are implementation-complete within the scoped host/test evidence. Repository defaults remain disabled/unverified. Original enrichment checkout, its work and untracked duplicates are preserved; newer Group/5s preset work is outside this PR base and must be reconciled when it lands. Baseline `custom` variants are verified and supported; unknown future presets fail closed.
 
 Review and follow-up: [voice-search-implementation-review](../reviews/voice-search-implementation-review-2026-10-02.md), [todo/53](53-voice-search-acceptance-2026-10-02.md). The implementation PR is a draft until release gates close.
+
+## Shared Modality correction — 2026-10-02
+
+User correction: the duplicate Match against selector should be removed because the page already exposes Visual/Audio/All. Completed in PR #2: the existing selector now drives Sound Sample `target`, Audio is the voice-page initial target, and All maps to `both`. Spoken Request still transcribes without search fields and then uses ordinary text Search. Description/parser/text fusion are visibly unavailable during samples; no-audio notices apply only to audio-only queries. Capability validation remains authoritative.
+
+**PASS** — final Node22 suite 73 files / 529 tests and production build. **PASS** — read-only visual/both service probes, then all three API targets HTTP 200 with two scoped hits. **PASS** — refreshed current browser, removed selector count 0, default Audio and Visual/All target mapping. Enabled all three targets only in the ignored isolated preview configuration after transport checks. Labeled relevance, native mic, latency/cost and Docker gates remain **NOT RUN**. See todo/53 for the correction disposition.

@@ -7,9 +7,11 @@ import { voiceMessages } from '@/lib/i18n/voice';
 import { VoiceRecorder, type RecorderState } from '@/lib/voice/recorder';
 import { VOICE_UPLOAD_MAX, type VoiceCapabilities, type VoiceLanguage, type VoiceMode, type VoiceMoments, type VoiceResponse } from '@/lib/voice/types';
 import type { SearchModality } from '@/lib/es/search-core';
+import { buildVoiceFormData } from '@/lib/voice/ui-request';
 
 export function VoiceSearchPanel(props: {
   variantId: string; videoId: string; size: number; filters: unknown; scopeKey: string;
+  mode: VoiceMode; target: SearchModality | null; onModeChange: (mode: VoiceMode) => void;
   onStart: () => number;
   onMoments: (result: VoiceMoments, token: number) => void;
   onTranscript: (text: string, token: number) => void;
@@ -17,8 +19,7 @@ export function VoiceSearchPanel(props: {
 }) {
   const { locale } = useLocale();
   const t = voiceMessages[locale];
-  const [mode, setMode] = useState<VoiceMode>('sound_sample');
-  const [target, setTarget] = useState<SearchModality>('audio');
+  const { mode, target } = props;
   const [language, setLanguage] = useState<VoiceLanguage>('auto');
   const [capabilities, setCapabilities] = useState<VoiceCapabilities | null>(null);
   const [clip, setClip] = useState<Blob | null>(null);
@@ -65,18 +66,17 @@ export function VoiceSearchPanel(props: {
   const submit = async () => {
     if (!clip) return;
     if (mode === 'sound_sample' && (!props.variantId || props.filters === undefined)) { setError(t.invalidFilters); return; }
+    let form: FormData;
+    if (mode === 'spoken_request') form = buildVoiceFormData(clip, { mode, language });
+    else {
+      if (!target || !capabilities?.sound_sample.targets.includes(target)) { setError(t.targetUnavailable); return; }
+      form = buildVoiceFormData(clip, { mode, target, variantId: props.variantId, size: props.size, videoId: props.videoId, filters: props.filters });
+    }
     invalidate(); setError(null); setBusy(true);
     const current = sequence.current;
     const token = props.onStart();
     const controller = new AbortController(); abortRef.current = controller;
     const timeout = setTimeout(() => controller.abort(), 35000);
-    const form = new FormData(); form.append('file', clip, 'voice'); form.append('mode', mode);
-    if (mode === 'spoken_request') form.append('language', language);
-    else {
-      form.append('variant_id', props.variantId); form.append('target', target); form.append('size', String(props.size));
-      if (props.videoId) form.append('video_id', props.videoId);
-      if (props.filters) form.append('filters', JSON.stringify(props.filters));
-    }
     try {
       const res = await fetch('/api/search/voice', { method: 'POST', body: form, signal: controller.signal });
       const data: VoiceResponse & { error?: { message: string } } = await res.json();
@@ -93,6 +93,7 @@ export function VoiceSearchPanel(props: {
     }
   };
   const available = Boolean(capabilities?.[mode].available);
+  const targetAvailable = mode === 'spoken_request' || Boolean(target && capabilities?.sound_sample.targets.includes(target));
   const capturing = state === 'recording' || state === 'requesting_permission';
   return <EuiPanel paddingSize="m" hasBorder>
     <EuiFlexGroup justifyContent="spaceBetween" alignItems="center">
@@ -101,16 +102,14 @@ export function VoiceSearchPanel(props: {
     </EuiFlexGroup>
     <EuiSpacer size="s" />
     <EuiButtonGroup legend={t.title} idSelected={mode} options={[{ id: 'sound_sample', label: t.sample }, { id: 'spoken_request', label: t.spoken }]}
-      onChange={(id) => { invalidate(); recorderRef.current?.dispose(); setState('idle'); setError(null); setMode(id as VoiceMode); }} />
+      onChange={(id) => { invalidate(); recorderRef.current?.dispose(); setState('idle'); setError(null); props.onModeChange(id as VoiceMode); }} />
     <EuiSpacer size="s" />
     <EuiText size="s"><p>{mode === 'sound_sample' ? t.sampleHint : t.spokenHint}</p><p>{t.limits}</p></EuiText>
     {capabilities && !available && <><EuiSpacer size="s" /><EuiCallOut size="s" color="warning" title={capabilities.enabled ? t.unavailable : t.disabled} /></>}
+    {available && !targetAvailable && <><EuiSpacer size="s" /><EuiCallOut size="s" color="warning" title={t.targetUnavailable} /></>}
     {available && <><EuiSpacer size="s" /><EuiText size="xs"><p>{t.destination} {capabilities?.[mode].destination}.</p></EuiText></>}
     <EuiSpacer size="s" />
-    {mode === 'sound_sample' ? <EuiFormRow label={t.target}><EuiSelect value={target}
-      options={(capabilities?.sound_sample.targets ?? ['audio']).map((value) => ({ value, text: t[value] }))}
-      onChange={(e) => { invalidate(); setTarget(e.target.value as SearchModality); }} /></EuiFormRow>
-      : <EuiFormRow label={t.language}><EuiSelect value={language} options={(capabilities?.spoken_request.languages ?? ['auto']).map((value) => ({ value, text: value === 'auto' ? t.auto : value }))}
+    {mode === 'spoken_request' && <EuiFormRow label={t.language}><EuiSelect value={language} options={(capabilities?.spoken_request.languages ?? ['auto']).map((value) => ({ value, text: value === 'auto' ? t.auto : value }))}
         onChange={(e) => { invalidate(); setLanguage(e.target.value as VoiceLanguage); }} /></EuiFormRow>}
     <EuiSpacer size="m" />
     <EuiFlexGroup alignItems="center" gutterSize="s">
@@ -125,7 +124,7 @@ export function VoiceSearchPanel(props: {
     {preview && <><EuiSpacer size="s" /><audio controls src={preview} aria-label={t.preview} /></>}
     {error && <><EuiSpacer size="s" /><EuiCallOut color="danger" size="s" title={error} /></>}
     <EuiSpacer size="s" />
-    <EuiButton fill isLoading={busy} disabled={!available || !clip || capturing || (mode === 'sound_sample' && (!props.variantId || props.filters === undefined))} onClick={() => void submit()}>
+    <EuiButton fill data-voice-target={mode === 'sound_sample' ? target ?? '' : undefined} isLoading={busy} disabled={!available || !targetAvailable || !clip || capturing || (mode === 'sound_sample' && (!props.variantId || props.filters === undefined))} onClick={() => void submit()}>
       {mode === 'sound_sample' ? t.search : t.transcribe}</EuiButton>
   </EuiPanel>;
 }

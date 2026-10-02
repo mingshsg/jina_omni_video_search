@@ -2,7 +2,7 @@
 
 The separate **Voice search** tab is `/search-voice`. It reuses the file-search controls, moment grouping and player.
 
-- **Sound Sample** is selected initially. A short recording is embedded directly and searches existing audio moments by default. Speech in this mode is a sample, not an instruction. A verified deployment can advertise visual or combined targets independently.
+- **Sound Sample** is selected initially. A short recording is embedded directly. The existing **Modality** selector below chooses Audio (default), Visual (recording→video-frame matching), or All (both vector channels). There is no separate Match against selector. Speech in this mode is a sample, not an instruction. Deployments configure available targets independently; unavailable targets disable sample submission with an explanation. Description, text parsing and text fusion apply to text search, so are disabled while submitting a Sound Sample.
 - **Spoken Request** transcribes in the original language. The transcript appears in the editable query field; review it and click the ordinary Search button. The existing text search mode, parser and filters apply.
 
 Choose Record → Stop → preview → Find moments/Transcribe, or upload a short audio file. Nothing is submitted automatically. Limits are 1–15 seconds, 5 MiB per file and 6 MiB multipart envelope. The browser stops capture at 14.5s to leave room for final packets. Actual decoded duration is authoritative; long uploads are rejected rather than truncated. Microphone capture requires HTTPS or localhost; upload works without capture permission. Closing the panel, changing mode/target/controls, re-recording or beginning text search cancels pending voice work.

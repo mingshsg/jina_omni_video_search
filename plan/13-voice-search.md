@@ -16,7 +16,7 @@ The user confirmed both modes on 2026-10-02, with **Sound Sample as the default 
 | **Sound Sample** (default) | Engine, applause, laughter, or a recorded dialogue excerpt | Embed the recording directly; match existing chunk vectors | Ranked moments; no transcription required |
 | **Spoken Request** | “Find a car chase” / “找李政宰的追逐场景” | Transcribe in the original language, let the user edit, submit through existing text search | The same moments and metadata behavior as typing that reviewed text |
 
-Keep mode separate from the **target modality**. Sound Sample searches audio moments by default; an explicit advanced target can select visual moments or both. “Find a car chase” in Sound Sample mode is a sound/semantic sample, not automatically a command. Spoken Request makes that distinction visible.
+Keep mode separate from the **target modality**. Sound Sample searches audio moments by default; the existing page's Modality selector chooses Visual, Audio or All for the recording too. The duplicate Match against control is removed following the user's 2026-10-02 correction. “Find a car chase” in Sound Sample mode is a sound/semantic sample, not automatically a command. Spoken Request makes that distinction visible.
 
 Initial delivery covers the file-video search page. Existing live search remains unchanged. Live voice querying and continuous follow-search are a later scoped extension after file acceptance; they must reuse live session/time/variant filters and have their own contract tests. Exact recording identification, speaker identity, song identification and exact dialogue lookup are outside this feature's acceptance promise.
 

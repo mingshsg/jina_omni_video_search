@@ -35,6 +35,8 @@ import {
 import { AppShell } from '@/components/AppShell';
 import { VoiceSearchPanel } from '@/components/VoiceSearchPanel';
 import { voiceMessages } from '@/lib/i18n/voice';
+import { voiceTargetForModality } from '@/lib/voice/ui-request';
+import type { VoiceMode } from '@/lib/voice/types';
 import {
   EMPTY_FACETS,
   facetsToApiFilters,
@@ -203,12 +205,14 @@ export default function SearchExperience({ voicePage = false }: { voicePage?: bo
   const { t, locale } = useLocale();
   const voiceT = voiceMessages[locale];
   const [voiceOpen, setVoiceOpen] = useState(voicePage);
+  const [voiceMode, setVoiceMode] = useState<VoiceMode>('sound_sample');
+  const soundSampleActive = voiceOpen && voiceMode === 'sound_sample';
   const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const [query, setQuery] = useState('');
-  const [modality, setModality] = useState<Modality>('visual');
-  const [sortBy, setSortBy] = useState<SortBy>('visual');
+  const [modality, setModality] = useState<Modality>(voicePage ? 'audio' : 'visual');
+  const [sortBy, setSortBy] = useState<SortBy>(voicePage ? 'audio' : 'visual');
   const [useHybridText, setUseHybridText] = useState(false);
   const [parseQuery, setParseQuery] = useState(false);
   const [suppressExtracted, setSuppressExtracted] = useState<string[]>([]);
@@ -505,10 +509,10 @@ export default function SearchExperience({ voicePage = false }: { voicePage?: bo
     { id: 'visual', label: t.modalityVisual },
     { id: 'audio', label: t.modalityAudio },
     { id: 'all', label: t.modalityAll },
-    { id: 'description', label: t.modalityDescription },
+    { id: 'description', label: t.modalityDescription, isDisabled: soundSampleActive },
   ];
 
-  const sortOptions = useHybridText
+  const sortOptions = useHybridText && !soundSampleActive
     ? [{ value: 'hybrid', text: t.sortByHybrid }]
     : [
         {
@@ -738,6 +742,10 @@ export default function SearchExperience({ voicePage = false }: { voicePage?: bo
           <EuiButtonEmpty onClick={() => {
             requestSeqRef.current++;
             setSearching(false);
+            if (!voiceOpen) {
+              setVoiceMode('sound_sample');
+              if (modality === 'description') setModality('audio');
+            }
             setVoiceOpen((open) => !open);
           }}>{voiceT.title}</EuiButtonEmpty>
         </EuiFlexItem>)}
@@ -746,8 +754,8 @@ export default function SearchExperience({ voicePage = false }: { voicePage?: bo
             <EuiSwitch
               label={t.parseQueryLabel}
               showLabel={false}
-              checked={parseQuery}
-              disabled={modality === 'description'}
+              checked={parseQuery && !soundSampleActive}
+              disabled={modality === 'description' || soundSampleActive}
               onChange={(e) => {
                 const on = e.target.checked;
                 setParseQuery(on);
@@ -769,6 +777,10 @@ export default function SearchExperience({ voicePage = false }: { voicePage?: bo
       {voiceOpen && (() => {
         const parsed = facetsToApiFilters(facets, { yearInvalid: t.facetYearInvalid, yearReversed: t.facetYearReversed });
         return <><EuiSpacer size="m" /><VoiceSearchPanel variantId={variantId} videoId={videoId}
+          mode={voiceMode} target={voiceTargetForModality(modality)} onModeChange={(mode) => {
+            setVoiceMode(mode);
+            if (mode === 'sound_sample' && modality === 'description') setModality('audio');
+          }}
           size={oversampleForGroupedTopK(size)} filters={parsed.ok ? (parsed.filters ?? null) : undefined}
           scopeKey={JSON.stringify([variantId, videoId, facets, size, query, modality, sortBy, useHybridText, parseQuery])}
           onClose={() => setVoiceOpen(false)} onStart={() => { setSearching(false); return ++requestSeqRef.current; }}
@@ -783,12 +795,12 @@ export default function SearchExperience({ voicePage = false }: { voicePage?: bo
             setHits(result.hits); setResultModality(result.meta.modality === 'both' ? 'all' : result.meta.modality);
             setResultHybrid(false); setParseMeta(null); setSearchExplain(null); setActiveHit(null); setError(null);
             lastSubmittedQueryRef.current = null;
-            setVoiceNotice(result.meta.audio_channel_status === 'no_indexed_audio' ? voiceT.noAudio : voiceT.sampleResult);
+            setVoiceNotice(result.meta.modality === 'audio' && result.meta.audio_channel_status === 'no_indexed_audio' ? voiceT.noAudio : voiceT.sampleResult);
           }} /></>;
       })()}
       {voiceNotice && <><EuiSpacer size="s" /><EuiCallOut size="s" title={voiceNotice} /></>}
 
-      {parseQuery && (
+      {parseQuery && !soundSampleActive && (
         <>
           <EuiSpacer size="s" />
           <EuiText size="xs" color="subdued">
@@ -887,8 +899,8 @@ export default function SearchExperience({ voicePage = false }: { voicePage?: bo
           <EuiFormRow label={t.sortByLabel}>
             <EuiSelect
               options={sortOptions}
-              value={useHybridText ? 'hybrid' : sortBy}
-              disabled={useHybridText || modality === 'description'}
+              value={soundSampleActive ? (modality === 'all' ? 'rrf' : modality) : useHybridText ? 'hybrid' : sortBy}
+              disabled={soundSampleActive || useHybridText || modality === 'description'}
               onChange={(e) => {
                 const next = e.target.value as SortBy;
                 setSortBy(next);
@@ -915,8 +927,8 @@ export default function SearchExperience({ voicePage = false }: { voicePage?: bo
             <EuiSwitch
               label={t.hybridTextLabel}
               showLabel={false}
-              checked={useHybridText}
-              disabled={parseQuery || modality === 'description'}
+              checked={useHybridText && !soundSampleActive}
+              disabled={soundSampleActive || parseQuery || modality === 'description'}
               onChange={(e) => onHybridTextChange(e.target.checked)}
               compressed
             />
