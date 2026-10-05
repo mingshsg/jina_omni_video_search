@@ -16,10 +16,12 @@ import {
   EuiText,
   EuiTitle,
 } from '@elastic/eui';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocale } from '@/lib/i18n/locale-context';
 import type { DramaResultsDto, DramaSummaryDto } from '@/lib/drama/safe-dto';
 import { DRAMA_ACTIVE_STATUSES } from '@/lib/ingest/drama-options';
+
+import { createDramaPollGuard } from '@/lib/drama/poll-guard';
 
 type SubtitleSource = 'auto' | 'existing_only' | 'force_asr';
 
@@ -55,6 +57,7 @@ export function DramaResultsFlyout({
   onRetryStarted?: () => void;
 }) {
   const { t, locale } = useLocale();
+  const pollGuard = useRef(createDramaPollGuard());
   const [detail, setDetail] = useState<DramaResultsDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
@@ -68,6 +71,7 @@ export function DramaResultsFlyout({
   );
 
   const load = useCallback(async () => {
+    const ticket = pollGuard.current.begin();
     try {
       const res = await fetch(`/api/library/${encodeURIComponent(videoId)}`, {
         headers: { 'Accept-Language': locale },
@@ -77,10 +81,11 @@ export function DramaResultsFlyout({
         error?: { message: string };
       };
       if (!res.ok) throw new Error(data.error?.message ?? t.libraryError);
+      if (!pollGuard.current.accept(ticket, data.drama?.run_id)) return;
       setDetail(data.drama ?? null);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t.libraryError);
+      if (pollGuard.current.isCurrent(ticket)) setError(err instanceof Error ? err.message : t.libraryError);
     }
   }, [videoId, locale, t.libraryError]);
 
@@ -94,6 +99,7 @@ export function DramaResultsFlyout({
       setError(t.dramaSpokenLanguageRequired);
       return;
     }
+    pollGuard.current.invalidate();
     setRetrying(true);
     setError(null);
     try {
@@ -108,12 +114,14 @@ export function DramaResultsFlyout({
           ...(retryLanguage ? { source_language: retryLanguage } : {}),
         }) } : {}),
       });
-      const data = (await res.json()) as { error?: { message: string } };
+      const data = (await res.json()) as { drama?: { run_id?: string }; error?: { message: string } };
       if (!res.ok) throw new Error(data.error?.message ?? t.libraryError);
+      pollGuard.current.acceptRun(data.drama?.run_id);
       // The runner is asynchronous; show the accepted state immediately and
       // keep polling rather than leaving the stale failure on screen.
       setDetail((current) => ({
         ...(current ?? drama), status: 'pending', error: undefined,
+        run_id: data.drama?.run_id ?? current?.run_id,
         subtitle_source: retrySource,
         ...(retryLanguage ? { source_language: retryLanguage } : {}),
       }));
@@ -128,6 +136,7 @@ export function DramaResultsFlyout({
 
   useEffect(() => {
     void load();
+    return () => pollGuard.current.invalidate();
   }, [load]);
 
   useEffect(() => {

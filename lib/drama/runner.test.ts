@@ -133,6 +133,7 @@ import {
   prepareDramaHandoff,
   releaseDramaRun,
   runDramaEnrichment,
+  startDramaEnrichmentAsync,
   tryAcquireDramaRun,
 } from './runner';
 import { persistDramaMeta } from './persist-meta';
@@ -148,6 +149,8 @@ import { proposeStructure } from './structure';
 import { generateKeyActors } from './key-actors';
 import { extractKeyScenes } from './key-scenes';
 import { cleanupDramaFrames } from './frame-gc';
+import { updateJob } from '../ingest/job-store';
+import { writeDramaJson } from './workspace';
 
 function fakeJob(
   drama: Omit<DramaJobState, 'subtitleSource' | 'directorCoverage'> &
@@ -254,6 +257,7 @@ describe('runDramaEnrichment', () => {
     expect(payload.enrichment_status).toBe('partial');
     expect(job.drama?.status).toBe('partial');
     expect(job.drama?.error?.message).toMatch(/subtitles/);
+    expect(updateJob).toHaveBeenLastCalledWith(job, expect.objectContaining({ drama: expect.objectContaining({ status: 'partial' }) }), { event: 'progress', persist: true });
   });
 
   it('passes the per-run subtitleSource into subtitle resolution', async () => {
@@ -336,7 +340,7 @@ describe('runDramaEnrichment', () => {
     );
   });
 
-  it('reuses the stable run_id across sequential retries (no duplicate docs)', async () => {
+  it('reuses the assigned workspace across repeated runner entries (request retries assign a new ID)', async () => {
     const job = fakeJob({
       status: 'partial',
       languages: [],
@@ -578,5 +582,26 @@ describe('subtitle generation switching (I2)', () => {
     const payload = termCalls[termCalls.length - 1][1];
     expect(payload.modules_done).toContain('subtitles');
     expect(payload.enrichment_status).toBe('partial');
+  });
+});
+
+
+describe('terminal enrichment failure persistence', () => {
+  beforeEach(() => { vi.clearAllMocks(); clearDramaRunLeases(); });
+  it('persists the terminal job even if the final meta write fails', async () => {
+    vi.mocked(persistDramaMeta).mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('final meta write unavailable'));
+    const job = fakeJob({ status: 'pending', modules: ['structure'], languages: [], modules_done: [] });
+    await runDramaEnrichment(job);
+    expect(job.drama?.status).toBe('partial');
+    expect(updateJob).toHaveBeenLastCalledWith(job, expect.objectContaining({ drama: expect.objectContaining({ status: 'partial' }) }), { event: 'progress', persist: true });
+    expect(isDramaRunActive(job.videoId)).toBe(false);
+  });
+  it('releases ownership and durably fails a top-level filesystem error', async () => {
+    vi.mocked(writeDramaJson).mockImplementationOnce(() => { throw new Error('ENOSPC'); });
+    const job = fakeJob({ status: 'pending', modules: ['structure'], languages: [], modules_done: [] });
+    startDramaEnrichmentAsync(job);
+    await vi.waitFor(() => expect(job.drama?.status).toBe('failed'));
+    expect(updateJob).toHaveBeenLastCalledWith(job, expect.objectContaining({ drama: expect.objectContaining({ status: 'failed' }) }), { event: 'progress', persist: true });
+    expect(isDramaRunActive(job.videoId)).toBe(false);
   });
 });

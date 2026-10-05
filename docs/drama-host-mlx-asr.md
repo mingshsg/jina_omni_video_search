@@ -4,8 +4,9 @@ The app container extracts `audio/asr_<lang>.mp3` in the shared drama run
 directory. If no matching subtitle exists and container ASR is not configured,
 the first subtitle attempt fails but leaves that audio in place. Run the small
 host script once per **spoken** language, then use the video's **Retry** action
-in Library. The retry keeps the same run ID and reads
-`subtitles/host_<lang>.srt` before trying any configured ASR. No cloud ASR key,
+in Library. The retry creates a new run ID and copies the preceding run’s manually
+prepared `subtitles/host_<lang>.srt` into that workspace before trying any
+configured ASR. Previous published artifacts remain in run history. No cloud ASR key,
 Ollama service, or Python package in the container is needed.
 
 On an Apple Silicon Mac with `mlx_whisper` installed:

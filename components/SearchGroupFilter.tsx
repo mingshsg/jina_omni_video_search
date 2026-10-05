@@ -25,6 +25,7 @@ import {
   variantSwitchTargets,
 } from '@/lib/metadata/group-availability-ui';
 import {
+  groupLookupMatches,
   isStaleExactLookup,
   lookupMissName,
   planExactLookup,
@@ -139,22 +140,24 @@ export function SearchGroupFilter({
         lookupTimer.current = null;
         void (async () => {
           try {
-            const query = groupAvailabilityQuery({ locale, selectedIds: [], q: name });
+            const queryName = groupLookupMatches(name, data?.groups ?? [], true)[0]?.id ?? name;
+            const query = groupAvailabilityQuery({ locale, selectedIds: [], q: queryName });
             const res = await fetch(`/api/metadata/group-availability?${query}`);
             if (!res.ok) return;
             const body = (await res.json()) as GroupAvailability;
             // Superseded by a newer input change, a clear, or a locale change.
             if (isStaleExactLookup(seq, lookupSeq.current)) return;
-            const exact = (body.groups ?? []).filter((entry) => entry.id === name);
+            const candidates = [...(data?.groups ?? []), ...(body.groups ?? [])];
+            const exact = groupLookupMatches(name, candidates, true);
             setLookup(exact);
-            setLookupMiss(lookupMissName(name, exact));
+            setLookupMiss(lookupMissName(name, groupLookupMatches(name, candidates)));
           } catch {
             /* lookup is best-effort; the main list is unaffected */
           }
         })();
       }, delayMs);
     },
-    [locale],
+    [locale, data],
   );
 
   const lookupGroup = useCallback(

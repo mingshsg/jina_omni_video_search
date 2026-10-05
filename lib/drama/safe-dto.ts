@@ -7,6 +7,14 @@
  */
 import type { DramaMetaPayload } from './persist-meta';
 import type { VideoAssetDocument } from '../es/index-assets';
+import { dramaArtifactRelativePath } from './artifact-path';
+import { isDramaWorkActive } from './run-lease';
+import { getJobByVideoId } from '../ingest/job-store';
+
+function interrupted(asset: VideoAssetDocument, status: string): boolean {
+  return asset.status === 'ready' && ['running', 'pending'].includes(status) &&
+    !isDramaWorkActive(asset.video_id) && !getJobByVideoId(asset.video_id)?.pipelineRunning;
+}
 
 /**
  * Read-only drama status carried on the Library list row (badge/action gate).
@@ -87,11 +95,9 @@ export interface DramaEarlierRunSources {
 /** Convert a published run path to a route URL without exposing MEDIA_ROOT. */
 function artifactUrl(videoId: string, runId: string, rawPath: string | undefined): string | undefined {
   if (!rawPath || !runId) return undefined;
-  const segments = rawPath.split(/[\\/]/).filter(Boolean);
-  const marker = segments.findIndex((part, index) => part === 'drama' && segments[index + 1] === runId);
-  const relative = rawPath.startsWith('/') ? segments.slice(marker + 2) : segments;
-  if ((rawPath.startsWith('/') && marker < 0) || relative.length < 2) return undefined;
-  if (relative.some((part) => part === '.' || part === '..' || !/^[\w.-]+$/.test(part))) return undefined;
+  const artifact = dramaArtifactRelativePath(rawPath, videoId, runId);
+  if (!artifact) return undefined;
+  const relative = artifact.split('/');
   return [
     '/api/drama-media',
     encodeURIComponent(videoId),
@@ -119,7 +125,7 @@ export function dramaSummaryFromAsset(
   const metaDrama = readMetaDrama(asset.meta);
   if (metaDrama) {
     return {
-      status: metaDrama.enrichment_status,
+      status: interrupted(asset, metaDrama.enrichment_status) ? 'failed' : metaDrama.enrichment_status,
       ...(metaDrama.subtitle_source ? { subtitle_source: metaDrama.subtitle_source } : {}),
       ...(metaDrama.source_language ? { source_language: metaDrama.source_language } : {}),
       ...(metaDrama.director_coverage ? { director_coverage: metaDrama.director_coverage } : {}),
@@ -127,21 +133,21 @@ export function dramaSummaryFromAsset(
       modules: metaDrama.modules,
       modules_done: metaDrama.modules_done,
       synopsis_status: metaDrama.synopsis_status,
-      error: metaDrama.error?.message,
+      error: interrupted(asset, metaDrama.enrichment_status) ? 'Enrichment interrupted; retry to start a new run' : metaDrama.error?.message,
       run_id: metaDrama.run_id,
     };
   }
   const job = asset.job?.drama;
   if (!job) return undefined;
   return {
-    status: job.status,
+    status: interrupted(asset, job.status) ? 'failed' : job.status,
     ...(job.subtitle_source ? { subtitle_source: job.subtitle_source } : {}),
     ...(job.source_language ? { source_language: job.source_language } : {}),
     ...(job.director_coverage ? { director_coverage: job.director_coverage } : {}),
     languages: job.languages,
     modules: job.modules,
     modules_done: job.modules_done,
-    error: job.error_message,
+    error: interrupted(asset, job.status) ? 'Enrichment interrupted; retry to start a new run' : job.error_message,
     run_id: job.run_id,
   };
 }

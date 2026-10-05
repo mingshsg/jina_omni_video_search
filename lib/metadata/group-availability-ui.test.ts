@@ -376,3 +376,13 @@ describe('groupAvailabilityQuery (G1)', () => {
     expect(params.get('q')).toBe('old group');
   });
 });
+
+it('deduplicates catalog and exact-lookup options by canonical group ID', () => {
+  const demo = entry('demo', ['v1']);
+  const composed = composeGroupAvailability({
+    data: { status: 'ok', groups: [demo], total_groups: 1, truncated: false, ready_variant_ids: ['v1'] },
+    lookup: [{ ...demo, label: 'Latest label' }], selectedIds: ['demo'], loading: false, failed: false,
+  });
+  expect(composed.options).toEqual([{ ...demo, label: 'Latest label' }]);
+  expect(composed.entries).toHaveLength(1);
+});

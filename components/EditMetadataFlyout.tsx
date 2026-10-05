@@ -589,31 +589,34 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
   const countryOptions = useMemo(
     () => [
       { value: '', text: t.metaEmptyOption },
+      ...(country && !catalogs?.countries.some((c) => c.code === country) ? [{ value: country, text: country }] : []),
       ...(catalogs?.countries ?? []).map((c) => ({
         value: c.code,
         text: c.label,
       })),
     ],
-    [catalogs, t.metaEmptyOption],
+    [catalogs, country, t.metaEmptyOption],
   );
 
   const typeOptions = useMemo(
     () => [
       { value: '', text: t.metaEmptyOption },
+      ...(videoType && !catalogs?.video_types.includes(videoType) ? [{ value: videoType, text: videoType }] : []),
       ...(catalogs?.video_types ?? []).map((v) => ({ value: v, text: v })),
     ],
-    [catalogs, t.metaEmptyOption],
+    [catalogs, videoType, t.metaEmptyOption],
   );
 
   const langOptions = useMemo(
     () => [
       { value: '', text: t.metaEmptyOption },
+      ...(language && !catalogs?.primary_languages.includes(language) ? [{ value: language, text: language }] : []),
       ...(catalogs?.primary_languages ?? []).map((v) => ({
         value: v,
         text: v,
       })),
     ],
-    [catalogs, t.metaEmptyOption],
+    [catalogs, language, t.metaEmptyOption],
   );
 
   const suggestStageText =
@@ -993,6 +996,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
       }
     }
   }, [
+    operatorHint,
     year,
     videoType,
     language,
@@ -1502,6 +1506,7 @@ export function EditMetadataFlyout({ videoId, onClose, onSaved }: Props) {
     description,
     abstract,
     selectedActors,
+    selectedGroup,
     videoType,
     language,
     country,

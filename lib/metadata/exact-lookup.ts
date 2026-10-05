@@ -64,3 +64,11 @@ export function lookupMissName(
     ? name
     : null;
 }
+
+const normalizeLookup = (value: string): string => value.normalize('NFKC').trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+export function groupLookupMatches<T extends { id: string; label: string }>(name: string, entries: T[], exact = false): T[] {
+  const needle = normalizeLookup(name);
+  if (!needle) return [];
+  return entries.filter((entry) => [entry.id, entry.label].some((value) =>
+    exact ? normalizeLookup(value) === needle : normalizeLookup(value).includes(needle)));
+}

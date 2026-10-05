@@ -185,12 +185,12 @@ export async function POST(request: Request) {
     }
 
     const local = await importFromLocalPath(body.source, cfg);
-    const mediaPath = await copyLocalToOriginals(local.mediaPath, cfg);
     const drama = acceptDramaForIngest({
       mode: 'local',
       durationMs: local.probe.duration_ms,
       raw: body.drama,
     });
+    const mediaPath = await copyLocalToOriginals(local.mediaPath, cfg);
     const job = createIngestJob({
       mode: 'local',
       mediaPath,

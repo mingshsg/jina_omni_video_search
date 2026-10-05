@@ -1,10 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import {
   dramaResultsFromAsset,
   dramaSummaryFromAsset,
 } from './safe-dto';
 import type { VideoAssetDocument } from '../es/index-assets';
 import type { DramaMetaPayload } from './persist-meta';
+import { clearDramaRunLeases, reserveDramaStart, tryAcquireDramaRun } from './run-lease';
+beforeEach(() => clearDramaRunLeases());
 
 function docWithMetaDrama(metaDrama: DramaMetaPayload): VideoAssetDocument {
   return {
@@ -75,6 +77,7 @@ describe('dramaSummaryFromAsset', () => {
   });
 
   it('falls back to job.drama when meta.drama is absent', () => {
+    tryAcquireDramaRun('v1', 'j1');
     const doc = docWithMetaDrama({} as DramaMetaPayload);
     doc.meta = { revision: 1, updated_at: '' } as unknown as VideoAssetDocument['meta'];
     doc.job.drama = {
@@ -105,6 +108,7 @@ describe('dramaSummaryFromAsset', () => {
 
 describe('dramaResultsFromAsset sanitizes paths', () => {
   it('keeps earlier subtitles and scripts visible while a later structure run is active', () => {
+    tryAcquireDramaRun('v1', 'j1');
     const oldRoot = '/internal/media/v1/drama/oldrun';
     const dto = dramaResultsFromAsset(docWithMetaDrama({
       run_id: 'newrun',
@@ -278,5 +282,24 @@ describe('dramaResultsFromAsset sanitizes paths', () => {
     });
     expect(JSON.stringify(dto)).not.toContain('/internal/media');
     expect(JSON.stringify(dto)).not.toContain('host_en.srt');
+  });
+});
+
+describe('interrupted enrichment recovery', () => {
+  const running = () => docWithMetaDrama({ run_id: 'r1', enrichment_status: 'running', modules: ['structure'], languages: [] });
+  it('surfaces an unowned running marker as retryable failure without mutating history', () => {
+    const asset = running();
+    expect(dramaSummaryFromAsset(asset)).toMatchObject({ status: 'failed', run_id: 'r1', error: expect.stringContaining('interrupted') });
+    expect((asset.meta as VideoAssetDocument['meta'] & { drama: DramaMetaPayload }).drama.enrichment_status).toBe('running');
+  });
+  it('keeps a handoff reservation and a live run active', () => {
+    reserveDramaStart('v1');
+    expect(dramaSummaryFromAsset(running())?.status).toBe('running');
+    clearDramaRunLeases(); tryAcquireDramaRun('v1', 'j1');
+    expect(dramaSummaryFromAsset(running())?.status).toBe('running');
+  });
+  it('does not turn a pending base ingest into an interrupted enrichment', () => {
+    const asset = running(); asset.status = 'processing';
+    expect(dramaSummaryFromAsset(asset)?.status).toBe('running');
   });
 });

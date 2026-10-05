@@ -161,7 +161,8 @@ export async function POST(request: Request, { params }: Params) {
     // Ephemeral operator hint (todo/41 E): steers retrieval through the
     // existing work_title input and may override the output locale. It is
     // per-run state only — no asset field, no `meta` write.
-    const hint = resolveOperatorHint(parsed.data?.operator_hint);
+    const operatorHint = normalizeOperatorHint(parsed.data?.operator_hint) || undefined;
+    const hint = resolveOperatorHint(operatorHint);
     assertSuggestRateLimit(clientKey(request, videoId));
     const locale =
       hint.locale ?? localeFromRequest(request);
@@ -176,6 +177,7 @@ export async function POST(request: Request, { params }: Params) {
       cfg.SUGGEST_AGENT_CONNECTOR_ID,
       // Must be part of the key: a different hint is a different run, and
       // without this operator A's hint would hit operator B's cached result.
+      operatorHint ?? null,
       hint.workTitle,
       hint.locale,
     ]);
@@ -188,7 +190,7 @@ export async function POST(request: Request, { params }: Params) {
           local,
           cfg,
           signal,
-          operatorHint: parsed.data?.operator_hint ?? undefined,
+          operatorHint,
           operatorWorkTitle: hint.workTitle ?? undefined,
           onProgress: report,
         });

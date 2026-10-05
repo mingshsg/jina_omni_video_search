@@ -1,6 +1,7 @@
 import { getConfig } from '../config';
 import { getEsClient } from './client';
 import { getAsset } from './index-assets';
+import { getJobByVideoId } from '../ingest/job-store';
 
 /** Longest title a display name may be; mirrors the ES keyword subfield. */
 export const ASSET_TITLE_MAX = 256;
@@ -61,7 +62,7 @@ export async function renameAssetTitle(params: {
   if (!asset) {
     throw new AssetRenameError(`Asset not found: ${params.videoId}`);
   }
-  if (asset.title !== params.expectedTitle) {
+  if (asset.title !== params.expectedTitle && asset.title !== newTitle) {
     throw new AssetRenameError(
       `Title mismatch for ${params.videoId}: expected ${JSON.stringify(
         params.expectedTitle,
@@ -93,12 +94,19 @@ export async function renameAssetTitle(params: {
     id: params.videoId,
     refresh: 'wait_for',
     retry_on_conflict: 3,
-    // Ingest-owned field only — never `meta`.
-    doc: { title: newTitle },
+    // Check and write atomically; a third-party rename must not be overwritten.
+    script: {
+      lang: 'painless',
+      source: `if (ctx._source.title != params.expected && ctx._source.title != params.title) { throw new IllegalArgumentException('Title changed concurrently'); } if (ctx._source.title == params.title) { ctx.op = 'noop'; } else { ctx._source.title = params.title; }`,
+      params: { expected: params.expectedTitle, title: newTitle },
+    },
   });
 
-  // Only `video_title` is written; `conflicts: 'proceed'` tolerates a
-  // concurrent ingest touch rather than failing the whole rename.
+  // Keep an active job from restoring the old title on its next persist.
+  const job = getJobByVideoId(params.videoId);
+  if (job) job.title = newTitle;
+
+  // Only video_title changes; any partial propagation is explicitly retryable.
   const chunkUpdate = await client.updateByQuery({
     index: cfg.ES_INDEX_CHUNKS,
     refresh: true,
@@ -117,6 +125,10 @@ export async function renameAssetTitle(params: {
     },
   });
 
+  if (chunkUpdate.timed_out || (chunkUpdate.version_conflicts ?? 0) > 0 ||
+      (chunkUpdate.failures?.length ?? 0) > 0) {
+    throw new AssetRenameError('Title updated on asset but chunk propagation is incomplete; retry the same rename');
+  }
   return {
     video_id: params.videoId,
     previous_title: asset.title,

@@ -179,6 +179,7 @@ export type UiMessages = {
   dramaUrlHint: string;
   dramaPendingHint: string;
   dramaClientNeedModules: string;
+  dramaClientNeedsDirectors: string;
   dramaClientNeedLanguages: string;
   dramaStatusLabel: string;
   dramaRetryLabel: string;
@@ -285,6 +286,7 @@ export type UiMessages = {
   refresh: string;
   libraryError: string;
   retryStarted: string;
+  dramaRetryStarted: string;
   removeDone: string;
   batchRemoveSelected: string;
   batchRemoveAll: string;
@@ -644,6 +646,7 @@ export const uiEn: UiMessages = {
     'Enrichment is not available for URL import yet — use Upload or Local, or enable later from the library.',
   dramaPendingHint: 'Enrichment queued (after ready): {modules}',
   dramaClientNeedModules: 'Select at least one enrichment module.',
+  dramaClientNeedsDirectors: 'Key actors requires Director’s Script.',
   dramaClientNeedLanguages:
     'Select at least one subtitle language when Subtitles is enabled.',
   dramaStatusLabel: 'Enrichment',
@@ -758,6 +761,7 @@ export const uiEn: UiMessages = {
   refresh: 'Refresh',
   libraryError: 'Could not load library',
   retryStarted: 'Re-index started',
+  dramaRetryStarted: 'Enrichment retry started',
   removeDone: 'Removed from index',
   batchRemoveSelected: 'Remove selected',
   batchRemoveAll: 'Remove all',
@@ -1134,6 +1138,7 @@ export const uiZh: UiMessages = {
     'URL 导入暂不支持增强 — 请用上传或本地路径，或之后在片库开启。',
   dramaPendingHint: '增强已排队（ready 之后）：{modules}',
   dramaClientNeedModules: '请至少选择一个增强模块。',
+  dramaClientNeedsDirectors: '关键演员需要同时选择导演脚本。',
   dramaClientNeedLanguages: '勾选字幕模块时请至少选择一种字幕语言。',
   dramaStatusLabel: '增强',
   dramaRetryLabel: '重试增强',
@@ -1244,6 +1249,7 @@ export const uiZh: UiMessages = {
   refresh: '刷新',
   libraryError: '无法加载片库',
   retryStarted: '已开始重新索引',
+  dramaRetryStarted: '已开始重试增强',
   removeDone: '已从索引移除',
   batchRemoveSelected: '删除所选',
   batchRemoveAll: '全部删除',

@@ -163,6 +163,40 @@ not merely an early script excerpt. Korean and Thai source episodes can select
 live ASR and source-language quality still need representative-episode validation.
 Follow-up findings and gates: [`todo/38`](../todo/38-drama-implementation-followup-2026-09-28.md).
 
+### Review correction — retry generations and portable outputs (2026-10-04)
+
+A request-level retry creates a fresh `run_id`; the prepared runner reuses
+only that newly assigned workspace. Publishing its running marker snapshots
+the preceding generation, so earlier results remain available even if the
+retry fails. Same-generation cue reconciliation still applies within a run;
+old subtitle documents retire only after the corresponding replacement
+language indexes successfully. Manually prepared `host_<lang>.srt` transcripts
+are copied from the immediately preceding retry generation without overwriting
+new host edits. Final job status is persisted through the existing partial
+asset update; editorial metadata and chunk vectors remain untouched.
+
+Retry, Library Start and the ingest-to-ready handoff share an in-process start
+reservation. A ready asset with a pending/running marker and no live owner is
+reported as interrupted/failed and may start again. Multi-replica ownership
+remains an open acceptance gate. Results polling rejects older generations
+until the accepted retry generation is observed.
+
+New script, subtitle and thumbnail paths are run-relative. Legacy absolute
+paths resolve through the exact `media/<video_id>/drama/<run_id>` anchor,
+with the published-artifact allowlist and realpath checks retained.
+
+Subtitle vectors carry `text_embedding_variant`, a hash of provider, model,
+task, passage role, dimensions and normalization. Each run checks the existing
+index dimensions and adds the keyword mapping when needed; incompatible or
+unreadable mappings produce lexical-only cues without vector inference.
+Future vector retrieval must filter this identity and exclude untagged legacy
+vectors. This change does not introduce subtitle vector retrieval.
+
+Rejected local enrichment imports are validated before copying. Rejected
+uploads remain in quarantine rather than being deleted. All-rejected batches
+return their per-file reasons. Acceptance evidence and remaining runtime/UI
+gates live in [todo/55](../todo/55-review-remediation-2026-10-04.md).
+
 ### `ko` / `th` source-language transcription acceptance plan
 
 The operator selects the **spoken source language**. Selecting `ko` means

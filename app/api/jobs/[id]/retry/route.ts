@@ -5,12 +5,14 @@ import {
   createIngestJob,
   getIngestJob,
   resolveIngestJob,
+  updateJob,
 } from '@/lib/ingest/job-store';
 import {
   prepareJobEstimate,
   startPipelineAsync,
 } from '@/lib/ingest/pipeline';
-import { isDramaRunActive, startDramaEnrichmentAsync } from '@/lib/drama/runner';
+import { prepareDramaHandoff, startDramaEnrichmentAsync } from '@/lib/drama/runner';
+import { reserveDramaStart, releaseDramaStart } from '@/lib/drama/run-lease';
 import { DramaRetryPolicyError, resolveDramaRetryPolicy } from '@/lib/drama/retry-policy';
 import { resolveLocale } from '@/lib/i18n';
 
@@ -79,19 +81,14 @@ export async function POST(
 
   // Drama-only resume (R7): base ingest already reached `ready`, so rerun
   // just the follow-on enrichment instead of re-embedding every chunk.
-  // The stable run ID is kept so subtitle bulk `_id`s overwrite rather
-  // than duplicate; the per-video lease (F1) rejects overlapping runs.
+  // Each retry publishes a fresh generation and preserves earlier results.
   if (
     prev.status === 'ready' &&
     prev.drama &&
     prev.drama.status !== 'succeeded' &&
     prev.drama.status !== 'skipped'
   ) {
-    // F1: refuse when a run is active. This check and the runner's
-    // lease acquisition below execute with no `await` between them, so
-    // the pair is atomic on a single process (no interleaving request
-    // can slip in). Cross-replica overlap remains explicitly open.
-    if (isDramaRunActive(prev.videoId)) {
+    if (!reserveDramaStart(prev.videoId)) {
       return NextResponse.json(
         {
           error: {
@@ -105,21 +102,29 @@ export async function POST(
         { status: 409 },
       );
     }
-    prev.drama = {
-      status: 'pending',
-      languages: prev.drama.languages,
-      modules: prev.drama.modules,
-      modules_done: [],
-      run_id: prev.drama.run_id,
-      // Default to the original policy; an explicit retry request may revise it.
-      subtitleSource: retryPolicy?.subtitleSource ?? prev.drama.subtitleSource,
-      sourceLanguage: retryPolicy?.sourceLanguage ?? prev.drama.sourceLanguage,
-      directorCoverage: prev.drama.directorCoverage,
-    };
-    prev.pipelineRunning = false;
-    // The runner acquires the lease and releases it in `finally`.
-    startDramaEnrichmentAsync(prev);
-    return NextResponse.json(ingestAcceptResponse(prev));
+    const previousDrama = prev.drama;
+    try {
+      prev.drama = {
+        status: 'pending',
+        languages: prev.drama.languages,
+        modules: prev.drama.modules,
+        modules_done: [],
+        // Default to the original policy; an explicit retry request may revise it.
+        subtitleSource: retryPolicy?.subtitleSource ?? prev.drama.subtitleSource,
+        sourceLanguage: retryPolicy?.sourceLanguage ?? prev.drama.sourceLanguage,
+        directorCoverage: prev.drama.directorCoverage,
+      };
+      prev.pipelineRunning = false;
+      await prepareDramaHandoff(prev, previousDrama.run_id);
+      await updateJob(prev, { drama: prev.drama }, { persist: true });
+      startDramaEnrichmentAsync(prev);
+      return NextResponse.json(ingestAcceptResponse(prev));
+    } catch {
+      prev.drama = previousDrama;
+      return NextResponse.json({ error: { code: 'DRAMA_START_FAILED', message: 'Could not prepare enrichment retry' } }, { status: 500 });
+    } finally {
+      releaseDramaStart(prev.videoId);
+    }
   }
 
   const job = createIngestJob({
@@ -132,8 +137,6 @@ export async function POST(
     videoId: prev.videoId,
     chunking: prev.chunking,
     // Carry an unfinished drama request so base retry still enriches (R7).
-    // The stable run ID is carried too (F1) so a later drama rerun
-    // overwrites the same subtitle documents.
     drama:
       prev.drama &&
       prev.drama.status !== 'succeeded' &&
@@ -143,7 +146,6 @@ export async function POST(
             languages: prev.drama.languages,
             modules: prev.drama.modules,
             modules_done: [],
-            run_id: prev.drama.run_id,
             // P4: keep the original per-run policy on base retry too.
             subtitleSource: prev.drama.subtitleSource,
             sourceLanguage: prev.drama.sourceLanguage,

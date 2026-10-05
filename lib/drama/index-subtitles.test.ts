@@ -1,6 +1,9 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { SrtCue } from './srt';
 
+const getMappingMock = vi.fn();
+const putMappingMock = vi.fn();
+const providerIdentity = { provider: 'jina', model: 'omni', task: 'retrieval', dims: 2, normalizedBy: 'application' };
 const bulkMock = vi.fn(async (_request: { operations: unknown[] }) => ({ errors: false, items: [] }));
 const deleteByQueryMock = vi.fn(async (_request: { query: unknown }) => ({ deleted: 3 }));
 const embedTextMock = vi.fn(async (text: string) => ({
@@ -20,11 +23,11 @@ vi.mock('./env', () => ({
 }));
 
 vi.mock('../embed/provider', () => ({
-  createEmbeddingProvider: () => ({ embedText: embedTextMock }),
+  createEmbeddingProvider: () => ({ ...providerIdentity, embedText: embedTextMock }),
 }));
 
 vi.mock('../es/client', () => ({
-  getEsClient: () => ({ bulk: bulkMock, deleteByQuery: deleteByQueryMock }),
+  getEsClient: () => ({ bulk: bulkMock, deleteByQuery: deleteByQueryMock, indices: { getMapping: getMappingMock, putMapping: putMappingMock } }),
 }));
 
 import {
@@ -40,6 +43,9 @@ function cue(i: number): SrtCue {
 describe('indexDramaSubtitles', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    getMappingMock.mockResolvedValue({ subtitles: { mappings: { properties: { text_embedding: { type: 'dense_vector', dims: 2 }, text_embedding_variant: { type: 'keyword' } } } } });
+    putMappingMock.mockResolvedValue({ acknowledged: true });
+    providerIdentity.model = 'omni';
     bulkMock.mockResolvedValue({ errors: false, items: [] });
   });
 
@@ -96,7 +102,7 @@ describe('indexDramaSubtitles', () => {
     expect(body).toMatchObject({ lang, start_ms: 1000, end_ms: 1800 });
   });
 
-  it('embeds the run id in every document id (retry overwrites, F1)', async () => {
+  it('embeds the generation ID in every document ID', async () => {
     const cues = [cue(1)];
     await indexDramaSubtitles({
       videoId: 'vid1',
@@ -184,5 +190,38 @@ describe('indexDramaSubtitles', () => {
     });
     expect(res).toEqual({ deleted: 0 });
     expect(deleteByQueryMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('subtitle vector identity and mapping compatibility', () => {
+  const indexOne = () => indexDramaSubtitles({ videoId: 'vid1', runId: 'run1', lang: 'en', cues: [cue(1)], source: 'asr' });
+  beforeEach(() => {
+    vi.clearAllMocks(); providerIdentity.model = 'omni';
+    getMappingMock.mockResolvedValue({ subtitles: { mappings: { properties: { text_embedding: { type: 'dense_vector', dims: 2 }, text_embedding_variant: { type: 'keyword' } } } } });
+    bulkMock.mockResolvedValue({ errors: false, items: [] });
+  });
+  it('tags vectors with provider identity and changes the tag with the model', async () => {
+    await indexOne();
+    const first = bulkMock.mock.calls[0][0].operations[1] as Record<string, unknown>;
+    providerIdentity.model = 'other-model'; await indexOne();
+    const second = bulkMock.mock.calls[1][0].operations[1] as Record<string, unknown>;
+    expect(first.text_embedding_variant).toMatch(/^[a-f0-9]{16}$/);
+    expect(first.text_embedding_variant).not.toBe(second.text_embedding_variant);
+  });
+  it('keeps all cues lexical when index dimensions differ, without charging inference', async () => {
+    getMappingMock.mockResolvedValueOnce({ subtitles: { mappings: { properties: { text_embedding: { type: 'dense_vector', dims: 1024 } } } } });
+    expect(await indexOne()).toMatchObject({ indexed: 1, embedded: 0 });
+    expect(embedTextMock).not.toHaveBeenCalled();
+    expect(bulkMock.mock.calls[0][0].operations[1]).not.toHaveProperty('text_embedding_variant');
+  });
+  it('adds the identity mapping to an existing compatible strict index', async () => {
+    getMappingMock.mockResolvedValueOnce({ subtitles: { mappings: { properties: { text_embedding: { type: 'dense_vector', dims: 2 } } } } });
+    await indexOne();
+    expect(putMappingMock).toHaveBeenCalledWith({ index: 'video-drama-subtitles', properties: { text_embedding_variant: { type: 'keyword' } } });
+  });
+  it('falls back to lexical indexing when mapping inspection is unavailable', async () => {
+    getMappingMock.mockRejectedValueOnce(new Error('permission denied'));
+    expect(await indexOne()).toMatchObject({ indexed: 1, embedded: 0 });
+    expect(embedTextMock).not.toHaveBeenCalled();
   });
 });

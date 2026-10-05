@@ -12,7 +12,8 @@ Source review: [`reviews/enrichment-and-hybrid-post-push-code-review-2026-10-01.
 
 ## Next update
 
-- [ ] **P2 — retry UI race:** retain polling after a retry 202 despite a stale persisted failed status. Add a component-level test for delayed asset update and out-of-order responses.
+- [x] **P2 — retry UI race implementation:** retain polling after accepting retry despite stale persisted failed status. A generation/sequence guard rejects stale and out-of-order reads; batch epochs and terminal-event guards protect ingest streams (2026-10-04, [todo/55](55-review-remediation-2026-10-04.md)).
+- [ ] Add a component-level test for delayed asset update/out-of-order responses. Pure guard regression passes; component/browser acceptance remains NOT RUN.
 - [ ] **P2 — long bilingual subtitles:** decide and implement a bounded continuation for more than 1000 cues, including durable progress and cost bounds, or reject that request before processing with a clear user-facing limit. Test 1000/1001 cues.
 - [ ] Verify failed/partial **Enrichment results** retry and polling in the rebuilt browser, including an immediate refresh after accepting retry.
 - [ ] Verify a new upload with EN+ZH selected and the actual spoken language; confirm one original transcript, one translation, aligned cues, and correct provenance.

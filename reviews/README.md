@@ -6,6 +6,32 @@ loses an action item.
 
 ## Current — project level
 
+- [`update-publish-readiness-review-2026-10-05.md`](./update-publish-readiness-review-2026-10-05.md)
+  — **Feature-branch publication ready; release gates remain open.** Final 851
+  tests, Docker build and scoped browser checks pass; separate remediation,
+  logo and Group auto-selection commits. → [`todo/58`](../todo/58-update-publish-2026-10-05.md)
+
+- [`review-remediation-code-review-2026-10-04.md`](./review-remediation-code-review-2026-10-04.md)
+  — **Scoped findings repaired; acceptance remains open.** Fresh retry generations,
+  interrupted-run recovery, shared start guards, editor/ingest fixes, portable
+  artifacts and vector identity. 846 tests/build, isolated live ES and scoped
+  browser checks pass. Supersedes code dispositions in the two reviews below.
+  → [`todo/55`](../todo/55-review-remediation-2026-10-04.md)
+
+- [`branch-wide-bug-review-2026-10-04.md`](./branch-wide-bug-review-2026-10-04.md)
+  — **No P1; five P2s.** Retry reuses the run ID and wipes that run's
+  results; "stuck at running" has non-restart triggers; Group-only edits and
+  the operator hint are lost to stale React callbacks; the ingest page locks
+  after a failure. Eleven P3s. No code changed.
+  → [`todo/54`](../todo/54-branch-wide-bug-review-2026-10-04.md)
+
+- [`demo-path-bug-sweep-code-review-2026-10-03.md`](./demo-path-bug-sweep-code-review-2026-10-03.md)
+  — **Normal demo path is clean; one conditional demo-breaker.** An app
+  restart during an enrichment run leaves the UI stuck at "running" with no
+  retry/start. Four minor visible glitches (duplicate Group option, false
+  "no match" hint, script links download, wrong retry toast).
+  → [`todo/53`](../todo/53-demo-path-bug-sweep-2026-10-03.md)
+
 - [`trimmed-run-age-guard-and-scene-buttons-code-review-2026-10-02.md`](./trimmed-run-age-guard-and-scene-buttons-code-review-2026-10-02.md)
   — **One P2 and two P3s found, all fixed.** The age guard now fails closed
   on any unreadable entry instead of treating it as "nothing newer" (both

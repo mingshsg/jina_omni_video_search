@@ -71,6 +71,7 @@ export async function POST(request: Request) {
       nodeStream,
       file.name,
       cfg,
+      (probe) => { acceptDramaForIngest({ mode: 'upload', durationMs: probe.duration_ms, options: dramaOpts }); },
     );
 
     const titleField = form.get('title');

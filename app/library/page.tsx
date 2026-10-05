@@ -643,7 +643,7 @@ export default function LibraryPage() {
           drama={dramaViewTarget.drama}
           onClose={() => setDramaViewTarget(null)}
           onRetryStarted={() => {
-            setToast(t.retryStarted);
+            setToast(t.dramaRetryStarted);
             void load();
           }}
         />

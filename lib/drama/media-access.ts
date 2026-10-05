@@ -1,5 +1,6 @@
 import path from 'node:path';
 import type { DramaMetaPayload } from './persist-meta';
+import { dramaArtifactRelativePath } from './artifact-path';
 
 function inside(root: string, candidate: string): boolean {
   const rel = path.relative(root, candidate);
@@ -32,8 +33,8 @@ export function approvedDramaMediaPath(params: {
     publishedRun.directors_script_en_path,
     ...(publishedRun.subtitle_paths ?? []).filter((raw) => {
       if (typeof raw !== 'string') return false;
-      const relative = path.relative(root, path.resolve(root, raw))
-        .split(path.sep).join('/');
+      const relative = dramaArtifactRelativePath(raw, videoId, runId);
+      if (!relative) return false;
       const match = /^subtitles\/(en|zh|ko|th)\.srt$/.exec(relative);
       return Boolean(match && publishedRun.languages.includes(match[1] as 'en' | 'zh' | 'ko' | 'th'));
     }),
@@ -44,7 +45,9 @@ export function approvedDramaMediaPath(params: {
   ];
   for (const raw of published) {
     if (typeof raw !== 'string' || !raw) continue;
-    const candidate = path.resolve(root, raw);
+    const relative = dramaArtifactRelativePath(raw, videoId, runId);
+    if (!relative) continue;
+    const candidate = path.resolve(root, relative);
     if (inside(root, candidate) && candidate === requested) return candidate;
   }
   return null;

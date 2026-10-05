@@ -20,7 +20,10 @@ const requestSchema = z.object({
 });
 
 export async function POST(request: Request, { params }: { params: { videoId: string } }) {
-  const videoId = decodeURIComponent(params.videoId ?? '').trim();
+  let videoId: string;
+  try { videoId = decodeURIComponent(params.videoId ?? '').trim(); } catch {
+    return NextResponse.json({ error: { code: 'LIBRARY_INVALID', message: 'Invalid video id' } }, { status: 400 });
+  }
   if (!videoId || videoId.includes('/') || videoId.includes('..')) {
     return NextResponse.json(
       { error: { code: 'LIBRARY_INVALID', message: 'Invalid video id' } },
@@ -29,7 +32,10 @@ export async function POST(request: Request, { params }: { params: { videoId: st
   }
   try {
     getConfig();
-    const raw: unknown = await request.json();
+    let raw: unknown;
+    try { raw = await request.json(); } catch {
+      return NextResponse.json({ error: { code: 'INGEST_DRAMA_INVALID', message: 'Invalid JSON body' } }, { status: 400 });
+    }
     const parsed = requestSchema.safeParse(raw);
     if (!parsed.success) {
       return NextResponse.json(

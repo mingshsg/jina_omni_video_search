@@ -75,3 +75,16 @@ describe('approvedDramaMediaPath', () => {
     expect(allowed(['subtitles', 'en.srt'], newer, 'run3')).toBeNull();
   });
 });
+
+describe('portable published artifact paths', () => {
+  it('serves a legacy path recorded under another MEDIA_ROOT', () => {
+    const legacy = { ...drama, directors_script_zh_path: '/app/data/media/vid1/drama/run1/scripts/directors_script_zh.md', subtitle_paths: ['/app/data/media/vid1/drama/run1/subtitles/en.srt'] };
+    expect(allowed(['scripts', 'directors_script_zh.md'], legacy)).toBe(path.join(runRoot, 'scripts/directors_script_zh.md'));
+    expect(allowed(['subtitles', 'en.srt'], legacy)).toBe(path.join(runRoot, 'subtitles/en.srt'));
+  });
+  it('rejects a legacy path anchored to another video or run and traversal', () => {
+    for (const raw of ['/app/data/media/other/drama/run1/scripts/directors_script_zh.md', '/app/data/media/vid1/drama/other/scripts/directors_script_zh.md', '/app/data/media/vid1/drama/run1/scripts/../scripts/directors_script_zh.md']) {
+      expect(allowed(['scripts', 'directors_script_zh.md'], { ...drama, directors_script_zh_path: raw })).toBeNull();
+    }
+  });
+});

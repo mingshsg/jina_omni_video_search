@@ -58,7 +58,8 @@ describe('renameAssetTitle', () => {
     const assetReq = mocks.update.mock.calls[0]?.[0];
     expect(assetReq.index).toBe('video-assets');
     expect(assetReq.id).toBe('v1');
-    expect(assetReq.doc).toEqual({ title: NEW_TITLE });
+    expect(assetReq.script.params).toEqual({ expected: OLD_TITLE, title: NEW_TITLE });
+    expect(assetReq.script.source).toContain('Title changed concurrently');
 
     const chunkReq = mocks.updateByQuery.mock.calls[0]?.[0];
     expect(chunkReq.index).toBe('video-chunks');
@@ -125,5 +126,20 @@ describe('renameAssetTitle', () => {
     });
     expect(mocks.update).not.toHaveBeenCalled();
     expect(mocks.updateByQuery).not.toHaveBeenCalled();
+  });
+});
+
+describe('partial rename recovery', () => {
+  it.each([{ version_conflicts: 1 }, { timed_out: true }, { failures: [{ cause: 'blocked' }] }])('does not report propagation success on %j', async (partial) => {
+    mocks.getAsset.mockResolvedValue({ video_id: 'v1', title: OLD_TITLE });
+    mocks.update.mockResolvedValue({ result: 'updated' });
+    mocks.updateByQuery.mockResolvedValue({ total: 10, updated: 9, ...partial });
+    await expect(renameAssetTitle({ videoId: 'v1', expectedTitle: OLD_TITLE, newTitle: NEW_TITLE })).rejects.toThrow(/incomplete; retry/);
+  });
+  it('accepts the same rename after the asset already changed but chunks did not', async () => {
+    mocks.getAsset.mockResolvedValue({ video_id: 'v1', title: NEW_TITLE });
+    mocks.update.mockResolvedValue({ result: 'noop' });
+    mocks.updateByQuery.mockResolvedValue({ total: 10, updated: 1 });
+    expect(await renameAssetTitle({ videoId: 'v1', expectedTitle: OLD_TITLE, newTitle: NEW_TITLE })).toMatchObject({ asset_result: 'noop', chunks_updated: 1 });
   });
 });

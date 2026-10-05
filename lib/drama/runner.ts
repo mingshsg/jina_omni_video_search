@@ -2,11 +2,13 @@
  * Follow-on drama enrichment after ingest embed reaches `ready` (plan/12 P1).
  * Node/ffmpeg path — Python submodule not required.
  */
+import path from 'node:path';
 import type { IngestJob } from '../ingest/job-store';
 import { updateJob } from '../ingest/job-store';
 import type { DramaJobState, DramaModule } from '../ingest/drama-options';
 import {
   createDramaWorkspace,
+  copyRetryHostSubtitles,
   isSafeDramaRunId,
   openDramaWorkspace,
   writeDramaJson,
@@ -25,6 +27,10 @@ import { generateDirectorsScript } from './directors-script';
 import { generateKeyActors } from './key-actors';
 import { extractKeyScenes } from './key-scenes';
 import { cleanupDramaFrames } from './frame-gc';
+
+import { tryAcquireDramaRun, releaseDramaRun } from './run-lease';
+export { isDramaRunActive, tryAcquireDramaRun, releaseDramaRun, clearDramaRunLeases } from './run-lease';
+
 
 function patchDrama(
   job: IngestJob,
@@ -53,43 +59,8 @@ async function emitDramaProgress(
 }
 
 /**
- * Per-video drama run lease (F1, single process).
- * Guards against two enrichment runs overlapping on one video — e.g. two
- * concurrent retry requests — which would race `meta.drama` and the shared
- * in-memory job state. Multi-replica ownership is explicitly still open.
- */
-const activeDramaRuns = new Map<string, string>(); // videoId -> jobId
-
-export function isDramaRunActive(videoId: string): boolean {
-  return activeDramaRuns.has(videoId);
-}
-
-/**
- * Atomically acquire the run lease (single-threaded check-and-set).
- * Not reentrant: even the same job cannot overlap itself — a second
- * concurrent entry returns without touching shared state.
- */
-export function tryAcquireDramaRun(videoId: string, jobId: string): boolean {
-  if (activeDramaRuns.has(videoId)) return false;
-  activeDramaRuns.set(videoId, jobId);
-  return true;
-}
-
-export function releaseDramaRun(videoId: string, jobId: string): void {
-  if (activeDramaRuns.get(videoId) === jobId) {
-    activeDramaRuns.delete(videoId);
-  }
-}
-
-/** Test helper — not for production use. */
-export function clearDramaRunLeases(): void {
-  activeDramaRuns.clear();
-}
-
-/**
- * Resolve this run's workspace, reusing the stable run ID when one is
- * already assigned (retry path). Same run ID ⇒ same artifact paths and
- * same subtitle bulk `_id`s, so retries overwrite instead of duplicating.
+ * Resolve this run's workspace, reusing an ID assigned by the handoff. Each retry clears the old ID
+ * before handoff so published generations remain available.
  */
 function resolveDramaWorkspace(job: IngestJob): DramaWorkspace {
   const runId = job.drama?.run_id;
@@ -107,9 +78,10 @@ function resolveDramaWorkspace(job: IngestJob): DramaWorkspace {
  * recoverable marker. Throws on marker failure; the caller must surface
  * that visibly (failed drama, retryable) without reverting base `ready`.
  */
-export async function prepareDramaHandoff(job: IngestJob): Promise<DramaWorkspace> {
+export async function prepareDramaHandoff(job: IngestJob, previousRunId?: string): Promise<DramaWorkspace> {
   if (!job.drama) throw new Error('prepareDramaHandoff: job has no drama request');
   const ws = resolveDramaWorkspace(job);
+  copyRetryHostSubtitles(previousRunId, ws);
   patchDrama(job, {
     status: 'running',
     run_id: ws.runId,
@@ -475,6 +447,12 @@ export async function runDramaEnrichment(job: IngestJob): Promise<void> {
               ? 'partial'
               : 'failed';
 
+    const portable = (raw: string | undefined): string | undefined => {
+      if (!raw) return undefined;
+      const relative = path.isAbsolute(raw) ? path.relative(ws.rootDir, raw) : raw;
+      if (relative.split(/[\\/]/).some((part) => part === '..' || part === '.') || path.isAbsolute(relative)) return undefined;
+      return relative.split(path.sep).join('/');
+    };
     const dramaMeta: DramaMetaPayload = {
       run_id: ws.runId,
       enrichment_status,
@@ -494,12 +472,12 @@ export async function runDramaEnrichment(job: IngestJob): Promise<void> {
             ? 'audited'
             : 'provisional'
           : undefined,
-      directors_script_zh_path: directorsPaths?.zh,
-      directors_script_en_path: directorsPaths?.en,
-      directors_script_raw_path: directorsPaths?.raw,
-      subtitle_paths: subtitlePaths,
-      key_actors: keyActors?.actors,
-      key_scenes: keyScenes?.scenes,
+      directors_script_zh_path: portable(directorsPaths?.zh),
+      directors_script_en_path: portable(directorsPaths?.en),
+      directors_script_raw_path: portable(directorsPaths?.raw),
+      subtitle_paths: subtitlePaths.map(portable).filter((raw): raw is string => Boolean(raw)),
+      key_actors: keyActors?.actors.map((actor) => ({ ...actor, thumb_path: portable(actor.thumb_path) })),
+      key_scenes: keyScenes?.scenes.map((scene) => ({ ...scene, thumb_path: portable(scene.thumb_path) })),
       error:
         errors.length > 0
           ? {
@@ -550,7 +528,7 @@ export async function runDramaEnrichment(job: IngestJob): Promise<void> {
               ? `Enrichment partial: ${dramaMeta.error?.message ?? ''}`
               : `Enrichment failed: ${dramaMeta.error?.message ?? ''}`,
       },
-      { event: 'progress', persist: false },
+      { event: 'progress', persist: true },
     );
   } finally {
     releaseDramaRun(job.videoId, job.id);

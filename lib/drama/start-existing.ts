@@ -6,8 +6,8 @@ import {
   assertDramaDurationAllowed,
   type DramaRequestOptions,
 } from '../ingest/drama-request';
-import { DRAMA_TERMINAL_STATUSES } from '../ingest/drama-options';
-import { resolveIngestJob } from '../ingest/job-store';
+import { reserveDramaStart, releaseDramaStart } from './run-lease';
+import { updateJob, resolveIngestJob } from '../ingest/job-store';
 import {
   isDramaRunActive,
   prepareDramaHandoff,
@@ -24,17 +24,13 @@ export class ExistingDramaStartError extends Error {
   }
 }
 
-/** Serializes starts on this process; the runner owns the subsequent lease. */
-const starting = new Set<string>();
-
 export async function startExistingDrama(
   videoId: string,
   options: DramaRequestOptions,
 ): Promise<{ job_id: string; video_id: string; run_id: string | null }> {
-  if (starting.has(videoId)) {
+  if (!reserveDramaStart(videoId)) {
     throw new ExistingDramaStartError('DRAMA_RUN_ACTIVE', 409, 'Enrichment is already starting');
   }
-  starting.add(videoId);
   try {
     const asset = await getAsset(videoId);
     if (!asset) {
@@ -43,18 +39,7 @@ export async function startExistingDrama(
     if (asset.status !== 'ready') {
       throw new ExistingDramaStartError('DRAMA_NOT_READY', 409, 'Video must be ready before enrichment');
     }
-    const drama = (asset.meta as { drama?: { enrichment_status?: string } } | undefined)?.drama;
-    const currentStatus = drama?.enrichment_status ?? asset.job?.drama?.status;
-    if (
-      currentStatus &&
-      !(DRAMA_TERMINAL_STATUSES as readonly string[]).includes(currentStatus)
-    ) {
-      throw new ExistingDramaStartError(
-        'DRAMA_RUN_ACTIVE',
-        409,
-        'Enrichment is already running for this video',
-      );
-    }
+    // Durable running markers without an owner are interrupted and retryable.
     if (isDramaRunActive(videoId)) {
       throw new ExistingDramaStartError('DRAMA_RUN_ACTIVE', 409, 'Enrichment is already running');
     }
@@ -82,6 +67,7 @@ export async function startExistingDrama(
       // Durable marker before responding: a restart leaves a retryable run.
       const ws = await prepareDramaHandoff(job);
       runId = ws.runId;
+      await updateJob(job, { drama: job.drama }, { persist: true });
     } catch (err) {
       job.drama = previousDrama;
       throw err;
@@ -89,6 +75,6 @@ export async function startExistingDrama(
     startDramaEnrichmentAsync(job);
     return { job_id: job.id, video_id: videoId, run_id: runId };
   } finally {
-    starting.delete(videoId);
+    releaseDramaStart(videoId);
   }
 }

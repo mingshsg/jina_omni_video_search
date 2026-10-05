@@ -58,3 +58,13 @@ describe('lookupMissName (R5)', () => {
     expect('ab'.length < EXACT_LOOKUP_MISS_MIN_LENGTH).toBe(true);
   });
 });
+
+describe('catalog group lookup', () => {
+  it('matches localized labels and partial IDs without a false no-match hint', async () => {
+    const { groupLookupMatches, lookupMissName } = await import('./exact-lookup');
+    const catalog = [{ id: 'trailer', label: '预告片' }, { id: 'demo', label: '演示' }];
+    expect(groupLookupMatches('预告片', catalog, true)).toEqual([catalog[0]]);
+    expect(lookupMissName('TRAIL', groupLookupMatches('TRAIL', catalog))).toBeNull();
+    expect(lookupMissName('unknown', groupLookupMatches('unknown', catalog))).toBe('unknown');
+  });
+});

@@ -41,6 +41,7 @@ export function dramaSubtitlesMapping(opts?: {
           index: true,
           similarity: 'cosine',
         },
+        text_embedding_variant: { type: 'keyword' },
         source: { type: 'keyword' },
         created_at: { type: 'date' },
         ...textSemantic,

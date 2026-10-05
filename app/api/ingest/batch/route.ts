@@ -68,9 +68,10 @@ type BatchItemError = {
   message: string;
 };
 
-function errorResponse(err: IngestError, locale: 'zh' | 'en', status: number) {
+function errorResponse(err: IngestError, locale: 'zh' | 'en', status: number, errors?: BatchItemError[]) {
   return NextResponse.json(
     {
+      ...(errors ? { errors } : {}),
       error: {
         code: err.code,
         message: ingestErrorMessage(err.code, locale),
@@ -112,12 +113,12 @@ async function acceptLocalFileJob(opts: {
   dramaOptions?: DramaRequestOptions;
 }): Promise<IngestJob> {
   const local = await importFromLocalPath(opts.sourcePath, opts.cfg);
-  const mediaPath = await copyLocalToOriginals(local.mediaPath, opts.cfg);
   const drama = acceptDramaForIngest({
     mode: 'local',
     durationMs: local.probe.duration_ms,
     options: opts.dramaOptions,
   });
+  const mediaPath = await copyLocalToOriginals(local.mediaPath, opts.cfg);
   const job = createIngestJob({
     mode: 'local',
     mediaPath,
@@ -149,6 +150,7 @@ async function acceptUploadFileJob(opts: {
     nodeStream,
     opts.file.name,
     opts.cfg,
+    (probe) => { acceptDramaForIngest({ mode: 'upload', durationMs: probe.duration_ms, options: opts.dramaOptions }); },
   );
   const drama = acceptDramaForIngest({
     mode: 'upload',
@@ -294,7 +296,7 @@ async function handleFolderBatch(
   }
 
   if (jobs.length === 0) {
-    return errorResponse(new IngestError('INGEST_BATCH_EMPTY'), locale, 400);
+    return errorResponse(new IngestError('INGEST_BATCH_EMPTY'), locale, 400, errors);
   }
 
   return NextResponse.json(batchResponse(jobs, errors, chunking));
@@ -359,7 +361,7 @@ async function handleUploadBatch(
   }
 
   if (jobs.length === 0) {
-    return errorResponse(new IngestError('INGEST_BATCH_EMPTY'), locale, 400);
+    return errorResponse(new IngestError('INGEST_BATCH_EMPTY'), locale, 400, errors);
   }
 
   return NextResponse.json(batchResponse(jobs, errors, chunking));

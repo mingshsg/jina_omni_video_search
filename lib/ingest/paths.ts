@@ -56,10 +56,7 @@ export function quarantinePartial(
     const dest = path.join(dir, `${path.basename(partialPath)}.${Date.now()}.partial`);
     fs.renameSync(partialPath, dest);
   } catch {
-    try {
-      fs.unlinkSync(partialPath);
-    } catch {
-      /* best effort */
-    }
+    // Preserve the staged file if quarantine cannot be written. Never delete
+    // user media; an operator can recover it from the original staging path.
   }
 }

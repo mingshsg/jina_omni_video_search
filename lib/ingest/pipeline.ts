@@ -31,6 +31,7 @@ import {
   type WindowErrorInfo,
 } from './job-store';
 import { startDramaEnrichmentAsync, prepareDramaHandoff } from '../drama/runner';
+import { reserveDramaStart, releaseDramaStart } from '../drama/run-lease';
 
 function mediaRoot(cfg: AppConfig): string {
   return path.resolve(cfg.MEDIA_ROOT);
@@ -183,6 +184,7 @@ export async function runIngestPipeline(job: IngestJob): Promise<void> {
   job.pipelineRunning = true;
   const cfg = getConfig();
   const root = mediaRoot(cfg);
+  let dramaReserved = false;
   const startedMs = Date.now();
   const startedAt = new Date(startedMs).toISOString();
 
@@ -457,6 +459,8 @@ export async function runIngestPipeline(job: IngestJob): Promise<void> {
     // via the retry route — base `ready` is still emitted.
     if (job.drama) {
       try {
+        dramaReserved = reserveDramaStart(job.videoId);
+        if (!dramaReserved) throw new Error('Enrichment is already starting or running');
         await prepareDramaHandoff(job);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -534,6 +538,7 @@ export async function runIngestPipeline(job: IngestJob): Promise<void> {
       { event: 'error', persist: true, extra: { error: fatal } },
     );
   } finally {
+    if (dramaReserved) releaseDramaStart(job.videoId);
     job.pipelineRunning = false;
   }
 }

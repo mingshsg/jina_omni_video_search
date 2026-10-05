@@ -3,6 +3,7 @@
 import {
   EuiBadge,
   EuiButton,
+  EuiButtonEmpty,
   EuiCallOut,
   EuiCheckbox,
   EuiComboBox,
@@ -166,6 +167,7 @@ export default function IngestPage() {
   const batchTotalRef = useRef(0);
   // I3: once any batch item fails (base or drama), results stay until an
   // explicit reset — the finished banner must not auto-clear them.
+  const batchEpoch = useRef(0);
   const batchRetainRef = useRef(false);
   const [batchRetainResults, setBatchRetainResults] = useState(false);
 
@@ -207,6 +209,8 @@ export default function IngestPage() {
   }, [clearSuccessResetTimer, closeStream]);
 
   const resetBatchForm = useCallback(() => {
+    batchEpoch.current += 1;
+    setBatchFinishedBanner(false);
     closeBatchStreams();
     setBatchFiles([]);
     setBatchPickerKey((k) => k + 1);
@@ -404,7 +408,9 @@ export default function IngestPage() {
       // drama) or skipped-file errors retain rows + errors until the
       // operator explicitly clears or retries.
       if (!batchRetainRef.current && batchFailedRef.current === 0) {
+        const epoch = batchEpoch.current;
         setTimeout(() => {
+          if (epoch !== batchEpoch.current) return;
           resetBatchForm();
         }, SUCCESS_RESET_MS);
       }
@@ -413,6 +419,7 @@ export default function IngestPage() {
 
   const attachBatchStream = useCallback(
     (row: BatchJobRow) => {
+      const epoch = batchEpoch.current;
       const existing = batchStreamsRef.current.get(row.job_id);
       if (existing) {
         existing.close();
@@ -423,7 +430,9 @@ export default function IngestPage() {
       );
       batchStreamsRef.current.set(row.job_id, es);
 
+      let terminalSeen = false;
       const onPayload = (raw: MessageEvent) => {
+        if (terminalSeen || epoch !== batchEpoch.current) return;
         try {
           const data = JSON.parse(String(raw.data)) as ProgressSnapshot;
           setBatchRows((prev) =>
@@ -434,6 +443,7 @@ export default function IngestPage() {
           if (data.status === 'ready') {
             // R9: keep batch rows until drama reaches a terminal state.
             if (isDramaActive(data)) return;
+            terminalSeen = true;
             es.close();
             batchStreamsRef.current.delete(row.job_id);
             // F4: partial/failed enrichment is not a batch success — keep
@@ -462,6 +472,7 @@ export default function IngestPage() {
               return;
             }
             setTimeout(() => {
+              if (epoch !== batchEpoch.current) return;
               setBatchRows((prev) =>
                 prev.filter((r) => r.job_id !== row.job_id),
               );
@@ -470,6 +481,7 @@ export default function IngestPage() {
               maybeFinishBatch();
             }, SUCCESS_RESET_MS);
           } else if (data.status === 'failed') {
+            terminalSeen = true;
             es.close();
             batchStreamsRef.current.delete(row.job_id);
             batchFailedRef.current += 1;
@@ -506,6 +518,10 @@ export default function IngestPage() {
       return false;
     }
     const mods = dramaModules.map((o) => String(o.value ?? o.label));
+    if (mods.includes('key_actors') && !mods.includes('directors_script')) {
+      setClientError(t.dramaClientNeedsDirectors);
+      return false;
+    }
     if (mods.includes('subtitles') && dramaLanguages.length === 0) {
       setClientError(t.dramaClientNeedLanguages);
       return false;
@@ -678,6 +694,7 @@ export default function IngestPage() {
     const chunkFields = chunkingRequestFields();
     if (!chunkFields) return;
     closeBatchStreams();
+    batchEpoch.current += 1;
     setSubmitting(true);
     setApiError(null);
     setBatchRows([]);
@@ -687,6 +704,9 @@ export default function IngestPage() {
     batchDoneRef.current = 0;
     batchFailedRef.current = 0;
     setBatchFinishedBanner(false);
+    batchRetainRef.current = false;
+    setBatchRetainResults(false);
+    batchTotalRef.current = 0;
     setLastSuccessTitle(null);
 
     try {
@@ -736,12 +756,15 @@ export default function IngestPage() {
         errors?: BatchItemError[];
         error?: { message: string };
       };
+      setBatchErrors(data.errors ?? []);
       if (!res.ok) {
+        batchRetainRef.current = true;
+        setBatchRetainResults(true);
+        setBatchFinishedBanner(true);
         throw new Error(data.error?.message ?? t.ingestFailed);
       }
 
       const jobs = data.jobs ?? [];
-      setBatchErrors(data.errors ?? []);
       if ((data.errors ?? []).length > 0) {
         // I3: skipped-file errors are retained like other failures.
         batchRetainRef.current = true;
@@ -844,6 +867,10 @@ export default function IngestPage() {
         error?: { message: string };
       };
       if (!res.ok) throw new Error(data.error?.message ?? t.ingestFailed);
+      setBatchFinishedBanner(false);
+      setBatchRows((prev) => prev.map((item) => item.job_id === row.job_id
+        ? { ...item, progress: { ...item.progress!, status: 'ready', drama: { ...item.progress!.drama!, status: 'running' } } }
+        : item));
       // Un-count the earlier failure; the reattached stream recounts the
       // new terminal outcome, and the stale error entry is dropped.
       batchFailedRef.current = Math.max(0, batchFailedRef.current - 1);
@@ -922,10 +949,11 @@ export default function IngestPage() {
     Boolean(progress) &&
     (progress!.status === 'processing' ||
       progress!.status === 'pending' ||
-      progress!.status === 'ready' ||
+      (progress!.status === 'ready' && isDramaActive(progress!)) ||
       awaiting);
 
-  const batchBusy = batchRows.length > 0;
+  const batchBusy = batchRows.some((row) => !row.progress ||
+    !['ready', 'failed'].includes(row.progress.status) || isDramaActive(row.progress));
   const formBusy = submitting || singleBusy || batchBusy;
 
   return (
@@ -1408,6 +1436,9 @@ export default function IngestPage() {
                   >
                     {t.dramaRetryLabel}
                   </EuiButton>
+                  <EuiButtonEmpty onClick={resetFormForNextImport} disabled={submitting}>
+                    {t.batchClearResultsLabel}
+                  </EuiButtonEmpty>
                 </>
               )}
             {progress.status === 'failed' && (

@@ -151,6 +151,7 @@ export async function importFromUploadStream(
   stream: Readable,
   originalFilename: string,
   cfg: AppConfig,
+  acceptProbe?: (probe: VideoProbeResult) => void,
 ): Promise<UploadImportResult> {
   if (!originalFilename.trim()) {
     throw new IngestError('INGEST_UPLOAD_NO_FILE');
@@ -173,15 +174,15 @@ export async function importFromUploadStream(
   try {
     const cap = new ByteCapTransform(cfg.MAX_SOURCE_BYTES, cfg, tmpPath);
     await pipeline(stream, cap, createWriteStream(tmpPath));
+    const probe = await validateMediaProbe(tmpPath);
+    acceptProbe?.(probe);
     fs.renameSync(tmpPath, mediaPath);
+    return { mediaPath, probe };
   } catch (err) {
     quarantinePartial(cfg, tmpPath);
     if (err instanceof IngestError) throw err;
     throw new IngestError('INGEST_INTERNAL');
   }
-
-  const probe = await validateMediaProbe(mediaPath);
-  return { mediaPath, probe };
 }
 
 /** Copy validated local file into originals store (Phase 6 retention for playback parity). */

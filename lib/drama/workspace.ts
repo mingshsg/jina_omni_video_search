@@ -33,11 +33,7 @@ export function isSafeDramaRunId(v: unknown): v is string {
   return typeof v === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(v);
 }
 
-/**
- * Reopen the workspace of an existing run (retry path). Same run ID ⇒
- * same artifact paths and same subtitle bulk `_id`s, so a retry
- * overwrites rather than duplicates (F1).
- */
+/** Open the workspace assigned to this generation (including a prepared handoff). */
 export function openDramaWorkspace(
   videoId: string,
   runId: string,
@@ -63,4 +59,19 @@ export function openDramaWorkspace(
 
 export function writeDramaJson(filePath: string, value: unknown): void {
   fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+}
+
+/** Preserve manually prepared host transcripts when a retry creates a new generation. */
+export function copyRetryHostSubtitles(previousRunId: string | undefined, ws: DramaWorkspace): void {
+  if (!isSafeDramaRunId(previousRunId) || previousRunId === ws.runId) return;
+  const oldRoot = path.join(path.dirname(ws.rootDir), previousRunId);
+  if (!fs.existsSync(oldRoot) || fs.lstatSync(oldRoot).isSymbolicLink()) return;
+  const oldSubtitles = path.join(oldRoot, 'subtitles');
+  if (!fs.existsSync(oldSubtitles) || fs.lstatSync(oldSubtitles).isSymbolicLink()) return;
+  for (const lang of ['en', 'zh', 'ko', 'th']) {
+    const source = path.join(oldSubtitles, `host_${lang}.srt`);
+    if (!fs.existsSync(source) || !fs.lstatSync(source).isFile()) continue;
+    const target = path.join(ws.subtitlesDir, `host_${lang}.srt`);
+    fs.copyFileSync(source, target, fs.constants.COPYFILE_EXCL);
+  }
 }

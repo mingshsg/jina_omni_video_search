@@ -115,7 +115,7 @@ export function composeGroupAvailability(params: {
   const selectedKey = selectedIds.join('\u0000');
   // Selectable options are the catalog plus exact-lookup hits only; selected
   // ids that are absent get a placeholder entry for visibility, never an option.
-  const options = [...(data?.groups ?? []), ...lookup];
+  const options = [...new Map([...(data?.groups ?? []), ...lookup].map((entry) => [entry.id, entry])).values()];
   const merged = mergeSelectedGroupEntries(
     options,
     selectedKey ? selectedKey.split('\u0000') : [],

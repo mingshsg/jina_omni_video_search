@@ -1,6 +1,7 @@
 /**
  * Bulk-index timed subtitle cues into ES_INDEX_DRAMA_SUBTITLES + embed text.
  */
+import { createHash } from 'node:crypto';
 import { createEmbeddingProvider } from '../embed/provider';
 import { getConfig } from '../config';
 import { getEsClient } from '../es/client';
@@ -17,6 +18,7 @@ export interface DramaSubtitleDoc {
   end_ms: number;
   text: string;
   text_embedding?: number[];
+  text_embedding_variant?: string;
   source: string;
   created_at: string;
 }
@@ -36,6 +38,24 @@ export async function indexDramaSubtitles(opts: {
 
   const capped = opts.cues;
   const provider = createEmbeddingProvider(cfg);
+  const index = dramaEnv.ES_INDEX_DRAMA_SUBTITLES;
+  const identity = createHash('sha256').update(JSON.stringify({
+    provider: provider.provider, model: provider.model, task: provider.task,
+    role: 'passage', dims: provider.dims, normalized_by: provider.normalizedBy,
+  })).digest('hex').slice(0, 16);
+  let vectorsCompatible = false;
+  if (opts.cues.length && maxEmbed > 0) {
+    try {
+      const mappings = Object.values(await client.indices.getMapping({ index }));
+      vectorsCompatible = mappings.length > 0 && mappings.every((entry) => {
+        const field = entry.mappings.properties?.text_embedding;
+        return field?.type === 'dense_vector' && 'dims' in field && field.dims === provider.dims;
+      });
+      if (vectorsCompatible && mappings.some((entry) => !entry.mappings.properties?.text_embedding_variant)) {
+        await client.indices.putMapping({ index, properties: { text_embedding_variant: { type: 'keyword' } } });
+      }
+    } catch { vectorsCompatible = false; } // Keep every cue searchable lexically.
+  }
   const docs: DramaSubtitleDoc[] = [];
   let embedded = 0;
 
@@ -45,9 +65,10 @@ export async function indexDramaSubtitles(opts: {
     let text_embedding: number[] | undefined;
     // DRAMA_SUBTITLE_EMBED_MAX bounds vector inference cost only.
     // Every validated cue is still indexed lexically.
-    if (i < maxEmbed) {
+    if (vectorsCompatible && i < maxEmbed) {
       try {
         const emb = await provider.embedText(cue.text, 'passage');
+        if (emb.embedding.length !== provider.dims || emb.embedding.some((value) => !Number.isFinite(value))) throw new Error('Invalid subtitle embedding');
         text_embedding = emb.embedding;
         embedded += 1;
       } catch {
@@ -63,6 +84,7 @@ export async function indexDramaSubtitles(opts: {
       end_ms: cue.endMs,
       text: cue.text,
       text_embedding,
+      ...(text_embedding ? { text_embedding_variant: identity } : {}),
       source: opts.source,
       created_at: createdAt,
     });
@@ -70,7 +92,6 @@ export async function indexDramaSubtitles(opts: {
 
   if (docs.length === 0) return { indexed: 0, embedded: 0, ids: [], segIds: [] };
 
-  const index = dramaEnv.ES_INDEX_DRAMA_SUBTITLES;
   const segIds = docs.map((doc) => doc.seg_id);
   const ids = segIds.map(
     (segId) => `${opts.videoId}_${opts.runId}_${segId}`,

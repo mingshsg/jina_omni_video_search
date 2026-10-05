@@ -35,6 +35,7 @@ export function contentTypeForPath(filePath: string): string {
       return 'image/png';
     case '.webp':
       return 'image/webp';
+    case '.md':
     case '.srt':
       return 'text/plain; charset=utf-8';
     default:

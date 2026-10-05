@@ -25,11 +25,12 @@ function badRequest(message = 'Bad request'): Response {
  * Serve only published, approved drama artifacts from the run workspace.
  */
 export async function GET(request: Request, { params }: Params) {
-  const videoId = decodeURIComponent(params.videoId ?? '').trim();
-  const runId = decodeURIComponent(params.runId ?? '').trim();
-  const rest = (params.rest ?? [])
-    .map((seg) => decodeURIComponent(seg))
-    .filter(Boolean);
+  let videoId: string, runId: string, rest: string[];
+  try {
+    videoId = decodeURIComponent(params.videoId ?? '').trim();
+    runId = decodeURIComponent(params.runId ?? '').trim();
+    rest = (params.rest ?? []).map((seg) => decodeURIComponent(seg)).filter(Boolean);
+  } catch { return badRequest(); }
 
   if (
     !videoId ||
