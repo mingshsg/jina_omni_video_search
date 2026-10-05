@@ -20,6 +20,7 @@ import {
   composeGroupAvailability,
   deriveGroupVariantNotice,
   groupAvailabilityQuery,
+  groupSelectionVariant,
   selectedSearchGroupIds,
   variantSelectableIds,
   variantSwitchTargets,
@@ -38,13 +39,13 @@ import { createGroupAvailabilityLoader } from '@/lib/metadata/group-availability
 
 type Props = {
   selectedIds: string[];
-  onChange: (ids: string[]) => void;
+  /** Group gesture may also choose a server-confirmed compatible variant. */
+  onChange: (ids: string[], variantId?: string) => void;
   /** Current search variant ('' = none) — drives the compatibility notice. */
   variantId?: string;
   /**
-   * Explicit, user-initiated variant switch. The control never changes the
-   * variant silently: it only offers a button that calls this with a
-   * compatible variant id (todo/39 G1).
+   * Manual compatibility fallback. Group selection also auto-selects a
+   * compatible variant, per the user's 2026-10-05 request.
    */
   onSelectVariant?: (variantId: string) => void;
   /** Variant ids the page can actually select (lib variant select options). */
@@ -247,9 +248,12 @@ export function SearchGroupFilter({
     (next: EuiComboBoxOptionOption[]) => {
       const capped = capGroupSelection(selectedSearchGroupIds(next));
       setLimitHit(capped.overflowed);
-      onChange(capped.ids);
+      const nextVariant = data && !failed && data.status !== 'unavailable'
+        ? groupSelectionVariant({ selectedIds: capped.ids, currentVariantId: variantId, entries: catalogEntries })
+        : undefined;
+      onChange(capped.ids, nextVariant);
     },
-    [onChange],
+    [onChange, data, failed, variantId, catalogEntries],
   );
 
   const derivedNotice = useMemo(

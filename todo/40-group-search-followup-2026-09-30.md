@@ -38,3 +38,7 @@ Container rebuilt `docker compose up -d --build app`; container `CreatedAt 2026-
 | 20/21 selection | **NOT RUN** | catalog exposes only 3 groups (`trailer`/`demo`/`training`); `drama` is 1 more. Insufficient data to reach the 20 cap. |
 
 Grouped text search also verified: `trailer` + variant `4495e972f9e6b5a1` + query `the` returns `3 个瞬间` (`t40-12b-trailer-search-correct-variant.png`). A mismatched variant correctly returns no moments.
+
+## Decision update — 2026-10-05
+
+The user requested automatic Variant selection when choosing Group. This supersedes the manual-switch-only behavior above: a Group gesture chooses a compatible ready Variant while preserving a compatible current choice. Manual Variant changes afterward remain honored; unknown/empty Group availability does not choose a different Variant. Implementation/verification: [todo/57](57-group-auto-variant-2026-10-05.md).

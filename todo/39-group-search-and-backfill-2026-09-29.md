@@ -24,3 +24,7 @@ Source: [`reviews/group-search-and-backfill-code-review-2026-09-29.md`](../revie
 
 - Recommended behavior for G1: explain the mismatch and offer compatible Variant choices. A cross-variant “All variants” search would need a separate API/ranking design because variants can differ by provider, model, dims and normalization; do not add it as a shortcut here.
 - This tracker does not supersede the open acceptances in `todo/34`, `todo/35`–`todo/38`, or the auth decision in `todo/30` S7/S8. Reconcile their status when those paths are actually verified.
+
+## Decision update — 2026-10-05
+
+The user requested automatic Variant selection when choosing Group. This supersedes the manual-switch-only behavior above: a Group gesture chooses a compatible ready Variant while preserving a compatible current choice. Manual Variant changes afterward remain honored; unknown/empty Group availability does not choose a different Variant. Implementation/verification: [todo/57](57-group-auto-variant-2026-10-05.md).

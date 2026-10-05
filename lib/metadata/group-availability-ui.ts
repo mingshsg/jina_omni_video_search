@@ -16,6 +16,32 @@ import type {
  */
 export const GROUP_SELECTION_LIMIT = 20;
 
+/** Select only from verified Group entries, preserving a compatible current choice.
+ * For multiple OR-filtered groups, prefer coverage, then server preference rank.
+ * An unresolved/empty selection cannot justify changing vector identity.
+ */
+export function groupSelectionVariant(params: {
+  selectedIds: string[];
+  currentVariantId: string;
+  entries: GroupAvailabilityEntry[];
+}): string | undefined {
+  const groups = [...new Set(params.selectedIds)].map((id) => params.entries.find((g) => g.id === id));
+  if (!groups.length || groups.some((g) => !g)) return undefined;
+  const candidates = new Map<string, { coverage: number; rank: number }>();
+  for (const group of groups) {
+    [...new Set(group!.ready_variant_ids)].forEach((id, rank) => {
+      const previous = candidates.get(id) ?? { coverage: 0, rank: 0 };
+      candidates.set(id, { coverage: previous.coverage + 1, rank: previous.rank + rank });
+    });
+  }
+  if (candidates.has(params.currentVariantId)) return params.currentVariantId;
+  return [...candidates.keys()].sort((a, b) => {
+    const left = candidates.get(a)!;
+    const right = candidates.get(b)!;
+    return right.coverage - left.coverage || left.rank - right.rank || a.localeCompare(b);
+  })[0];
+}
+
 /** Empty selection means All (no API filter). */
 export function selectedSearchGroupIds(
   options: Array<{ label: string; value?: string | number | string[] | null }>,

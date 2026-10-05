@@ -5,6 +5,7 @@ import {
   composeGroupAvailability,
   deriveGroupVariantNotice,
   groupAvailabilityQuery,
+  groupSelectionVariant,
   mergeSelectedGroupEntries,
   selectedSearchGroupIds,
   variantSelectableIds,
@@ -385,4 +386,32 @@ it('deduplicates catalog and exact-lookup options by canonical group ID', () => 
   });
   expect(composed.options).toEqual([{ ...demo, label: 'Latest label' }]);
   expect(composed.entries).toHaveLength(1);
+});
+
+
+describe('Group gesture chooses a ready Variant', () => {
+  it('switches from an unrelated default to the Group variant', () => {
+    expect(groupSelectionVariant({ selectedIds: ['trailer'], currentVariantId: 'training-v', entries: [entry('trailer', ['trailer-v'])] })).toBe('trailer-v');
+  });
+  it('keeps a compatible manual choice and leaves All/empty/unresolved groups alone', () => {
+    const entries = [entry('demo', ['popular-v', 'manual-v']), entry('empty', [])];
+    expect(groupSelectionVariant({ selectedIds: ['demo'], currentVariantId: 'manual-v', entries })).toBe('manual-v');
+    for (const ids of [[], ['empty'], ['unknown'], ['demo', 'unknown']]) {
+      expect(groupSelectionVariant({ selectedIds: ids, currentVariantId: 'manual-v', entries })).toBeUndefined();
+    }
+  });
+  it('uses server preference for several ready variants of one Group', () => {
+    expect(groupSelectionVariant({ selectedIds: ['demo'], currentVariantId: '', entries: [entry('demo', ['z-most-common', 'a-less-common'])] })).toBe('z-most-common');
+  });
+  it('prefers coverage for multiple groups and keeps OR-filter compatibility', () => {
+    const entries = [entry('one', ['one-v', 'shared-v']), entry('two', ['two-v', 'shared-v'])];
+    expect(groupSelectionVariant({ selectedIds: ['one', 'two'], currentVariantId: 'other', entries })).toBe('shared-v');
+    expect(groupSelectionVariant({ selectedIds: ['one', 'two'], currentVariantId: 'one-v', entries })).toBe('one-v');
+  });
+  it('is stable across group order and never selects an unrelated entry variant', () => {
+    const entries = [entry('one', ['b-v']), entry('two', ['a-v']), entry('unrelated', ['unrelated-v'])];
+    for (const selectedIds of [['one', 'two'], ['two', 'one']]) {
+      expect(groupSelectionVariant({ selectedIds, currentVariantId: '', entries })).toBe('a-v');
+    }
+  });
 });

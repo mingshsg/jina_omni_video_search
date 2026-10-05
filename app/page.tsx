@@ -381,9 +381,11 @@ export default function SearchPage() {
     sortOverride?: SortBy;
     facetsOverride?: SearchFacetState;
     suppressOverride?: string[];
+    variantOverride?: string;
   }) => {
     setError(null);
-    if (!variantId) {
+    const searchVariantId = opts?.variantOverride ?? variantId;
+    if (!searchVariantId) {
       setError(t.selectVariantFirst);
       return;
     }
@@ -446,7 +448,7 @@ export default function SearchPage() {
       const requestBody: Record<string, unknown> = {
         query: q,
         modality,
-        variant_id: variantId,
+        variant_id: searchVariantId,
         video_id: null,
         size: oversampleForGroupedTopK(size),
         sort_by: nextSort,
@@ -472,12 +474,12 @@ export default function SearchPage() {
       if (seq !== requestSeqRef.current) return; // superseded by a newer search
       if (!res.ok) throw new Error(data.error?.message ?? t.searchError);
       if (modality === 'description') {
-        setHits(mapDescriptionHitsToSynthetic(data.hits ?? [], variantId));
+        setHits(mapDescriptionHitsToSynthetic(data.hits ?? [], searchVariantId));
       } else {
         const chunkHits = (data.hits as SearchHit[] | undefined) ?? [];
         const extraDescriptionHits =
           modality === 'all'
-            ? mapDescriptionHitsToSynthetic(data.description_hits ?? [], variantId)
+            ? mapDescriptionHitsToSynthetic(data.description_hits ?? [], searchVariantId)
             : [];
         setHits([...chunkHits, ...extraDescriptionHits]);
       }
@@ -864,7 +866,15 @@ export default function SearchPage() {
                 return next.length === prev.length ? prev : next;
               })
             }
-            onChange={(ids) => {
+            onChange={(ids, matchingVariant) => {
+              // Commit both controls together so the debounce never searches
+              // the new Group with the previous incompatible vector variant.
+              const nextVariant = matchingVariant ?? variantRef.current;
+              if (matchingVariant) {
+                setVariantIds((prev) => prev.includes(matchingVariant) ? prev : [...prev, matchingVariant]);
+                variantRef.current = matchingVariant;
+                setVariantId(matchingVariant);
+              }
               const next = { ...facets, group_id: ids };
               setFacets(next);
               // Remember the burst's latest selection so the single rerun uses
@@ -875,7 +885,7 @@ export default function SearchPage() {
               const decision = filterRerunRef.current.onFilterChange({
                 submittedQuery: lastSubmittedQueryRef.current,
                 query,
-                variantId,
+                variantId: nextVariant,
               });
               if (decision.action !== 'schedule') return;
               if (filterRerunTimerRef.current !== null) {
@@ -898,7 +908,7 @@ export default function SearchPage() {
                 ) {
                   return;
                 }
-                void runSearch({ facetsOverride: override });
+                void runSearch({ facetsOverride: override, variantOverride: variantRef.current });
               }, decision.delayMs);
             }}
           />
