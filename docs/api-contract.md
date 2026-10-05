@@ -1068,3 +1068,7 @@ Serves the chunk JPEG (from chunk `thumb_path` or conventional path under
 | 2026-09-22 | Hybrid Phase 2: optional `filters` on text/image search; ready-ID allow-list; `FILTER_SCOPE_TOO_LARGE` |
 | 2026-09-22 | Hybrid Phase 3.6: EIS completion parser (`QUERY_PARSER_*`), parse cache, speculative embed |
 | 2026-09-22 | Hybrid Phase 3: opt-in `hybrid.use_text`, `sort_by=hybrid`, app-side BM25+RRF fusion; live rejects hybrid sort |
+
+## Voice search extension
+
+`GET /api/search/voice/capabilities` and multipart `POST /api/search/voice` are documented in [voice-search.md](voice-search.md). Existing text/image/live contracts remain unchanged. Sound Sample is the omitted-mode default; Spoken Request returns an editable transcript without searching.

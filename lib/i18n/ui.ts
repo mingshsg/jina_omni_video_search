@@ -8,6 +8,7 @@ export type UiMessages = {
   appSubtitle: string;
   navSearch: string;
   navImageSearch: string;
+  navVoiceSearch: string;
   navImport: string;
   navLibrary: string;
   navLive: string;
@@ -460,6 +461,7 @@ export const uiEn: UiMessages = {
   appSubtitle: 'Find a moment by text · play from there',
   navSearch: 'Search',
   navImageSearch: 'Image search',
+  navVoiceSearch: 'Voice search',
   navImport: 'Import',
   navLibrary: 'Library',
   navLive: 'Live',
@@ -955,6 +957,7 @@ export const uiZh: UiMessages = {
   appSubtitle: '用文本找到瞬间 · 从该处播放',
   navSearch: '检索',
   navImageSearch: '以图搜片',
+  navVoiceSearch: '语音搜索',
   navImport: '导入',
   navLibrary: '片库',
   navLive: '直播',

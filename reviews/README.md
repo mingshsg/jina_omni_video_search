@@ -6,6 +6,11 @@ loses an action item.
 
 ## Current — project level
 
+- [`voice-integration-code-review-2026-10-05.md`](./voice-integration-code-review-2026-10-05.md)
+  — **Scoped integration ready; acceptance remains open.** Current Group/Variant,
+  scene linking and logos retained; 942 tests, host/container builds and scoped
+  live voice/browser checks pass. → [`todo/59`](../todo/59-voice-integration-2026-10-05.md)
+
 - [`update-publish-readiness-review-2026-10-05.md`](./update-publish-readiness-review-2026-10-05.md)
   — **Feature-branch publication ready; release gates remain open.** Final 851
   tests, Docker build and scoped browser checks pass; separate remediation,
@@ -98,6 +103,17 @@ loses an action item.
   Partial runs report success; subtitle/director coverage is truncated;
   audit, face verification, timing, and recovery need stronger gates.
   → [`todo/36`](../todo/36-drama-adoption-review-2026-09-27.md)
+- [`voice-search-push-review-2026-10-02.md`](./voice-search-push-review-2026-10-02.md)
+  — **voice branch pre-push review.** Fixed unfinished-HTTP shutdown and unexpected worker-kill cleanup paths; 536 tests / 17 Python lifecycle scenarios and build pass. Ready for draft PR publication; release gates remain open. → [`todo/56`](../todo/56-voice-search-push-review-2026-10-02.md)
+
+- [`voice-asr-cancellation-implementation-review-2026-10-02.md`](./voice-asr-cancellation-implementation-review-2026-10-02.md)
+  — **local ASR worker cancellation.** Compute deadline, disconnect/shutdown termination and capacity recovery pass; actual rebuilt app abort reaps the cached-model worker in 61ms. 536 tests/build pass; wider acceptance remains open. → [`todo/55`](../todo/55-voice-asr-cancellation-2026-10-02.md)
+
+- [`voice-search-commit-review-2026-10-02.md`](./voice-search-commit-review-2026-10-02.md)
+  — **voice branch commit review.** Fixed retained uploads and partial moment-result handling; 534 tests and build pass. Optional local ASR compute cancellation and release acceptance remain open. → [`todo/54`](../todo/54-voice-search-commit-review-2026-10-02.md)
+
+- [`voice-search-implementation-review-2026-10-02.md`](./voice-search-implementation-review-2026-10-02.md)
+  — **separate Voice tab and file-video voice service.** Node22 suite/build and scoped EIS/ASR/API/browser checks pass; microphone, labeled relevance, performance and deployment acceptance remain open. → [`todo/53`](../todo/53-voice-search-acceptance-2026-10-02.md)
 
 - [`project-level-review-2026-09-23.md`](./project-level-review-2026-09-23.md)
   — **repository as a whole.** `next@14.2.35` carries a critical

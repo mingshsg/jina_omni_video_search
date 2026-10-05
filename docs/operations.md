@@ -236,3 +236,7 @@ Then set `ASSET_SEMANTIC_ENABLED=true` only after the upgrade succeeds.
 | `yarn smoke-phase8-search` | Search API smoke |
 | `yarn phase10-e2e` | Full Tiffany dual-variant E2E |
 | `yarn dev` / `yarn build` / `yarn start` | App |
+
+## Voice search operations
+
+The optional Voice tab defaults to disabled until the configured embedding/ASR transports are verified. See [voice-search.md](voice-search.md) for configuration, read-only probes, local Whisper setup and resource limits, and [todo/52](../todo/52-voice-search-2026-10-02.md) for measured versus pending acceptance.
