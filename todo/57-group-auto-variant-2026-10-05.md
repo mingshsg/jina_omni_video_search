@@ -20,6 +20,6 @@ Scope: main text-search toolbar. Search API/provider/variant identity contracts 
 - PASS `git diff --check`. Screenshot `/private/tmp/jina-group-auto-variant-20261005.png`.
 - NOT RUN live submitted-query rerun, synthetic catalog outage, high-latency rapid-click stress and full image/live runtime regressions. Existing request shape remains explicit `variant_id` plus Group filters, and full unit suite passes.
 
-Changes are uncommitted; the earlier manual-only tracker decisions are explicitly superseded without editing historical reviews.
+Changes are committed and published (todo/58); the earlier manual-only tracker decisions are explicitly superseded without editing historical reviews.
 
 Final container `0f31988c6616`, image `sha256:b70829bcffa8a322c1fff99d4f4aca2abdc064f8b85722b3365deda77933a751`.

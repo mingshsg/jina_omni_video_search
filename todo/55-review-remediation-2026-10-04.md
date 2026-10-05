@@ -23,7 +23,7 @@ uploads outside the accepted media location; no filesystem file was deleted.
 - [ ] Component-level polling/ingest stream tests (pure guard and route regressions pass).
 - [ ] Representative ASR/translation human quality, long-video boundaries, latency/cost and multi-replica durable coordination (existing trackers retain these gates).
 
-Evidence: [remediation review](../reviews/review-remediation-code-review-2026-10-04.md). All filesystem files preserved; temporary live ES fixture documents cleaned up. Changes remain uncommitted on `codex/enrichment-add-runs`.
+Evidence: [remediation review](../reviews/review-remediation-code-review-2026-10-04.md). All filesystem files preserved; temporary live ES fixture documents cleaned up. Committed and published on `codex/enrichment-add-runs`; see [todo/58](58-update-publish-2026-10-05.md).
 
 ## App container rebuild — 2026-10-05
 
