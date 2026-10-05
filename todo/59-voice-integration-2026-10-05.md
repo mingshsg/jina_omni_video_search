@@ -22,3 +22,4 @@ Prior draft PR #2 remains unmerged. Human relevance, real microphone/cross-brows
 - Browser: **PASS**, tab/default/sample upload + preview/results, drama auto-Variant, player ready/no error, editable transcript and subsequent edited Search. Screenshot saved locally.
 - Review: [voice-integration-code-review-2026-10-05.md](../reviews/voice-integration-code-review-2026-10-05.md). No blocking code findings. Remaining acceptance gates explicitly NOT RUN in the review.
 
+Final documentation check: [final review](../reviews/voice-integration-final-review-2026-10-05.md) corrects two historical line references and the tracker EOF whitespace. No code changed after the passing builds. Integration checkpoint: `902ac9d`.

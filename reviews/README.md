@@ -6,6 +6,10 @@ loses an action item.
 
 ## Current — project level
 
+- [`voice-integration-final-review-2026-10-05.md`](./voice-integration-final-review-2026-10-05.md)
+  — **Final integration/documentation ready.** Preserves the code review below,
+  corrects two citations and final whitespace evidence. → [`todo/59`](../todo/59-voice-integration-2026-10-05.md)
+
 - [`voice-integration-code-review-2026-10-05.md`](./voice-integration-code-review-2026-10-05.md)
   — **Scoped integration ready; acceptance remains open.** Current Group/Variant,
   scene linking and logos retained; 942 tests, host/container builds and scoped
