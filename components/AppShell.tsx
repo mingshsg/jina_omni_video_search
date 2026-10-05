@@ -1,6 +1,8 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
+import styles from './AppShell.module.css';
 import { usePathname } from 'next/navigation';
 import {
   EuiButtonGroup,
@@ -11,7 +13,6 @@ import {
   EuiHeaderLinks,
   EuiHeaderSection,
   EuiHeaderSectionItem,
-  EuiIcon,
   EuiPageTemplate,
   EuiTitle,
 } from '@elastic/eui';
@@ -48,18 +49,14 @@ export function AppShell({
           <EuiHeaderSectionItem>
             <Link
               href="/"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '0 12px',
-                textDecoration: 'none',
-                color: 'inherit',
-              }}
+              className={styles.brand}
+              aria-label={t.appTitle}
             >
-              <EuiIcon type="play" size="m" />
+              <Image src="/brands/elastic-logo.png" alt="Elastic" width={90} height={31} unoptimized className={styles.elasticLogo} />
+              <span className={styles.divider} aria-hidden="true" />
+              <Image src="/brands/jina-logo.png" alt="Jina" width={56} height={31} unoptimized className={styles.jinaLogo} />
               <EuiTitle size="xxs">
-                <span>{t.appTitle}</span>
+                <span className={styles.appTitle}>{t.appTitle}</span>
               </EuiTitle>
             </Link>
           </EuiHeaderSectionItem>
