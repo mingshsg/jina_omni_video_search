@@ -6,6 +6,12 @@ loses an action item.
 
 ## Current — project level
 
+- [`voice-integration-merge-readiness-2026-10-05.md`](./voice-integration-merge-readiness-2026-10-05.md)
+  — **Final merge HOLD; scoped checks passed.** Existing draft PR has the old
+  voice-only head, current integration has no PR, and the 306-file full merge
+  needs explicit scope/landing order plus remaining acceptance.
+  → [`todo/60`](../todo/60-voice-integration-merge-readiness-2026-10-05.md)
+
 - [`voice-integration-final-review-2026-10-05.md`](./voice-integration-final-review-2026-10-05.md)
   — **Final integration/documentation ready.** Preserves the code review below,
   corrects two citations and final whitespace evidence. → [`todo/59`](../todo/59-voice-integration-2026-10-05.md)
